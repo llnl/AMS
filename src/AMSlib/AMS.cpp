@@ -391,6 +391,11 @@ private:
     if (rmq_entry.contains("rabbitmq-cert"))
       rmq_cert = getEntry<std::string>(rmq_entry, "rabbitmq-cert");
 
+    if(exchange == "") {
+      DBG(AMS, "Found empty RMQ exchange, deactivating model update")
+      update_surrogate = false;
+    }
+
     auto &DB = ams::db::DBManager::getInstance();
     DB.instantiate_rmq_db(port,
                           host,
