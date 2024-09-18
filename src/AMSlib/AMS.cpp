@@ -379,11 +379,11 @@ private:
     std::string rmq_user = getEntry<std::string>(rmq_entry, "rabbitmq-user");
     std::string rmq_vhost = getEntry<std::string>(rmq_entry, "rabbitmq-vhost");
     std::string rmq_out_queue =
-        getEntry<std::string>(rmq_entry, "rabbitmq-outbound-queue");
+        getEntry<std::string>(rmq_entry, "rabbitmq-queue-physics");
     std::string exchange =
-        getEntry<std::string>(rmq_entry, "rabbitmq-exchange");
+        getEntry<std::string>(rmq_entry, "rabbitmq-exchange-training");
     std::string routing_key =
-        getEntry<std::string>(rmq_entry, "rabbitmq-routing-key");
+        getEntry<std::string>(rmq_entry, "rabbitmq-key-training");
     bool update_surrogate = getEntry<bool>(entry, "update_surrogate");
 
     // We allow connection to RabbitMQ without TLS certificate
@@ -396,6 +396,15 @@ private:
       update_surrogate = false;
     }
 
+    CFATAL(AMS,
+           exchange == "" && update_surrogate,
+           "Found empty RMQ exchange, model update is not possible. "
+           "Please provide a RMQ exchange or deactivate surrogate model "
+           "update.")
+    
+    //FIX ME: ADD options to give name to file via command line
+    std::string monitoring_file = "ams-rmq.json";
+
     auto &DB = ams::db::DBManager::getInstance();
     DB.instantiate_rmq_db(port,
                           host,
@@ -407,7 +416,8 @@ private:
                           rmq_out_queue,
                           exchange,
                           routing_key,
-                          update_surrogate);
+                          update_surrogate,
+                          monitoring_file);
   }
 
   void parseDatabase(json &jRoot)

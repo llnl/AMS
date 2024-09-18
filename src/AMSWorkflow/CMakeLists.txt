@@ -11,6 +11,7 @@ file(GLOB_RECURSE pyfiles *.py ams_wf/*.py ams/*.py)
 # detect virtualenv and set Pip args accordingly
 set(AMS_PY_APP "${CMAKE_BINARY_DIR}")
 if(DEFINED ENV{VIRTUAL_ENV} OR DEFINED ENV{CONDA_PREFIX})
+  message(STATUS "Installing AMS into $ENV{VIRTUAL_ENV}")
   set(_pip_args)
 else()
   set(_pip_args "--user")
