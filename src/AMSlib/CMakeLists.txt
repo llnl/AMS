@@ -7,7 +7,7 @@
 file(GLOB_RECURSE MINIAPP_INCLUDES "*.hpp")
 #set global library path to link with tests if necessary
 set(LIBRARY_OUTPUT_PATH ${AMS_LIB_OUT_PATH})
-set(AMS_LIB_SRC ${MINIAPP_INCLUDES} AMS.cpp wf/resource_manager.cpp wf/debug.cpp wf/basedb.cpp wf/logger.cpp wf/utils.cpp)
+set(AMS_LIB_SRC ${MINIAPP_INCLUDES} AMS.cpp wf/resource_manager.cpp wf/debug.cpp wf/basedb.cpp wf/logger.cpp wf/utils.cpp util/SmallVector.cpp)
 
 if (WITH_CUDA)
   list(APPEND AMS_LIB_SRC wf/cuda/utilities.cpp)
