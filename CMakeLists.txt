@@ -77,7 +77,7 @@ if (WITH_CUDA)
 
   # we need to enable nvcc
   enable_language(CUDA)
-  set(CMAKE_CUDA_STANDARD 14)
+  # set(CMAKE_CUDA_STANDARD 14)
   # Turn off message of mfem
   set(ENABLE_CUDA True)
   list(APPEND AMS_APP_LIBRARIES ${CUDA_LIBRARIES} cuda)

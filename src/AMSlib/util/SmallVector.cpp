@@ -22,7 +22,7 @@
 #include <stdexcept>
 #include <string>
 
-#include "SmallVector.h"
+#include "SmallVector.hpp"
 using namespace ams;
 
 // Check that no bytes are wasted and everything is well-aligned.

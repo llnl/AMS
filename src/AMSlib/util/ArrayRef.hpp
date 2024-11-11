@@ -19,7 +19,7 @@
 #include <optional>
 #include <vector>
 
-#include "SmallVector.h"
+#include "SmallVector.hpp"
 
 namespace ams
 {

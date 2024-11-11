@@ -73,6 +73,17 @@ enum struct AMSUQPolicy {
 void AMSInit();
 void AMSFinalize();
 
+typedef struct {
+  uint8_t *dPtr;
+  size_t *shape;
+  size_t *strides;
+  int dims;
+  AMSDType dType;            // AMS_SINGLE/AMS_DOUBLE
+  AMSResourceType location;  // CPU/GPU/Pinned
+} AMSCTensor;
+
+>>>>>>> c52415d (Concat test case 1, works)
+
 AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
                               AMSDType data_type,
                               AMSResourceType resource_type,

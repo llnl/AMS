@@ -14,6 +14,8 @@
 #include <random>
 #include <vector>
 
+#include "AMS.h"
+
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
@@ -53,6 +55,19 @@ template <typename T>
 inline bool is_real_equal(T l, T r)
 {
   return r == std::nextafter(l, r);
+}
+
+
+static inline size_t dtype_to_size(AMSDType dType)
+{
+  switch (dType) {
+    case AMSDType::AMS_DOUBLE:
+      return sizeof(double);
+    case AMSDType::AMS_SINGLE:
+      return sizeof(float);
+    default:
+      throw std::runtime_error("Requesting the size of unknown object");
+  }
 }
 
 // -----------------------------------------------------------------------------
