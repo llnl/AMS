@@ -44,7 +44,7 @@ struct AMSAllocator {
   AMSAllocator(std::string& alloc_name) : name(alloc_name) {}
   virtual ~AMSAllocator() = default;
 
-  virtual void* allocate(size_t num_bytes) = 0;
+  virtual void* allocate(size_t num_bytes, size_t alignment) = 0;
   virtual void deallocate(void* ptr) = 0;
 
   const std::string getName() const;
@@ -91,10 +91,12 @@ public:
    */
   template <typename TypeInValue>
   PERFFASPECT()
-  TypeInValue* allocate(size_t nvalues, AMSResourceType dev)
+  TypeInValue* allocate(size_t nvalues,
+                        AMSResourceType dev,
+                        size_t alignment = sizeof(TypeInValue))
   {
     return static_cast<TypeInValue*>(
-        RMAllocators[dev]->allocate(nvalues * sizeof(TypeInValue)));
+        RMAllocators[dev]->allocate(nvalues * sizeof(TypeInValue), alignment));
   }
 
   /** @brief deallocates pointer from the specified device.

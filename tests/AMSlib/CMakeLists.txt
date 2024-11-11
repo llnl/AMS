@@ -198,11 +198,32 @@ endfunction()
 BUILD_TEST(ams_packing_test cpu_packing_test.cpp AMSPack)
 ADDTEST(ams_packing_test AMSPack)
 
-# AMS Database benchmark (RMQ and/or HDF5 + MPI / No ML models used)
-BUILD_TEST(ams_benchmark_db ams_bench_db.cpp)
-# The AMS DB Benchmark requires mfem
-# TODO: Remove mfem requirement from the benchmark
-target_link_libraries(ams_benchmark_db PRIVATE AMS ${AMS_EXAMPLE_LIBRARIES})
+#Tensor tests
+BUILD_TEST(ams_tensor_test ams_tensor_test.cpp)
+
+add_test(NAME ams_tensor_num_elements COMMAND ams_tensor_test "num_elements")
+set_tests_properties(ams_tensor_num_elements PROPERTIES LABELS "AMSTensor")
+
+add_test(NAME ams_tensor_cast COMMAND ams_tensor_test "cast")
+set_tests_properties(ams_tensor_cast PROPERTIES LABELS "AMSTensor")
+
+add_test(NAME ams_tensor_create COMMAND ams_tensor_test "create")
+set_tests_properties(ams_tensor_create PROPERTIES LABELS "AMSTensor")
+
+add_test(NAME ams_tensor_view COMMAND ams_tensor_test "view")
+set_tests_properties(ams_tensor_view PROPERTIES LABELS "AMSTensor")
+
+add_test(NAME ams_tensor_move COMMAND ams_tensor_test "move")
+set_tests_properties(ams_tensor_move PROPERTIES LABELS "AMSTensor")
+
+add_test(NAME ams_tensor_access COMMAND ams_tensor_test "access")
+set_tests_properties(ams_tensor_access PROPERTIES LABELS "AMSTensor")
+
+add_test(NAME ams_tensor_conversion COMMAND ams_tensor_test "conversion")
+set_tests_properties(ams_tensor_conversion PROPERTIES LABELS "AMSTensor")
+
+add_test(NAME ams_tensor_transpose COMMAND ams_tensor_test "transpose")
+set_tests_properties(ams_tensor_transpose PROPERTIES LABELS "AMSTensor")
 
 if(WITH_TORCH)
   BUILD_TEST(ams_inference_test torch_model.cpp)

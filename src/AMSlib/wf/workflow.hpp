@@ -13,16 +13,16 @@
 #include <caliper/cali_macros.h>
 #endif
 
-#include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <vector>
 
 #include "AMS.h"
 #include "ml/uq.hpp"
 #include "resource_manager.hpp"
+#include "util/ArrayRef.h"
+#include "util/SmallVector.h"
 #include "wf/basedb.hpp"
 
 #ifdef __ENABLE_MPI__
