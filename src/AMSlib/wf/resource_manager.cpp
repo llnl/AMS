@@ -31,7 +31,10 @@ struct AMSDefaultDeviceAllocator final : AMSAllocator {
     DBG(AMSDefaultDeviceAllocator, "Destroying default device allocator");
   };
 
-  void *allocate(size_t num_bytes) { return DeviceAllocate(num_bytes); }
+  void *allocate(size_t num_bytes, size_t alignment)
+  {
+    return DeviceAllocate(num_bytes);
+  }
 
   void deallocate(void *ptr) { return DeviceFree(ptr); }
 };
@@ -43,9 +46,9 @@ struct AMSDefaultHostAllocator final : AMSAllocator {
     DBG(AMSDefaultDeviceAllocator, "Destroying default host allocator");
   }
 
-  void *allocate(size_t num_bytes)
+  void *allocate(size_t num_bytes, size_t alignment)
   {
-    return aligned_alloc(8, roundUp(num_bytes, 8));
+    return aligned_alloc(alignment, roundUp(num_bytes, alignment));
   }
 
   void deallocate(void *ptr) { free(ptr); }
@@ -55,7 +58,10 @@ struct AMSDefaultPinnedAllocator final : AMSAllocator {
   AMSDefaultPinnedAllocator(std::string name) : AMSAllocator(name) {}
   ~AMSDefaultPinnedAllocator() = default;
 
-  void *allocate(size_t num_bytes) { return DevicePinnedAlloc(num_bytes); }
+  void *allocate(size_t num_bytes, size_t alignment)
+  {
+    return DevicePinnedAlloc(num_bytes);
+  }
 
   void deallocate(void *ptr) { DeviceFreePinned(ptr); }
 };
