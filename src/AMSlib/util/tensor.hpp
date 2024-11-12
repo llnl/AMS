@@ -4,7 +4,7 @@
 
 #include "AMS.h"
 #include "ArrayRef.hpp"
-#include "SmallVector.h"
+#include "SmallVector.hpp"
 #include "wf/data_handler.hpp"
 #include "wf/resource_manager.hpp"
 #include "wf/utils.hpp"

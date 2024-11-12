@@ -21,8 +21,8 @@
 #include "AMS.h"
 #include "ml/uq.hpp"
 #include "resource_manager.hpp"
-#include "util/ArrayRef.h"
-#include "util/SmallVector.h"
+#include "util/ArrayRef.hpp"
+#include "util/SmallVector.hpp"
 #include "wf/basedb.hpp"
 
 #ifdef __ENABLE_MPI__
