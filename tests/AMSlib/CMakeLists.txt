@@ -225,6 +225,16 @@ set_tests_properties(ams_tensor_conversion PROPERTIES LABELS "AMSTensor")
 add_test(NAME ams_tensor_transpose COMMAND ams_tensor_test "transpose")
 set_tests_properties(ams_tensor_transpose PROPERTIES LABELS "AMSTensor")
 
+add_test(NAME ams_tensor_valid_reshapes COMMAND ams_tensor_test "test-reshape")
+set_tests_properties(ams_tensor_valid_reshapes PROPERTIES LABELS "AMSTensor")
+
+add_test(NAME ams_tensor_reshape COMMAND ams_tensor_test "reshape")
+set_tests_properties(ams_tensor_reshape PROPERTIES LABELS "AMSTensor")
+
+add_test(NAME ams_tensor_concat COMMAND ams_tensor_test "concat")
+set_tests_properties(ams_tensor_concat PROPERTIES LABELS "AMSTensor")
+
+
 if(WITH_TORCH)
   BUILD_TEST(ams_inference_test torch_model.cpp)
   ADDTEST(ams_inference_test AMSInferDouble ${CMAKE_CURRENT_SOURCE_DIR}/debug_model.pt "double")
@@ -242,6 +252,7 @@ endif()
   INTEGRATION_TEST_ENV()
   BUILD_TEST(ams_rmq ams_rmq_env.cpp)
   INTEGRATION_TEST_RMQ()
+  BUILD_TEST(ams_multi_model_end_to_end ams_multi_model_ete.cpp)
 
 
   # UQ Tests
