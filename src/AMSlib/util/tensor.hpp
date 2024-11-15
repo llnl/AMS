@@ -562,6 +562,37 @@ public:
     }
   }
 
+  AMSTensor expand(const ams::ArrayRef<size_t> new_shape) const
+  {
+    // Check if the new shape is compatible for expansion
+    if (new_shape.size() < _shape.size()) {
+      throw std::invalid_argument(
+          "New shape must have equal or greater rank than the original shape.");
+    }
+
+    // Initialize new strides for the expanded tensor
+    ams::SmallVector<size_t, 4> new_strides(new_shape.size(), 0);
+
+    // Map the original shape dimensions onto the new shape, from the last dimension backward
+    size_t shape_offset = new_shape.size() - _shape.size();
+    for (size_t i = 0; i < _shape.size(); ++i) {
+      size_t new_dim = shape_offset + i;
+
+      if (_shape[i] == 1 && new_shape[new_dim] > 1) {
+        // Set stride to 0 for expanded singleton dimensions
+        new_strides[new_dim] = 0;
+      } else if (_shape[i] == new_shape[new_dim]) {
+        // Retain the original stride if dimension size matches
+        new_strides[new_dim] = _strides[i];
+      } else {
+        throw std::invalid_argument(
+            "Cannot expand non-singleton dimension to a different size.");
+      }
+    }
+
+    // Create and return a new tensor view with the expanded shape and updated strides
+    return AMSTensor::view(_data, new_shape, new_strides, _dType, _location);
+  }
   // Function to align and expand a tensor for batch alignment
   // Helper function to align and expand a tensor's shape for batch alignment
   static AMSTensor alignAndExpand(AMSTensor& tensor,

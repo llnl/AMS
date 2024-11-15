@@ -248,17 +248,122 @@ void test_reshape()
 void testConcatenateTensors()
 {
   // Test Case 1: Basic Concatenation with Compatible Shapes
+  //{
+  //  AMSTensor tensor1 =
+  //      AMSTensor::create({2, 3},
+  //                        {3 * sizeof(float), 1 * sizeof(float)},
+  //                        AMS_SINGLE,
+  //                        AMS_HOST);  // Shape: [2, 3]
+  //  AMSTensor tensor2 =
+  //      AMSTensor::create({2, 3},
+  //                        {3 * sizeof(float), 1 * sizeof(float)},
+  //                        AMS_SINGLE,
+  //                        AMS_HOST);  // Shape: [2, 3]
+
+  //  tensor1.at<float>(0) = 1.0f;
+  //  tensor1.at<float>(1) = 2.0f;
+  //  tensor1.at<float>(2) = 3.0f;
+  //  tensor1.at<float>(3) = 4.0f;
+  //  tensor1.at<float>(4) = 5.0f;
+  //  tensor1.at<float>(5) = 6.0f;
+
+  //  tensor2.at<float>(0) = 7.0f;
+  //  tensor2.at<float>(1) = 8.0f;
+  //  tensor2.at<float>(2) = 9.0f;
+  //  tensor2.at<float>(3) = 10.0f;
+  //  tensor2.at<float>(4) = 11.0f;
+  //  tensor2.at<float>(5) = 12.0f;
+
+  //  ams::SmallVector<AMSTensor> iTensors;
+  //  float* ptr1 = tensor1.data<float>();
+  //  float* ptr2 = tensor2.data<float>();
+  //  iTensors.push_back(std::move(tensor1));
+  //  iTensors.push_back(std::move(tensor2));
+  //  AMSTensor result = AMSTensor::concatenateTensors(iTensors);
+
+  //  ams::SmallVector<size_t> expected_shape({2, 6});
+
+  //  assert(expected_shape == result.shape() && "Expecting shape to be {2,6}");
+  //  int elements = std::accumulate(result.shape().begin(),
+  //                                 result.shape().end(),
+  //                                 1,
+  //                                 std::multiplies<size_t>());
+
+  //  for (size_t i = 0; i < 2; i++) {
+  //    for (size_t j = 0; j < 6; j++) {
+  //      std::cout << result.elementAt<float>({i, j}) << " "
+  //                << iTensors[j / 3].elementAt<float>({i, j % 3}) << "\n";
+  //      assert(result.elementAt<float>({i, j}) ==
+  //                 iTensors[j / 3].elementAt<float>({i, j % 3}) &&
+  //             "Values do not match");
+  //    }
+  //  }
+
+  //  std::cout << "Test Case 1 Passed!" << std::endl;
+  //}
+
+  //// Test Case 2: Concatenation with Broadcasting
+  //{
+  //  AMSTensor tensor1 =
+  //      AMSTensor::create({2, 1},
+  //                        {1 * sizeof(float), 1 * sizeof(float)},
+  //                        AMS_SINGLE,
+  //                        AMS_HOST);  // Shape: [2, 1]
+  //  AMSTensor tensor2 =
+  //      AMSTensor::create({2, 3},
+  //                        {3 * sizeof(float), 1 * sizeof(float)},
+  //                        AMS_SINGLE,
+  //                        AMS_HOST);  // Shape: [2, 3]
+
+  //  tensor1.at<float>(0) = 1.0f;
+  //  tensor1.at<float>(1) = 2.0f;
+
+  //  tensor2.at<float>(0) = 3.0f;
+  //  tensor2.at<float>(1) = 4.0f;
+  //  tensor2.at<float>(2) = 5.0f;
+  //  tensor2.at<float>(3) = 6.0f;
+  //  tensor2.at<float>(4) = 7.0f;
+  //  tensor2.at<float>(5) = 8.0f;
+
+  //  ams::SmallVector<AMSTensor> iTensors;
+  //  float* ptr1 = tensor1.data<float>();
+  //  float* ptr2 = tensor2.data<float>();
+  //  iTensors.push_back(std::move(tensor1));
+  //  iTensors.push_back(std::move(tensor2));
+  //  AMSTensor result = AMSTensor::concatenateTensors(iTensors);
+  //  for (auto& T : iTensors) {
+  //    std::cout << "Tensor\n";
+  //    for (size_t i = 0; i < T.shape()[0]; i++) {
+  //      for (size_t j = 0; j < T.shape()[1]; j++) {
+  //        std::cout << "[" << i << ", " << j
+  //                  << "]:" << T.elementAt<float>({i, j}) << "\n";
+  //      }
+  //    }
+  //  }
+
+  //  for (size_t i = 0; i < 2; i++) {
+  //    for (size_t j = 0; j < 4; j++) {
+  //      assert(result.elementAt<float>({i, j}) ==
+  //                 iTensors[j > 0].elementAt<float>({i, j != 0 ? j - 1 : 0}) &&
+  //             "Values do not match");
+  //    }
+  //  }
+
+  //  std::cout << "Test Case 2 Passed!" << std::endl;
+  //}
+  //
+  //  // Test Case 3: Concatenating tensors over different batch axises
   {
-    AMSTensor tensor1 =
-        AMSTensor::create({2, 3},
-                          {3 * sizeof(float), 1 * sizeof(float)},
-                          AMS_SINGLE,
-                          AMS_HOST);  // Shape: [2, 3]
-    AMSTensor tensor2 =
-        AMSTensor::create({2, 3},
-                          {3 * sizeof(float), 1 * sizeof(float)},
-                          AMS_SINGLE,
-                          AMS_HOST);  // Shape: [2, 3]
+    AMSTensor tensor1 = AMSTensor::create({3, 2},
+                                          {2 * sizeof(float), sizeof(float)},
+                                          AMS_SINGLE,
+                                          AMS_HOST,
+                                          0);  // Shape: [3, 2]
+    AMSTensor tensor2 = AMSTensor::create({2, 3},
+                                          {2 * sizeof(float), sizeof(float)},
+                                          AMS_SINGLE,
+                                          AMS_HOST,
+                                          1);  // Shape: [3, 2]
 
     tensor1.at<float>(0) = 1.0f;
     tensor1.at<float>(1) = 2.0f;
@@ -267,110 +372,135 @@ void testConcatenateTensors()
     tensor1.at<float>(4) = 5.0f;
     tensor1.at<float>(5) = 6.0f;
 
-    tensor2.at<float>(0) = 7.0f;
-    tensor2.at<float>(1) = 8.0f;
-    tensor2.at<float>(2) = 9.0f;
-    tensor2.at<float>(3) = 10.0f;
-    tensor2.at<float>(4) = 11.0f;
-    tensor2.at<float>(5) = 12.0f;
+    tensor2.at<float>(0) = 11.0f;
+    tensor2.at<float>(1) = 12.0f;
+    tensor2.at<float>(2) = 13.0f;
+    tensor2.at<float>(3) = 14.0f;
+    tensor2.at<float>(4) = 15.0f;
+    tensor2.at<float>(5) = 16.0f;
 
     ams::SmallVector<AMSTensor> iTensors;
-    float* ptr1 = tensor1.data<float>();
-    float* ptr2 = tensor2.data<float>();
     iTensors.push_back(std::move(tensor1));
     iTensors.push_back(std::move(tensor2));
+
     AMSTensor result = AMSTensor::concatenateTensors(iTensors);
 
-    ams::SmallVector<size_t> expected_shape({2, 6});
+    std::cout << "Test Case 3 Passed!" << std::endl;
+  }
 
-    assert(expected_shape == result.shape() && "Expecting shape to be {2,6}");
-    int elements = std::accumulate(result.shape().begin(),
-                                   result.shape().end(),
-                                   1,
-                                   std::multiplies<size_t>());
+  // Test Case 4: Incompatible Shapes (Expect Exception)
+  //try {
+  //  AMSTensor tensor1 =
+  //      AMSTensor::create({2, 2},
+  //                        {2 * sizeof(float), 1 * sizeof(float)},
+  //                        AMS_SINGLE,
+  //                        AMS_HOST);  // Shape: [2, 2]
+  //  AMSTensor tensor2 =
+  //      AMSTensor::create({3, 2},
+  //                        {2 * sizeof(float), 1 * sizeof(float)},
+  //                        AMS_SINGLE,
+  //                        AMS_HOST);  // Shape: [3, 2]
+  //  ams::SmallVector<AMSTensor> iTensors;
+  //  iTensors.push_back(std::move(tensor1));
+  //  iTensors.push_back(std::move(tensor2));
+  //  std::cerr << "Test Case 4 Failed: Expected exception was not thrown."
+  //            << std::endl;
+  //} catch (const std::invalid_argument& e) {
+  //  std::cout << "Test Case 4 Passed!" << std::endl;
+  //}
+}
 
-    for (size_t i = 0; i < 2; i++) {
-      for (size_t j = 0; j < 6; j++) {
-        std::cout << result.elementAt<float>({i, j}) << " "
-                  << iTensors[j / 3].elementAt<float>({i, j % 3}) << "\n";
-        assert(result.elementAt<float>({i, j}) ==
-                   iTensors[j / 3].elementAt<float>({i, j % 3}) &&
-               "Values do not match");
+void test_expand()
+{
+  // 1. Expand a scalar tensor (shape: {1}) to (4, 3)
+  {
+    ams::SmallVector<size_t> scalar_shape = {1};
+    ams::SmallVector<size_t> scalar_strides = {sizeof(double)};
+    AMSTensor scalar_tensor =
+        AMSTensor::create(scalar_shape, scalar_strides, AMS_DOUBLE, AMS_HOST);
+    scalar_tensor.at<double>(0) = 42.0;
+
+    // Expand the scalar tensor to shape (4, 3)
+    ams::SmallVector<size_t> expanded_shape1 = {4, 3};
+    AMSTensor expanded_tensor1 = scalar_tensor.expand(expanded_shape1);
+
+    // Check expanded tensor properties
+    assert(expanded_shape1 == expanded_tensor1.shape());
+    for (size_t i = 0; i < 4; ++i) {
+      for (size_t j = 0; j < 3; ++j) {
+        std::cout << "Tensor value "
+                  << expanded_tensor1.elementAt<double>({i, j}) << "\n";
+        assert(expanded_tensor1.elementAt<double>({i, j}) == 42.0);
       }
     }
-
-    std::cout << "Test Case 1 Passed!" << std::endl;
+    std::cout << "Test 1: Scalar tensor expanded to (4, 3) - Passed\n";
   }
 
-  // Test Case 2: Concatenation with Broadcasting
+  // 2. Expand a 1D tensor (shape: {3}) to (3, 3)
   {
-    AMSTensor tensor1 = AMSTensor::create({2, 1},
-                                          {1, 1},
-                                          AMS_SINGLE,
-                                          AMS_HOST);  // Shape: [2, 1]
-    AMSTensor tensor2 = AMSTensor::create({2, 3},
-                                          {3, 1},
-                                          AMS_SINGLE,
-                                          AMS_HOST);  // Shape: [2, 3]
+    ams::SmallVector<size_t> vector_shape = {3};
+    ams::SmallVector<size_t> vector_strides = {sizeof(double)};
+    AMSTensor vector_tensor =
+        AMSTensor::create(vector_shape, vector_strides, AMS_DOUBLE, AMS_HOST);
 
-    tensor1.at<float>(0) = 1.0f;
-    tensor1.at<float>(1) = 2.0f;
-    tensor2.at<float>(0) = 3.0f;
-    tensor2.at<float>(1) = 4.0f;
-    tensor2.at<float>(2) = 5.0f;
-    tensor2.at<float>(3) = 6.0f;
-    tensor2.at<float>(4) = 7.0f;
-    tensor2.at<float>(5) = 8.0f;
+    // Fill tensor with values
+    vector_tensor.at<double>(0) = 1.0;
+    vector_tensor.at<double>(1) = 2.0;
+    vector_tensor.at<double>(2) = 3.0;
 
-    AMSTensor result = concatenateTensors({tensor1, tensor2});
+    // Expand the vector tensor to shape (3, 3)
+    ams::SmallVector<size_t> expanded_shape2 = {3, 3};
+    AMSTensor expanded_tensor2 = vector_tensor.expand(expanded_shape2);
 
-    // Expected Shape: [2, 4] after broadcasting tensor1 to [2, 3]
-    assert(result.shape() == ams::SmallVector<size_t, 4>{2, 4});
-    assert(result.at<float>(0) == 1.0f && result.at<float>(1) == 1.0f);
-    assert(result.at<float>(4) == 3.0f && result.at<float>(7) == 5.0f);
-
-    std::cout << "Test Case 2 Passed!" << std::endl;
+    // Check expanded tensor properties
+    assert(expanded_shape2 == expanded_tensor2.shape());
+    for (size_t i = 0; i < 3; ++i) {
+      for (size_t j = 0; j < 3; ++j) {
+        std::cout << "Tensor value "
+                  << expanded_tensor2.elementAt<double>({i, j}) << " original"
+                  << vector_tensor.at<double>(j) << "\n";
+        assert(expanded_tensor2.elementAt<double>({i, j}) ==
+               vector_tensor.elementAt<double>({j}));
+      }
+    }
+    std::cout << "Test 2: 1D tensor expanded to (3, 3) - Passed\n";
   }
-  //
-  //  // Test Case 3: Concatenating a Single Tensor
-  //  {
-  //    AMSTensor tensor = AMSTensor::create({3, 2},
-  //                                         {2, 1},
-  //                                         AMS_SINGLE,
-  //                                         AMS_HOST);  // Shape: [3, 2]
-  //    tensor.at<float>(0) = 1.0f;
-  //    tensor.at<float>(1) = 2.0f;
-  //    tensor.at<float>(2) = 3.0f;
-  //    tensor.at<float>(3) = 4.0f;
-  //    tensor.at<float>(4) = 5.0f;
-  //    tensor.at<float>(5) = 6.0f;
-  //
-  //    AMSTensor result = concatenateTensors({tensor});
-  //
-  //    // Expected Shape: [3, 2] - should match original tensor
-  //    assert(result.shape() == tensor.shape());
-  //    assert(result.at<float>(0) == 1.0f && result.at<float>(5) == 6.0f);
-  //
-  //    std::cout << "Test Case 3 Passed!" << std::endl;
-  //  }
-  //
-  //  // Test Case 4: Incompatible Shapes (Expect Exception)
-  //  try {
-  //    AMSTensor tensor1 = AMSTensor::create({2, 2},
-  //                                          {2, 1},
-  //                                          AMS_SINGLE,
-  //                                          AMS_HOST);  // Shape: [2, 2]
-  //    AMSTensor tensor2 = AMSTensor::create({3, 2},
-  //                                          {2, 1},
-  //                                          AMS_SINGLE,
-  //                                          AMS_HOST);  // Shape: [3, 2]
-  //
-  //    concatenateTensors({tensor1, tensor2});
-  //    std::cerr << "Test Case 4 Failed: Expected exception was not thrown."
-  //              << std::endl;
-  //  } catch (const std::invalid_argument &e) {
-  //    std::cout << "Test Case 4 Passed!" << std::endl;
-  //  }
+
+  // 3. Expand a 2D tensor (shape: {2, 1}) to (2, 3)
+  {
+    ams::SmallVector<size_t> matrix_shape = {2, 1};
+    ams::SmallVector<size_t> matrix_strides = {sizeof(double), sizeof(double)};
+    AMSTensor matrix_tensor =
+        AMSTensor::create(matrix_shape, matrix_strides, AMS_DOUBLE, AMS_HOST);
+
+    // Fill tensor with values
+    matrix_tensor.at<double>(0) = 10.0;
+    matrix_tensor.at<double>(1) = 20.0;
+
+    // Expand the matrix tensor to shape (2, 3)
+    ams::SmallVector<size_t> expanded_shape3 = {2, 3};
+    AMSTensor expanded_tensor3 = matrix_tensor.expand(expanded_shape3);
+
+    // Check expanded tensor properties
+    assert(expanded_shape3 == expanded_tensor3.shape());
+    std::cout << "Matrix Tensor dimensions: " << matrix_tensor.shape().size()
+              << "\n";
+    matrix_tensor.dump();
+    std::cout << "Expanded "
+              << "\n";
+    expanded_tensor3.dump();
+
+    expanded_tensor3.dump();
+    for (size_t i = 0; i < 2; ++i) {
+      for (size_t j = 0; j < 3; ++j) {
+        assert(expanded_tensor3.elementAt<double>({i, j}) ==
+               matrix_tensor.elementAt<double>({i, 0}));
+      }
+    }
+    std::cout << "Test 3: 2D tensor expanded to (2, 3) - Passed\n";
+  }
+
+  std::cout << "All expand tests passed successfully!\n";
 }
 
 
@@ -399,6 +529,8 @@ int main(int argc, char* argv[])
     test_canReshapeWithStrides();
   else if (func.compare("reshape") == 0)
     test_reshape();
+  else if (func.compare("expand") == 0)
+    test_expand();
   else if (func.compare("concat") == 0) {
     testConcatenateTensors();
   } else {

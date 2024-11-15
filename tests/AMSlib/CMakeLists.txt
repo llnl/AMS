@@ -234,6 +234,9 @@ set_tests_properties(ams_tensor_reshape PROPERTIES LABELS "AMSTensor")
 add_test(NAME ams_tensor_concat COMMAND ams_tensor_test "concat")
 set_tests_properties(ams_tensor_concat PROPERTIES LABELS "AMSTensor")
 
+add_test(NAME ams_tensor_expand COMMAND ams_tensor_test "expand")
+set_tests_properties(ams_tensor_expand PROPERTIES LABELS "AMSTensor")
+
 
 if(WITH_TORCH)
   BUILD_TEST(ams_inference_test torch_model.cpp)
