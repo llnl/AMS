@@ -1,5 +1,6 @@
 #include <sys/types.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <numeric>
 #include <stdexcept>
@@ -23,6 +24,7 @@ class AMSTensor
   AMSResourceType _location;  // CPU/GPU/Pinned
   bool _owned;
   bool _contiguous;
+  bool _bytes;
 
 
 private:
@@ -118,6 +120,7 @@ private:
       _data = rm.allocate<uint8_t>(_elements * _element_size,
                                    _location,
                                    _element_size);
+      _bytes = _elements * _element_size;
       if (!_data) {
         throw std::runtime_error("Failed to allocate memory for AMSTensor.");
       }
@@ -164,6 +167,16 @@ public:
     auto tensor = AMSTensor(shapes, strides, dType, location, batch_axis, true);
     tensor._data = data;
     return tensor;
+  }
+
+  static AMSTensor view(AMSTensor& tensor)
+  {
+    return AMSTensor::view(tensor._data,
+                           tensor._shape,
+                           tensor._strides,
+                           tensor._dType,
+                           tensor._location,
+                           tensor._batch_axis);
   }
 
   // Helper function to compute if a reshape is feasible without copying
@@ -374,7 +387,7 @@ public:
     }
 
     // Calculate new strides for a contiguous layout in the new tensor
-    ams::SmallVector<size_t, 4> newStrides(newShape.size());
+    ams::SmallVector<size_t> newStrides(newShape.size());
     size_t elementSize = dtype_to_size(dType);
     newStrides.back() = elementSize;
     for (int i = newStrides.size() - 2; i >= 0; --i) {
@@ -394,6 +407,7 @@ public:
 
     // Create the new tensor with the calculated shape and strides
     AMSTensor result = AMSTensor::create(newShape, newStrides, dType, location);
+    std::memset(result._data, 0, result._element_size * result._elements);
 
     // Copy data from each tensor to the correct position in `result`
     size_t offset = 0;
@@ -404,56 +418,95 @@ public:
                                                std::multiplies<size_t>());
     int tid = 0;
     int index = 0;
+    std::cout << "Num ELements on the left are " << num_elements_left << "\n";
     for (auto& tensor : tensors) {
       std::cout << "Tid is " << tid << "\n";
       int src_index = 0;
-      // Determine the copy size for a single slice along the concatenation axis
-      size_t copy_size_per_slice = tensor._strides[axis];
       // tensors differ only on the axis dimension
       size_t num_elements_right = std::accumulate(&tensor._shape[axis],
                                                   tensor._shape.end(),
                                                   1,
                                                   std::multiplies<size_t>());
-      std::cout << "Tensor Shape " << tensor.shape()[0] << ","
-                << tensor.shape()[1] << "\n";
-      std::cout << "num_elements_left " << num_elements_left << "\n";
-      std::cout << "num_elements_right " << num_elements_right << "\n";
-      for (size_t left = 0; left < num_elements_left; left++) {
-        uint8_t* dst_start_ptr =
-            &result._data[left * result._strides[axis - 1]] +
-            tid * result._strides[axis];
-        uint8_t* src_start_ptr =
-            &tensor._data[left * tensor._strides[axis - 1]];
-        std::cout << "Next left\n";
-        std::cout << "result._strides " << result._strides[axis - 1] << "\n";
-        std::cout << "tensor._strides " << tensor._strides[axis - 1] << "\n";
-        for (int right = 0; right < num_elements_right; right++) {
-          index = ((uintptr_t)dst_start_ptr - (uintptr_t)result._data) /
-                  result._element_size;
-          src_index = ((uintptr_t)src_start_ptr - (uintptr_t)tensor._data) /
-                      tensor._element_size;
-          std::cout << "Dest index: " << index << "\n";
-          std::cout << "Src index: " << src_index << "\n";
-          if (tensor._dType == AMS_SINGLE) {
-            float tmp = *reinterpret_cast<float*>(src_start_ptr);
-            std::cout << "Assigning float " << tmp << "\n";
-            for (int i = 0; i < sizeof(float); i++) {
-              dst_start_ptr[i] = src_start_ptr[i];
+      if (tensor.isContiguous(tensor._element_size)) {
+        for (size_t left = 0; left < num_elements_left; left++) {
+          // FIXME: This will break if axis = 0;
+#warning Will break when axis is 0
+          uint8_t* dst_start_ptr =
+              &result._data[left * result._strides[axis - 1]] +
+              tid * result._strides[axis];
+          uint8_t* src_start_ptr =
+              &tensor._data[left * tensor._strides[axis - 1]];
+          std::cout << "Next left\n";
+          std::cout << "result._strides " << result._strides[axis - 1] << "\n";
+          std::cout << "tensor._strides " << tensor._strides[axis - 1] << "\n";
+          for (int right = 0; right < num_elements_right; right++) {
+            index = ((uintptr_t)dst_start_ptr - (uintptr_t)result._data) /
+                    result._element_size;
+            src_index = ((uintptr_t)src_start_ptr - (uintptr_t)tensor._data) /
+                        tensor._element_size;
+            std::cout << "Dest index: " << index << "\n";
+            std::cout << "Src index: " << src_index << "\n";
+            if (tensor._dType == AMS_SINGLE) {
+              float tmp = *reinterpret_cast<float*>(src_start_ptr);
+              for (int i = 0; i < sizeof(float); i++) {
+                dst_start_ptr[i] = src_start_ptr[i];
+              }
+              dst_start_ptr += sizeof(float);
+              src_start_ptr += sizeof(float);
+            } else if (tensor._dType == AMS_DOUBLE) {
+              for (int i = 0; i < sizeof(double); i++) {
+                dst_start_ptr[i] = src_start_ptr[i];
+              }
+              dst_start_ptr += sizeof(double);
+              src_start_ptr += sizeof(double);
             }
-            tmp = *reinterpret_cast<float*>(dst_start_ptr);
-            std::cout << "Dest value " << tmp << "\n";
-
-            dst_start_ptr += sizeof(float);
-            src_start_ptr += sizeof(float);
-          } else if (tensor._dType == AMS_DOUBLE) {
-            for (int i = 0; i < sizeof(double); i++) {
-              dst_start_ptr[i] = src_start_ptr[i];
-            }
-            dst_start_ptr += sizeof(double);
-            src_start_ptr += sizeof(double);
+            index++;
+            src_index++;
           }
-          index++;
-          src_index++;
+        }
+      } else {
+        uint64_t dst_elements = 0;
+        uint64_t dst_offset = 0;
+        uint8_t* dst_start_ptr =
+            &result._data[dst_offset * result._strides[axis - 1]] +
+            tid * result._strides[axis];
+        std::cout << "Tid is " << tid << " and result stride is "
+                  << result._strides[axis] << "\n";
+        tensor.dump_vector("Shape", tensor.shape());
+        for (size_t i = 0; i < tensor.elements(); i++) {
+          ams::SmallVector<size_t> index(tensor.shape().size(), 0);
+          int rem = i;
+          for (long j = index.size() - 1; j >= 0; j--) {
+            index[j] = rem % tensor.shape()[j];
+            rem = rem / tensor.shape()[j];
+          }
+          tensor.dump_vector("Index is", index);
+          tensor.dump();
+          if (tensor._dType == AMS_SINGLE) {
+            float tmp = tensor.elementAt<float>(index);
+            float* dst = (float*)dst_start_ptr;
+            dst[dst_elements] = tmp;
+            std::cout << "Assigning element " << tmp << "\n";
+          } else if (tensor._dType == AMS_DOUBLE) {
+            double tmp = tensor.elementAt<double>(index);
+            double* dst = (double*)dst_start_ptr;
+            dst[dst_elements] = tmp;
+          }
+          dst_elements++;
+          std::cout << "Num Elements right are " << num_elements_right << "\n";
+          if (dst_elements == num_elements_right) {
+            dst_offset += 1;
+            dst_start_ptr =
+                &result._data[dst_offset * result._strides[axis - 1]] +
+                tid * result._strides[axis];
+
+            dst_elements = 0;
+            std::cout << "Increasing pointer by " << result._strides[axis - 1]
+                      << "\n";
+            for (int i = 0; i < tensor.shape()[axis]; i++) {
+              std::cout << ((float*)(dst_start_ptr))[i] << "\n";
+            }
+          }
         }
       }
       // Here we move the pointer of the 'tid' index.
@@ -551,6 +604,7 @@ public:
                             _location);
 
       // Copy data from the original tensor to the contiguous tensor
+#warning this is wrong.
       auto& rm = ams::ResourceManager::getInstance();
       rm.copy(_data,
               _location,
@@ -571,7 +625,7 @@ public:
     }
 
     // Initialize new strides for the expanded tensor
-    ams::SmallVector<size_t, 4> new_strides(new_shape.size(), 0);
+    ams::SmallVector<size_t> new_strides(new_shape.size(), 0);
 
     // Map the original shape dimensions onto the new shape, from the last dimension backward
     size_t shape_offset = new_shape.size() - _shape.size();
@@ -600,27 +654,18 @@ public:
                                   int max_rank)
   {
     auto shape = tensor.shape();
-    auto batch_axis = tensor.batch_axis();
 
     ams::SmallVector<size_t, 4> new_shape(max_rank, 1);
-    new_shape[batch_axis] = target_batch_size;  // Set the target batch size
-    std::cout << "Batch Axis is " << batch_axis << "\n";
-    std::cout << "New shape size is " << new_shape.size() << "\n";
-
     // Move tensor's dimensions to the appropriate location in `new_shape`
     for (size_t i = 0, j = 0; i < shape.size(); ++i, ++j) {
-      if (i == batch_axis) {
-        new_shape[batch_axis] = shape[batch_axis];
-      } else {
-        new_shape[j] = shape[i];
-      }
+      new_shape[j] = shape[i];
     }
     std::cout << "Before reshape \n";
     tensor.dump();
     return tensor.reshape(new_shape);  // Reshape without copying if possible
   }
 
-  void dump_vector(const std::string name, ams::ArrayRef<size_t> Vec)
+  void dump_vector(const std::string name, ams::ArrayRef<size_t> Vec) const
   {
     std::cout << name << " [";
     for (auto I : Vec) {
@@ -629,13 +674,13 @@ public:
     std::cout << "]\n";
   }
 
-  void dump()
+  void dump() const
   {
     dump_vector("Stride", _strides);
     dump_vector("Shape", _shape);
+    std::cout << "Elements " << _elements << "\n";
   }
 
-  // Main concatenation function with broadcasting checks
   static AMSTensor concatenateTensors(ams::MutableArrayRef<AMSTensor> tensors)
   {
     if (tensors.empty()) {
@@ -645,62 +690,62 @@ public:
     // Determine the batch axis and target batch size based on the first tensor
 
     int batch_axis = tensors[0].batch_axis();
-    int target_batch_size = tensors[0].shape()[batch_axis];
 
-    // Find the maximum rank among all tensors to align shapes
-    int max_rank = 0;
-    for (const auto& tensor : tensors) {
-      max_rank = std::max(max_rank, static_cast<int>(tensor.shape().size()));
+    // For all tensors, AMS assumes that batch_axis points to the dimension holding the samples. That one needs to be equal across all tensors.
+    size_t batch_dim_size = tensors[0]._shape[tensors[0]._batch_axis];
+    std::vector<AMSTensor> aligned_tensors;
+
+    for (auto& T : tensors) {
+      if (batch_dim_size != T._shape[T._batch_axis])
+        throw std::invalid_argument(
+            "Tensors should have equal shape on batch-axis");
+      if (T._batch_axis != 0) {
+        aligned_tensors.push_back(T.transpose(T._batch_axis, 0));
+      } else {
+        aligned_tensors.push_back(AMSTensor::view(T));
+      }
     }
 
-    // Prepare final shape based on broadcasting rules and target batch size
-    ams::SmallVector<size_t, 4> final_shape(max_rank, 1);
-    final_shape[batch_axis] =
-        target_batch_size;  // Set batch size in final shape
+    // Find the maximum rank among all tensors to align shapes
+    size_t max_rank = 0;
+    for (const auto& tensor : tensors) {
+      max_rank = std::max(max_rank, tensor.shape().size());
+    }
 
-    std::vector<AMSTensor> aligned_tensors;
-    std::cout << "Max Rank is " << max_rank << "\n";
-
+    // FIXME: TILL THIS POINT THIS is "correct"
+    ams::SmallVector<AMSTensor> expanded_tensors;
     // Align all tensors to the same rank and check for broadcasting compatibility
-    for (AMSTensor& tensor : tensors) {
+    for (AMSTensor& tensor : aligned_tensors) {
       // Align and expand each tensor to have the same rank as `max_rank`
       std::cout << "Original Tensor is \n";
-      tensor.dump();
-      AMSTensor aligned_tensor =
-          alignAndExpand(tensor, target_batch_size, max_rank);
-      std::cout << "Aligned Tensor is \n";
-      aligned_tensor.dump();
-
-      // Update final shape based on broadcasting compatibility
-      const auto& aligned_shape = aligned_tensor.shape();
-      for (size_t i = 0; i < max_rank; ++i) {
-        std::cout << "final_shape rank: " << final_shape.size()
-                  << ", aligned_shape rank: " << aligned_shape.size()
-                  << std::endl;
-        assert(final_shape.size() == aligned_shape.size() &&
-               "Shapes must have the same rank for broadcasting");
-        if (!isBroadcastCompatible(final_shape[i], aligned_shape[i])) {
-          throw std::invalid_argument(
-              "Tensors have incompatible shapes for concatenation.");
-        }
-        final_shape[i] = getBroadcastSize(final_shape[i], aligned_shape[i]);
+      ams::SmallVector<size_t> new_shape(tensor.shape());
+      for (int i = tensor._shape.size(); i < max_rank; i++) {
+        new_shape.push_back(1);
+        // TODO we likely need also to generate the strides correctly. Need to test this.
+#warning Test for strides.
       }
-      aligned_tensors.push_back(std::move(aligned_tensor));
+      tensor._shape = new_shape;
+      expanded_tensors.push_back(view(tensor));
     }
 
     // Concatenate tensors along the last dimension or specified axis
-    for (auto& V : aligned_tensors) {
-      std::cout << "Shape ";
-      for (auto s : V.shape()) {
-        std::cout << " " << s << " ";
+    std::cout << "========= Debug =======\n";
+    for (auto& V : expanded_tensors) {
+      std::cout << "expanded_tensors \n";
+      V.dump();
+      for (size_t i = 0; i < V.shape()[0]; i++) {
+        for (size_t j = 0; j < V.shape()[1]; j++) {
+          std::cout << "ELements at {" << i << ", " << j << "} "
+                    << V.elementAt<float>({i, j}) << "\n";
+        }
       }
-      std::cout << "\n";
     }
+    std::cout << "========= Debug =======\n";
 
     std::cout << "Max Ranking is " << max_rank << "\n";
 
-
-    return AMSTensor::concatenate(aligned_tensors, max_rank - 1);
+    // Always concat on outer dimension
+    return AMSTensor::concatenate(expanded_tensors, max_rank - 1);
   }
 
   size_t elements() const { return _elements; }
