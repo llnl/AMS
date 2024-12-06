@@ -391,17 +391,17 @@ private:
     if (rmq_entry.contains("rabbitmq-cert"))
       rmq_cert = getEntry<std::string>(rmq_entry, "rabbitmq-cert");
 
-    if(exchange == "") {
-      DBG(AMS, "Found empty RMQ exchange, deactivating model update")
-      update_surrogate = false;
-    }
-
     CFATAL(AMS,
            exchange == "" && update_surrogate,
            "Found empty RMQ exchange, model update is not possible. "
            "Please provide a RMQ exchange or deactivate surrogate model "
            "update.")
-    
+
+    if(exchange == "") {
+      WARNING(AMS, "Found empty RMQ exchange, deactivating model update")
+      update_surrogate = false;
+    }
+
     //FIX ME: ADD options to give name to file via command line
     std::string monitoring_file = "ams-rmq.json";
 

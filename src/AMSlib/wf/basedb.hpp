@@ -1022,10 +1022,22 @@ private:
   uint64_t _rId;
   /** @brief Path where to output the logging content */
   fs::path _output_file;
+
+protected:
   /** @brief Underlying JSON representation */
   json _data;
 
-  void initialize();
+  /**
+   *  @brief Internal method to update the internal output file name
+   *  with rank and class name as follows:
+   *     if output file is "stem.ext" -> stem{sep}{class_name}{sep}{rank}.ext
+   * For example, stem-publisher-0.ext for rank 0, class name publisher with "-" separator
+   *  @param[in]  rank          MPI rank
+   *  @param[in]  class_name    Class name
+   *  @param[in]  sep           Separator
+   */
+  void _updateMonitoringFile(uint64_t rank, std::string class_name, std::string sep);
+
 
 public:
   static std::mutex _mutex;
@@ -1038,7 +1050,7 @@ public:
    */
   AMSPerfLogging(uint64_t rId, std::string output_file);
 
-  ~AMSPerfLogging();
+  virtual ~AMSPerfLogging() = default;
 
   /**
    *  @brief Update the object with the MPI Rank
@@ -1053,7 +1065,7 @@ public:
    * For example, stem-0.ext for rank 0 with "-" separator
    *  @param[in]  rank          MPI rank
    */
-  void updateMonitoringFile(uint64_t rank, std::string sep);
+  virtual void updateMonitoringFile(uint64_t rank, std::string sep) = 0;
 
   /**
    *  @brief Return a timestamp based on given format
@@ -1077,6 +1089,91 @@ public:
    *  @brief Unlock the logger (mutex)
    */
   void unlock();
+
+  /**
+   *  @brief  Log when the connection is ready to be used.
+   */
+  virtual void logReadyConnection() = 0;
+
+  /**
+   *  @brief  Log when the connection is closed.
+   */
+  virtual void logClosedConnection() = 0;
+
+  /**
+   *  @brief  Log when an AMS message has been sent
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  size    The size in bytes of the message
+   */
+  virtual void logAMSMessage(int id, int size) = 0;
+
+  /**
+   *  @brief  Log when an AMS message has been acknowledged (or not)
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  acked   True if the message was successfuly acknowledged
+   */
+  virtual void logAckAMSMessage(int id, bool acked) = 0;
+
+  /**
+   *  @brief  Log error when an AMS message communication fails
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  err    The error message
+   */
+  virtual void logErrorAMSMessage(int id, const char* err) = 0;
+
+  /**
+   *  @brief  Dump the content of the logger as a string
+   *  @param[in]  tab_width      JSON indentation
+   *  @return                    Return JSON string
+   */
+  std::string dump(int tab_width = 2);
+
+  /**
+   *  @brief  Write the current state of the logger to the internal JSON file
+   *  @param[in]  tab_width      JSON indentation
+   */
+  void toJSON(int tab_width = 2);
+
+  /**
+   *  @brief  Write the current state of the logger to a JSON file
+   *  @param[in]  output_file    Path of the JSON file
+   *  @param[in]  tab_width      JSON indentation
+   */
+  void toJSON(const std::string& output_file, int tab_width = 2);
+};  // class AMSPerfLogging
+
+/**
+ * @brief Represents an object responsible of logging AMS activities
+ * 
+ * FIXME: This design could be improved with template specialization
+ * to allow user to specify they own key (instead of publisher)
+ */
+class AMSPublisherLogging : public AMSPerfLogging
+{
+  using json = nlohmann::json;
+
+public:
+
+  AMSPublisherLogging() = default;
+
+  /**
+   *  @brief Constructor
+   *  @param[in]  rId          Distributed ID
+   */
+  AMSPublisherLogging(uint64_t rId, std::string output_file);
+
+  ~AMSPublisherLogging();
+
+  void initialize();
+
+  /**
+   *  @brief Update the internal output file name
+   *  with rank as follows:
+   *     if output file is "stem.ext" -> stem{sep}{rank}.ext
+   * For example, stem-0.ext for rank 0 with "-" separator
+   *  @param[in]  rank          MPI rank
+   */
+  void updateMonitoringFile(uint64_t rank, std::string sep);
 
   /**
    *  @brief  Log when the connection is ready to be used.
@@ -1109,21 +1206,67 @@ public:
    */
   void logErrorAMSMessage(int id, const char* err);
 
-  /**
-   *  @brief  Dump the content of the logger as a string
-   *  @param[in]  tab_width      JSON indentation
-   *  @return                    Return JSON string
-   */
-  std::string dump(int tab_width = 2);
+};  // class AMSPublisherLogging
 
-  /**
-   *  @brief  Write the current state of the logger to a JSON file
-   *  @param[in]  output_file    Path of the JSON file
-   *  @param[in]  tab_width      JSON indentation
-   */
-  void toJSON(const std::string& output_file, int tab_width = 2);
+// /**
+//  * @brief Represents an object responsible of logging AMS activities
+//  */
+// class AMSConsumerLogging : public AMSPerfLogging
+// {
+//   using json = nlohmann::json;
 
-};  // class AMSPerfLogging
+// public:
+//   AMSConsumerLogging() = default;
+
+//   /**
+//    *  @brief Constructor
+//    *  @param[in]  rId          Distributed ID
+//    */
+//   AMSConsumerLogging(uint64_t rId, std::string output_file);
+
+//   ~AMSConsumerLogging();
+
+//   /**
+//    *  @brief Update the internal output file name
+//    *  with rank as follows:
+//    *     if output file is "stem.ext" -> stem{sep}{rank}.ext
+//    * For example, stem-0.ext for rank 0 with "-" separator
+//    *  @param[in]  rank          MPI rank
+//    */
+//   void updateMonitoringFile(uint64_t rank, std::string sep);
+
+//   /**
+//    *  @brief  Log when the connection is ready to be used.
+//    */
+//   void logReadyConnection();
+
+//   /**
+//    *  @brief  Log when the connection is closed.
+//    */
+//   void logClosedConnection();
+
+//   /**
+//    *  @brief  Log when an AMS message has been sent
+//    *  @param[in]  id      The ID (tag) of the message
+//    *  @param[in]  size    The size in bytes of the message
+//    */
+//   void logAMSMessage(int id, int size);
+
+//   /**
+//    *  @brief  Log when an AMS message has been acknowledged (or not)
+//    *  @param[in]  id      The ID (tag) of the message
+//    *  @param[in]  acked   True if the message was successfuly acknowledged
+//    */
+//   void logAckAMSMessage(int id, bool acked);
+
+//   /**
+//    *  @brief  Log error when an AMS message communication fails
+//    *  @param[in]  id      The ID (tag) of the message
+//    *  @param[in]  err    The error message
+//    */
+//   void logErrorAMSMessage(int id, const char* err);
+
+// };  // class AMSConsumerLogging
 
 /**
  * @brief Specific handler for RabbitMQ connections based on libevent.
@@ -1236,12 +1379,20 @@ protected:
    */
   void logErrorAMSMessage(int id, const char* err);
 
+  void logSOME();
+
   /**
    *  @brief  Write logging data to JSON file
    *  @param[in]  output_file      Name of the JSON file
    *  @param[in]  tab_width        Indentation width
    */
   void writeLoggingtoJSON(const std::string& output_file, int tab_width = 2);
+
+  /**
+   *  @brief  Write logging data to internal JSON file
+   *  @param[in]  tab_width        Indentation width
+   */
+  void writeLoggingtoJSON(int tab_width = 2);
 
 private:
   /**
@@ -1359,7 +1510,8 @@ public:
                      std::string cacert,
                      std::string exchange,
                      std::string routing_key,
-                     AMQP::ExchangeType extype = AMQP::fanout);
+                     AMQP::ExchangeType extype = AMQP::fanout,
+                     std::shared_ptr<AMSPerfLogging> logger = nullptr);
 
   /**
    *  @brief Delete the message with given ID
@@ -1432,7 +1584,8 @@ public:
               const AMQP::Address& address,
               std::string cacert,
               std::string routing_key,
-              std::string exchange);
+              std::string exchange,
+              std::shared_ptr<AMSPerfLogging> logger = nullptr);
 
   /**
    *  @brief Start the underlying I/O loop (blocking call)
@@ -1800,7 +1953,17 @@ private:
   std::shared_ptr<AMSPerfLogging> _logger;
 
 public:
+  /** @brief Performance logging object */
+  int rank;
+
   RMQInterface();
+
+  RMQInterface(const RMQInterface& c) = delete;
+  RMQInterface& operator=(const RMQInterface&) = delete;
+
+  RMQInterface(const RMQInterface&& c) = delete;
+  RMQInterface& operator=(const RMQInterface&&) = delete;
+
 
   /**
    * @brief Connect to a RabbitMQ server
@@ -1851,7 +2014,8 @@ public:
    * @brief Set the internal ID of the interface (usually MPI rank).
    * @param[in] rank The ID
    */
-  void updateMonitoringMPIRank(uint64_t rank) {
+  void updateMonitoringMPIRank(uint64_t rank)
+  {
     if (_logger) _logger->updateMPIRank(rank);
   }
 
@@ -1860,7 +2024,8 @@ public:
    * @param[in] rank The MPI rank
    * @param[in] sep String separator
    */
-  void updateMonitoringFile(uint64_t rank, std::string sep = "-") {
+  void updateMonitoringFile(uint64_t rank, std::string sep = "-")
+  {
     if (_logger) _logger->updateMonitoringFile(rank, sep);
   }
 
@@ -1934,7 +2099,17 @@ public:
    * @brief Check if this interface supports monitoring
    * @return True if monitoring is supported
    */
-  bool isMonitoringActivated() const { return _logger != nullptr; }
+  bool isMonitoringActivated() const {
+#ifdef __ENABLE_MPI__
+  char name[MPI_MAX_PROCESSOR_NAME];
+  int len;
+  MPI_Get_processor_name(name, &len);
+    std::cerr << "MPI  : isMonitoringActivated(" << _logger << " | " << name << "): " << _logger.use_count() << std::endl;
+#else
+    std::cerr << "NoMPI: isMonitoringActivated(" << _logger << "): " << _logger.use_count() << std::endl;
+#endif
+    return _logger != nullptr;
+  }
 
   /**
    * @brief Return the latest model and, by default, delete the corresponding message from the Consumer
@@ -1981,7 +2156,7 @@ public:
              bool allowModelUpdate)
       : BaseDB(id, allowModelUpdate), appDomain(domain), interface(interface)
   {
-   /* We set manually the MPI rank here because when
+    /* We set manually the MPI rank here because when
     * RMQInterface was statically initialized, MPI was not
     * necessarily initialized and ready. So we provide the
     * option of setting the MPI distributed ID afterward.
@@ -1992,7 +2167,7 @@ public:
     * before setId is called).
     */
     interface.setId(id);
-    if(interface.isMonitoringActivated()) {
+    if (interface.isMonitoringActivated()) {
       interface.updateMonitoringMPIRank(id);
       interface.updateMonitoringFile(id);
     }
@@ -2133,7 +2308,7 @@ private:
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
-  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false){};
+  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false) {}
 
 protected:
   RMQInterface rmq_interface;
@@ -2156,7 +2331,6 @@ public:
           e.second.use_count() - 1);
       if (e.second.use_count() > 0) e.second->close();
     }
-
     if (rmq_interface.isConnected()) {
       rmq_interface.close();
     }
@@ -2194,7 +2368,7 @@ public:
              "Requesting debug database but %d db type does not support it",
              dbType);
 #ifdef __ENABLE_DB__
-    DBG(DBManager, "Instantiating data base");
+    DBG(DBManager, "[r%d] Instantiating data base", rId);
 
     if ((dbType == AMSDBType::AMS_CSV || dbType == AMSDBType::AMS_HDF5) &&
         !fs_interface.isConnected()) {
@@ -2241,8 +2415,9 @@ public:
                                 bool isDebug = false)
   {
     DBG(DBManager,
-        "Requested DB for domain: '%s' Under Name: '%s' DB Configured to "
+        "[r%d] Requested DB for domain: '%s' Under Name: '%s' DB Configured to "
         "operate with '%s'",
+        rId,
         domainName.c_str(),
         dbLabel.c_str(),
         getDBTypeAsStr(dbType).c_str())
@@ -2259,8 +2434,11 @@ public:
       auto db = createDB(domainName, dbLabel, dbType, rId, isDebug);
       db_instances.insert(std::make_pair(std::string(domainName), db));
       DBG(DBManager,
-          "Creating new Database writting to file: %s",
+          "[r%d] Creating new Database writting to file: %s",
+          rId,
           domainName.c_str());
+
+      rmq_interface.rank = rId;
       return db;
     }
 

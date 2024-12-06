@@ -206,7 +206,7 @@ def parse_args():
     parser.add_argument('-t', '--tls-cert', help="TLS certificate file", required=False)
     parser.add_argument('-q', '--queue', help="Queue to listen to", required=True)
     parser.add_argument('-n', '--nmsgs', type=int, help="Max messages to consume", required=False, default=None)
-    parser.add_argument('--timeout', type=int, help="Numebr of seconds after which the consumer will timeout", default=10)
+    parser.add_argument('--timeout', type=int, help="Number of seconds after which the consumer will timeout", default=None)
 
     args = parser.parse_args()
     return args

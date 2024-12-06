@@ -10,32 +10,32 @@
 #include <caliper/cali_macros.h>
 #endif
 
+#include <unistd.h>
+
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
-#include <unistd.h>
-
+#include <mfem.hpp>
 #include <umpire/Umpire.hpp>
 #include <umpire/strategy/QuickPool.hpp>
 
-#include <mfem.hpp>
-
 #include "AMS.h"
 
-void createUmpirePool(const std::string& parent_name, const std::string& pool_name)
+void createUmpirePool(const std::string &parent_name,
+                      const std::string &pool_name)
 {
   auto &rm = umpire::ResourceManager::getInstance();
   auto alloc_resource = rm.makeAllocator<umpire::strategy::QuickPool, true>(
       pool_name, rm.getAllocator(parent_name));
 }
 
-AMSDType getDataType(const char* d_type)
+AMSDType getDataType(const char *d_type)
 {
   AMSDType dType = AMSDType::AMS_DOUBLE;
   if (std::strcmp(d_type, "float") == 0) {
     dType = AMSDType::AMS_SINGLE;
-  } else if (d_type ==  "double") {
+  } else if (d_type == "double") {
     dType = AMSDType::AMS_DOUBLE;
   } else {
     assert(false && "Unknown data type (must be 'float' or 'double')");
@@ -43,7 +43,7 @@ AMSDType getDataType(const char* d_type)
   return dType;
 }
 
-AMSDBType getDBType(const char* db_type)
+AMSDBType getDBType(const char *db_type)
 {
   AMSDBType dbType = AMSDBType::AMS_NONE;
   if (std::strcmp(db_type, "csv") == 0) {
@@ -84,14 +84,6 @@ struct Problem {
     }
     return inputs;
   }
-
-
-/*
-To move to CUDA
-      FPTypeValue *pPtr =
-          rm.allocate<FPTypeValue>(num_elements, AMSResourceType::AMS_HOST);
-      rm.copy(outputs[i], AMS_DEVICE, pPtr, AMS_HOST, num_elements);
-*/
 
   void ams_run(AMSExecutor &wf,
                AMSResourceType resource,
@@ -143,7 +135,7 @@ To move to CUDA
 
 void callBackDouble(void *cls, long elements, void **inputs, void **outputs)
 {
-  // std::cout << "Called the double precision model\n";
+  std::cout << "Called the double precision model\n";
   static_cast<Problem<double> *>(cls)->run(elements,
                                            (double **)(inputs),
                                            (double **)(outputs));
@@ -152,7 +144,7 @@ void callBackDouble(void *cls, long elements, void **inputs, void **outputs)
 
 void callBackSingle(void *cls, long elements, void **inputs, void **outputs)
 {
-  // std::cout << "Called the single precision model\n";
+  std::cout << "Called the single precision model\n";
   static_cast<Problem<float> *>(cls)->run(elements,
                                           (float **)(inputs),
                                           (float **)(outputs));
@@ -167,9 +159,12 @@ int main(int argc, char **argv)
   int rId = 0;
   // Level of Threading provided by MPI
   int provided = 0;
+
   MPI_CALL(MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided));
   MPI_CALL(MPI_Comm_size(MPI_COMM_WORLD, &wS));
   MPI_CALL(MPI_Comm_rank(MPI_COMM_WORLD, &rId));
+
+  // Deactivate output on cout for all ranks but 0
   if (rId != 0) {
     std::cout.setstate(std::ios::failbit);
   }
@@ -194,7 +189,10 @@ int main(int argc, char **argv)
   // setup command line parser
   // -------------------------------------------------------------------------
   mfem::OptionsParser args(argc, argv);
-  args.AddOption(&device_name, "-d", "--device", "Device config string (cpu or cuda)");
+  args.AddOption(&device_name,
+                 "-d",
+                 "--device",
+                 "Device config string (cpu or cuda)");
 
   // set precision
   args.AddOption(&precision_opt,
@@ -203,7 +201,10 @@ int main(int argc, char **argv)
                  "Set precision (single or double)");
 
   // data parameters
-  args.AddOption(&num_elems, "-e", "--num-elems", "Number of elements per iteration");
+  args.AddOption(&num_elems,
+                 "-e",
+                 "--num-elems",
+                 "Number of elements per iteration");
   args.AddOption(&num_inputs, "-di", "--dim-inputs", "Dimension of inputs");
   args.AddOption(&num_outputs, "-do", "--dim-outputs", "Dimension of outputs");
   args.AddOption(&num_iterations, "-i", "--num-iter", "Number of iterations");
@@ -214,7 +215,8 @@ int main(int argc, char **argv)
   args.AddOption(&db_config,
                  "-db",
                  "--dbconfig",
-                 "Path to directory where applications will store their data (for CSV/HDF5)",
+                 "Path to directory where applications will store their data "
+                 "(for CSV/HDF5)",
                  reqDB);
 
   args.AddOption(&db_type,
@@ -225,8 +227,12 @@ int main(int argc, char **argv)
                  "\t 'hdf5': use HDF5 as a back end\n"
                  "\t 'rmq': use RabbitMQ as a back end\n");
 
-  args.AddOption(
-      &verbose, "-v", "--verbose", "-qu", "--quiet", "Enable more verbose benchmark");
+  args.AddOption(&verbose,
+                 "-v",
+                 "--verbose",
+                 "-qu",
+                 "--quiet",
+                 "Enable more verbose benchmark");
 
   // -------------------------------------------------------------------------
   // parse arguments
@@ -281,7 +287,8 @@ int main(int argc, char **argv)
 
   const char *object_descr = std::getenv("AMS_OBJECTS");
   if (dbType == AMSDBType::AMS_RMQ && !object_descr) {
-    std::cerr << "Error: RabbitMQ backend required to set env variable AMS_OBJECTS\n";
+    std::cerr << "Error: RabbitMQ backend required to set env variable "
+                 "AMS_OBJECTS\n";
     return -1;
   }
 
@@ -304,35 +311,54 @@ int main(int argc, char **argv)
   }
 
   AMSCAbstrModel ams_model = AMSRegisterAbstractModel("bench_db_no_model",
-                                                        AMSUQPolicy::AMS_RANDOM,
-                                                        0.5,
-                                                        "",
-                                                        "",
-                                                        "bench_db_no_model",
-                                                        1);
+                                                      AMSUQPolicy::AMS_RANDOM,
+                                                      0.5,
+                                                      "",
+                                                      "",
+                                                      "bench_db_no_model",
+                                                      1);
 
-  std::cout << "Total elements across all " << wS << " ranks: " << wS * num_elems
-            << " (Weak Scaling)\n";
+  std::cout << "Total elements across all " << wS
+            << " ranks: " << wS * num_elems << "\n";
   std::cout << "Total elements per rank: " << num_elems << "\n";
 
   if (data_type == AMSDType::AMS_SINGLE) {
     Problem<float> prob(num_inputs, num_outputs);
+#ifdef __ENABLE_MPI__
+    AMSExecutor wf = AMSCreateDistributedExecutor(ams_model,
+                                                  AMSDType::AMS_SINGLE,
+                                                  resource,
+                                                  (AMSPhysicFn)callBackSingle,
+                                                  MPI_COMM_WORLD,
+                                                  rId,
+                                                  wS);
+#else
     AMSExecutor wf = AMSCreateExecutor(ams_model,
-                                        AMSDType::AMS_SINGLE,
-                                        resource,
-                                        (AMSPhysicFn)callBackSingle,
-                                        rId,
-                                        wS);
-
+                                       AMSDType::AMS_SINGLE,
+                                       resource,
+                                       (AMSPhysicFn)callBackSingle,
+                                       rId,
+                                       wS);
+#endif
     prob.ams_run(wf, resource, num_iterations, num_elems);
   } else {
     Problem<double> prob(num_inputs, num_outputs);
+#ifdef __ENABLE_MPI__
+    AMSExecutor wf = AMSCreateDistributedExecutor(ams_model,
+                                                  AMSDType::AMS_DOUBLE,
+                                                  resource,
+                                                  (AMSPhysicFn)callBackDouble,
+                                                  MPI_COMM_WORLD,
+                                                  rId,
+                                                  wS);
+#else
     AMSExecutor wf = AMSCreateExecutor(ams_model,
-                                        AMSDType::AMS_DOUBLE,
-                                        resource,
-                                        (AMSPhysicFn)callBackDouble,
-                                        rId,
-                                        wS);
+                                       AMSDType::AMS_DOUBLE,
+                                       resource,
+                                       (AMSPhysicFn)callBackDouble,
+                                       rId,
+                                       wS);
+#endif
     prob.ams_run(wf, resource, num_iterations, num_elems);
   }
 
@@ -340,5 +366,6 @@ int main(int argc, char **argv)
   adiak::fini()
 #endif
 
+  MPI_CALL(MPI_Finalize());
   return 0;
 }

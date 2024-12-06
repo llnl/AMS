@@ -7,11 +7,9 @@
 
 import argparse
 import pika
-import sys
 import ssl
 import json
 import struct
-from typing import Tuple
 
 import numpy as np
 
