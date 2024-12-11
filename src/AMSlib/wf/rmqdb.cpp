@@ -8,6 +8,7 @@
 #include "wf/basedb.hpp"
 
 using namespace ams::db;
+using json = nlohmann::json;
 
 /**
  * AMSMsgHeader
@@ -170,6 +171,16 @@ AMSMessage::AMSMessage(int id, uint64_t rId, uint8_t* data)
 
 /**
  * AMSMessageInbound
+ * 
+ * FIXME: The structure of AMSMessageInbound should be improved
+ * At the moment it is used to represent only model update but it is 
+ * very rigid (harcoded format etc)
+ * The format of ML model update must follow: 
+ *  UPDATE:<path of new ml model>
+ * 
+ * Instead, we should have some kind of abstract structure for incoming messages
+ * and a specialization for ML model updates.
+ * 
  */
 
 AMSMessageInbound::AMSMessageInbound(uint64_t id,
@@ -183,7 +194,7 @@ AMSMessageInbound::AMSMessageInbound(uint64_t id,
       body(std::move(body)),
       exchange(std::move(exchange)),
       routing_key(std::move(routing_key)),
-      redelivered(redelivered){};
+      redelivered(redelivered) {};
 
 
 bool AMSMessageInbound::empty() { return body.empty() || routing_key.empty(); }
@@ -219,16 +230,183 @@ std::vector<std::string> AMSMessageInbound::splitString(std::string str,
 }
 
 /**
+ * AMSPerfLogging
+ */
+
+std::mutex AMSPerfLogging::_mutex;
+
+AMSPerfLogging::AMSPerfLogging(uint64_t rId, std::string output_file)
+    : _rId(rId), _output_file(std::move(output_file))
+{
+  CWARNING(AMSPerfLogging,
+           !_output_file.has_filename(),
+           "Empty filename provided for RabbitMQ logging")
+  lock();
+  _data["mpi_rank"] = -1;
+  _data["internal_rank"] = _rId;
+  _data["created_at"] = getTimestamp();
+  unlock();
+}
+
+void AMSPerfLogging::updateMPIRank(uint64_t rank)
+{
+  lock();
+  // FIXME: Not a big fan of calling MPI directly here
+  //        For now it's okay, but we should have some kind of interface/shim
+  //        between AMS and MPI/any distributed backend
+#ifdef __ENABLE_MPI__
+  char name[MPI_MAX_PROCESSOR_NAME];
+  int len;
+  MPI_Get_processor_name(name, &len);
+  _data["mpi_host"] = name;
+#endif
+  _data["mpi_rank"] = rank;
+  unlock();
+}
+
+void AMSPerfLogging::_updateMonitoringFile(uint64_t rank,
+                                           std::string class_name,
+                                           std::string sep)
+{
+  lock();
+  auto ext = _output_file.extension();
+  _output_file = _output_file.stem();
+  _output_file += (sep + class_name);
+  _output_file += (sep + std::to_string(rank));
+  _output_file += ext;
+  unlock();
+}
+
+std::string AMSPerfLogging::getTimestamp(std::string fmt)
+{
+  auto t = std::time(nullptr);
+  auto tm = *std::localtime(&t);
+  std::ostringstream oss;
+  oss << std::put_time(&tm, fmt.c_str());
+  return oss.str();
+}
+
+uint64_t AMSPerfLogging::getNanoTimestamp()
+{
+  uint64_t ns =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::high_resolution_clock::now().time_since_epoch())
+          .count();
+  return ns;
+}
+
+void AMSPerfLogging::lock() { _mutex.lock(); }
+
+void AMSPerfLogging::unlock() { _mutex.unlock(); }
+
+std::string AMSPerfLogging::dump(int tab_width)
+{
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _data.dump(tab_width);
+}
+
+void AMSPerfLogging::toJSON(const std::string& output_file, int tab_width)
+{
+  lock();
+  _data["written_at"] = getTimestamp();
+  std::ofstream o(output_file);
+  o << std::setw(tab_width) << _data << std::endl;
+  DBG(AMSPerfLogging, "AMS wrote JSON logging data to: %s", output_file.c_str())
+  unlock();
+}
+
+void AMSPerfLogging::toJSON(int tab_width)
+{
+  toJSON(_output_file.generic_string(), tab_width);
+}
+
+/**
+ * AMSPublisherLogging
+ */
+
+AMSPublisherLogging::AMSPublisherLogging(uint64_t rId, std::string output_file)
+    : AMSPerfLogging(rId, std::move(output_file))
+{
+  lock();
+  _data["publisher"] = {};
+  _data["publisher"]["msgs"] = json::array();
+  unlock();
+}
+
+void AMSPublisherLogging::updateMonitoringFile(uint64_t rank, std::string sep)
+{
+  _updateMonitoringFile(rank, "publisher", sep);
+}
+
+void AMSPublisherLogging::logReadyConnection()
+{
+  lock();
+  _data["publisher"]["connection_ready"] = getNanoTimestamp();
+  unlock();
+}
+
+void AMSPublisherLogging::logClosedConnection()
+{
+  lock();
+  _data["publisher"]["connection_closed"] = getNanoTimestamp();
+  unlock();
+}
+
+void AMSPublisherLogging::logAMSMessage(int id, int size)
+{
+  lock();
+  uint64_t ts = getNanoTimestamp();
+  json json_msg;
+  json_msg["id"] = id;
+  json_msg["size_bytes"] = size;
+  json_msg["ts_send"] = ts;
+  _data["publisher"]["msgs"].push_back(json_msg);
+  unlock();
+}
+
+void AMSPublisherLogging::logAckAMSMessage(int id, bool acked)
+{
+  lock();
+  uint64_t ts = getNanoTimestamp();
+  for (auto& element : _data["publisher"]["msgs"]) {
+    if (element["id"] == id) {
+      _data["publisher"]["msgs"][id]["ack"] = acked;
+      if (acked) {
+        _data["publisher"]["msgs"][id]["ts_ack"] = ts;
+        uint64_t prev_ts = _data["publisher"]["msgs"][id]["ts_send"];
+        _data["publisher"]["msgs"][id]["duration_msec"] = (ts - prev_ts) / 1e6;
+      }
+    }
+  }
+  unlock();
+}
+
+void AMSPublisherLogging::logErrorAMSMessage(int id, const char* err)
+{
+  lock();
+  for (auto& element : _data["publisher"]["msgs"]) {
+    if (element["id"] == id) {
+      std::lock_guard<std::mutex> lock(_mutex);
+      _data["publisher"]["msgs"][id]["ack"] = false;
+      _data["publisher"]["msgs"][id]["error"] = err;
+    }
+  }
+  unlock();
+}
+
+/**
  * RMQHandler
  */
 
 RMQHandler::RMQHandler(uint64_t rId,
                        std::shared_ptr<struct event_base> loop,
-                       std::string cacert)
+                       std::string cacert,
+                       std::shared_ptr<AMSPerfLogging> logger)
     : AMQP::LibEventHandler(loop.get()),
       _rId(rId),
       _loop(loop),
-      _cacert(std::move(cacert))
+      _cacert(std::move(cacert)),
+      _logger(logger)
 {
   established = establish_connection.get_future();
   closed = close_connection.get_future();
@@ -257,6 +435,43 @@ bool RMQHandler::connectionValid()
 {
   std::chrono::milliseconds span(1);
   return ftr_error.wait_for(span) != std::future_status::ready;
+}
+
+bool RMQHandler::loggingEnabled() { return _logger != nullptr; }
+
+void RMQHandler::logReadyConnection() { _logger->logReadyConnection(); }
+
+void RMQHandler::logClosedConnection() { _logger->logClosedConnection(); }
+
+void RMQHandler::logAMSMessage(int id, int size)
+{
+  _logger->logAMSMessage(id, size);
+}
+
+void RMQHandler::logAckAMSMessage(int id, bool acked)
+{
+  _logger->logAckAMSMessage(id, acked);
+}
+
+void RMQHandler::logErrorAMSMessage(int id, const char* err)
+{
+  _logger->logErrorAMSMessage(id, err);
+}
+
+void RMQHandler::writeLoggingtoJSON(const std::string& output_file,
+                                    int tab_width)
+{
+  _logger->toJSON(output_file, tab_width);
+}
+
+void RMQHandler::writeLoggingtoJSON(int tab_width)
+{
+  _logger->toJSON(tab_width);
+}
+
+std::shared_ptr<AMSPerfLogging>& RMQHandler::getInternalLogger()
+{
+  return _logger;
 }
 
 bool RMQHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
@@ -296,6 +511,19 @@ bool RMQHandler::onSecured(AMQP::TcpConnection* connection, const SSL* ssl)
   return true;
 }
 
+uint16_t RMQHandler::onNegotiate(AMQP::TcpConnection* connection,
+                                 uint16_t interval)
+{
+  /** 
+   * We deactivate heartbeat because there is no heartbeat 
+   * management in LibEventHandler
+   * 
+   * TODO: implement heartbeat management in libevent 
+   * Handler or move to LibEv (or Boost asio)
+  */
+  return 0;
+}
+
 void RMQHandler::onClosed(AMQP::TcpConnection* connection)
 {
   DBG(RMQHandler, "[r%d] Connection is closed.", _rId)
@@ -315,6 +543,8 @@ void RMQHandler::onDetached(AMQP::TcpConnection* connection)
 {
   DBG(RMQHandler, "[r%d] Connection is detached.", _rId)
   close_connection.set_value(CLOSED);
+  if (loggingEnabled()) logClosedConnection();
+  if (loggingEnabled()) writeLoggingtoJSON();
 }
 
 bool RMQHandler::waitFuture(std::future<RMQConnectionStatus>& future,
@@ -339,8 +569,9 @@ RMQConsumerHandler::RMQConsumerHandler(uint64_t rId,
                                        std::string cacert,
                                        std::string exchange,
                                        std::string routing_key,
-                                       AMQP::ExchangeType extype)
-    : RMQHandler(rId, loop, cacert),
+                                       AMQP::ExchangeType extype,
+                                       std::shared_ptr<AMSPerfLogging> logger)
+    : RMQHandler(rId, loop, cacert, logger),
       _exchange(exchange),
       _extype(extype),
       _routing_key(routing_key),
@@ -530,7 +761,8 @@ RMQConsumer::RMQConsumer(uint64_t rId,
                          const AMQP::Address& address,
                          std::string cacert,
                          std::string exchange,
-                         std::string routing_key)
+                         std::string routing_key,
+                         std::shared_ptr<AMSPerfLogging> logger)
     : _rId(rId),
       _cacert(cacert),
       _routing_key(routing_key),
@@ -566,7 +798,7 @@ RMQConsumer::RMQConsumer(uint64_t rId,
                                                event_base_free(event);
                                              });
   _handler = std::make_shared<RMQConsumerHandler>(
-      rId, _loop, _cacert, _exchange, _routing_key, AMQP::fanout);
+      rId, _loop, _cacert, _exchange, _routing_key, AMQP::fanout, logger);
   _connection = new AMQP::TcpConnection(_handler.get(), address);
 }
 
@@ -624,8 +856,9 @@ RMQPublisherHandler::RMQPublisherHandler(
     uint64_t rId,
     std::shared_ptr<struct event_base> loop,
     std::string cacert,
-    std::string queue)
-    : RMQHandler(rId, loop, cacert),
+    std::string queue,
+    std::shared_ptr<AMSPerfLogging> logger)
+    : RMQHandler(rId, loop, cacert, logger),
       _queue(queue),
       _nb_msg_ack(0),
       _nb_msg(0),
@@ -634,33 +867,14 @@ RMQPublisherHandler::RMQPublisherHandler(
 {
 }
 
-/**
- *  @brief  Return the messages that have NOT been acknowledged by the RabbitMQ server. 
- *  @return     A vector of AMSMessage
- */
 std::vector<AMSMessage>& RMQPublisherHandler::msgBuffer() { return _messages; }
 
-/**
- *  @brief    Free AMSMessages held by the handler
- */
 void RMQPublisherHandler::cleanup() { freeAllMessages(_messages); }
 
-/**
- *  @brief    Total number of messages sent
- *  @return   Number of messages
- */
 int RMQPublisherHandler::msgSent() const { return _nb_msg; }
 
-/**
- *  @brief    Total number of messages successfully acknowledged
- *  @return   Number of messages
- */
 int RMQPublisherHandler::msgAcknowledged() const { return _nb_msg_ack; }
 
-/**
- *  @brief    Total number of messages unacknowledged
- *  @return   Number of messages unacknowledged
- */
 unsigned RMQPublisherHandler::unacknowledged() const
 {
   return _rchannel->unacknowledged();
@@ -668,10 +882,14 @@ unsigned RMQPublisherHandler::unacknowledged() const
 
 void RMQPublisherHandler::publish(AMSMessage&& msg)
 {
+  CALIPER(CALI_MARK_BEGIN("RMQ_PUBLISH");)
   {
     const std::lock_guard<std::mutex> lock(_mutex);
     _messages.push_back(msg);
   }
+
+  if (loggingEnabled()) logAMSMessage(msg.id(), msg.size());
+
   if (_rchannel) {
     // publish a message via the reliable-channel
     //    onAck   : message has been explicitly ack'ed by RabbitMQ
@@ -684,7 +902,9 @@ void RMQPublisherHandler::publish(AMSMessage&& msg)
                 &_nb_msg_ack = _nb_msg_ack,
                 id = msg.id(),
                 data = msg.data(),
-                &_messages = this->_messages]() mutable {
+                &_messages = this->_messages,
+                &_logger = _logger,
+                &mutex = _mutex]() mutable {
           DBG(RMQPublisherHandler,
               "[r%d] message #%d (Addr:%p) got acknowledged "
               "successfully "
@@ -696,8 +916,13 @@ void RMQPublisherHandler::publish(AMSMessage&& msg)
               data)
           this->freeMessage(id, _messages);
           _nb_msg_ack++;
+          if (loggingEnabled()) logAckAMSMessage(id, true);
         })
-        .onNack([this, id = msg.id(), data = msg.data()]() mutable {
+        .onNack([this,
+                 id = msg.id(),
+                 data = msg.data(),
+                 &_logger = _logger,
+                 &mutex = _mutex]() mutable {
           WARNING(RMQPublisherHandler,
                   "[r%d] message #%d (%p) received negative "
                   "acknowledged "
@@ -707,27 +932,35 @@ void RMQPublisherHandler::publish(AMSMessage&& msg)
                   _rId,
                   id,
                   data)
+          if (loggingEnabled()) logAckAMSMessage(id, false);
         })
-        .onError([this, id = msg.id(), data = msg.data()](
-                     const char* err_message) mutable {
+        .onError([this,
+                  id = msg.id(),
+                  data = msg.data(),
+                  &_logger = _logger,
+                  &mutex = _mutex](const char* err_message) mutable {
           WARNING(RMQPublisherHandler,
                   "[r%d] message #%d (%p) did not get send: %s",
                   _rId,
                   id,
                   data,
                   err_message)
+          if (loggingEnabled()) logErrorAMSMessage(id, err_message);
         });
   } else {
     WARNING(RMQPublisherHandler,
             "[r%d] The reliable channel was not ready for message #%d.",
             _rId,
             msg.id())
+    if (loggingEnabled()) logAckAMSMessage(msg.id(), false);
   }
   _nb_msg++;
+  CALIPER(CALI_MARK_END("RMQ_PUBLISH");)
 }
 
 void RMQPublisherHandler::onReady(AMQP::TcpConnection* connection)
 {
+  if (loggingEnabled()) logReadyConnection();
   DBG(RMQPublisherHandler,
       "[r%d] Sucessfuly logged in (connection %p). Connection ready to "
       "use.",
@@ -820,7 +1053,8 @@ RMQPublisher::RMQPublisher(uint64_t rId,
                            const AMQP::Address& address,
                            std::string cacert,
                            std::string queue,
-                           std::vector<AMSMessage>&& msgs_to_send)
+                           std::vector<AMSMessage>&& msgs_to_send,
+                           std::shared_ptr<AMSPerfLogging> logger)
     : _rId(rId),
       _queue(queue),
       _cacert(cacert),
@@ -855,14 +1089,15 @@ RMQPublisher::RMQPublisher(uint64_t rId,
                                                event_base_free(event);
                                              });
 
-  _handler =
-      std::make_shared<RMQPublisherHandler>(_rId, _loop, _cacert, _queue);
+  // Performance logging is optional
+  _handler = std::make_shared<RMQPublisherHandler>(
+      _rId, _loop, _cacert, _queue, logger);
   _connection = new AMQP::TcpConnection(_handler.get(), address);
 }
 
 void RMQPublisher::publish(AMSMessage&& message)
 {
-  // We have some messages to send first (from a potential restart)
+  // We could have some messages to send first (from a potential restart)
   if (_buffer_msg.size() > 0) {
     for (auto& msg : _buffer_msg) {
       DBG(RMQPublisher,
@@ -878,7 +1113,7 @@ void RMQPublisher::publish(AMSMessage&& message)
   _handler->publish(std::move(message));
 }
 
-bool RMQPublisher::ready_publish()
+bool RMQPublisher::readyPublish()
 {
   return _connection->ready() && _connection->usable();
 }
@@ -904,6 +1139,11 @@ std::vector<AMSMessage>& RMQPublisher::getMsgBuffer()
   return _handler->msgBuffer();
 }
 
+std::shared_ptr<AMSPerfLogging>& RMQPublisher::getLogger()
+{
+  return _handler->getInternalLogger();
+}
+
 void RMQPublisher::cleanup() { _handler->cleanup(); }
 
 int RMQPublisher::msgSent() const { return _handler->msgSent(); }
@@ -915,31 +1155,19 @@ int RMQPublisher::msgAcknowledged() const
 
 bool RMQPublisher::close(unsigned ms, int repeat)
 {
-  _handler->flush();
-  _connection->close(false);
-  return _handler->waitToClose(ms, repeat);
+  if (_handler) _handler->flush();
+  if (_connection) _connection->close(false);
+  if (_handler) return _handler->waitToClose(ms, repeat);
+  return false;
 }
 
 /**
  * RMQInterface
  */
 
-bool RMQInterface::connect(std::string rmq_name,
-                           std::string rmq_password,
-                           std::string rmq_user,
-                           std::string rmq_vhost,
-                           int service_port,
-                           std::string service_host,
-                           std::string rmq_cert,
-                           std::string outbound_queue,
-                           std::string exchange,
-                           std::string routing_key)
+RMQInterface::RMQInterface()
+    : _publisher_connected(false), _consumer_connected(false), _rId(0)
 {
-  _queue_sender = outbound_queue;
-  _exchange = exchange;
-  _routing_key = routing_key;
-  _cacert = rmq_cert;
-
   // Here we generate 64-bits wide random numbers to have a unique distributed ID
   // WARNING: there is no guarantee of uniqueness here as each MPI rank will have its own generator
   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -947,6 +1175,25 @@ bool RMQInterface::connect(std::string rmq_name,
   std::uniform_int_distribution<int> distrib(0,
                                              std::numeric_limits<int>::max());
   _rId = static_cast<uint64_t>(distrib(generator));
+}
+
+std::pair<bool, bool> RMQInterface::connect(std::string rmq_name,
+                                            std::string rmq_password,
+                                            std::string rmq_user,
+                                            std::string rmq_vhost,
+                                            int service_port,
+                                            std::string service_host,
+                                            std::string rmq_cert,
+                                            std::string outbound_queue,
+                                            std::string exchange,
+                                            std::string routing_key,
+                                            bool update_surrogate,
+                                            std::string monitoring_file)
+{
+  _queue_sender = outbound_queue;
+  _exchange = exchange;
+  _routing_key = routing_key;
+  _cacert = rmq_cert;
 
   AMQP::Login login(rmq_user, rmq_password);
   bool is_secure = true;
@@ -955,85 +1202,117 @@ bool RMQInterface::connect(std::string rmq_name,
 
   _address = std::make_shared<AMQP::Address>(
       service_host, service_port, login, rmq_vhost, is_secure);
-  _publisher =
-      std::make_shared<RMQPublisher>(_rId, *_address, _cacert, _queue_sender);
+
+  // Conditionnal logger (can be deactivated)
+  bool activate_monitoring = true;
+  _logger = nullptr;
+  if (activate_monitoring)
+    _logger = std::make_shared<AMSPublisherLogging>(_rId, monitoring_file);
+
+  _publisher = std::make_shared<RMQPublisher>(_rId,
+                                              *_address,
+                                              _cacert,
+                                              _queue_sender,
+                                              std::vector<AMSMessage>(),
+                                              _logger);
 
   _publisher_thread = std::thread([&]() { _publisher->start(); });
 
   if (!_publisher->waitToEstablish(100, 10)) {
     _publisher->stop();
     _publisher_thread.join();
-    FATAL(RabbitMQInterface, "Could not establish connection");
+    FATAL(RMQInterface, "Could not establish connection");
+  }
+  _publisher_connected = true;
+  _consumer_connected = false;
+
+  // We allow surrogate model update
+  if (update_surrogate) {
+    // std::shared_ptr<AMSPerfLogging> _consumer_logger = nullptr;
+    // if (activate_monitoring)
+    //   _consumer_logger = std::make_shared<AMSPerfLogging>(_rId, monitoring_file);
+
+    if (_exchange != "") {
+      _consumer = std::make_shared<RMQConsumer>(
+          _rId, *_address, _cacert, _exchange, _routing_key);
+      _consumer_thread = std::thread([&]() { _consumer->start(); });
+
+      if (!_consumer->waitToEstablish(100, 10)) {
+        _consumer->stop();
+        _consumer_thread.join();
+        FATAL(RMQInterface, "Could not establish consumer connection");
+      }
+      _consumer_connected = true;
+    } else {
+      WARNING(RMQInterface,
+              "Could not establish consumer connection: exchange is empty");
+    }
+  } else {
+    DBG(RMQInterface, "Deactivating surrogate model update");
   }
 
-  _consumer = std::make_shared<RMQConsumer>(
-      _rId, *_address, _cacert, _exchange, _routing_key);
-  _consumer_thread = std::thread([&]() { _consumer->start(); });
-
-  if (!_consumer->waitToEstablish(100, 10)) {
-    _consumer->stop();
-    _consumer_thread.join();
-    FATAL(RabbitMQDB, "Could not establish consumer connection");
-  }
-
-  connected = true;
-  return connected;
+  return std::make_pair(_publisher_connected, _consumer_connected);
 }
 
 void RMQInterface::restartPublisher()
 {
+  CALIPER(CALI_MARK_BEGIN("RMQ_RESTART_PUBLISHER");)
   std::vector<AMSMessage> messages = _publisher->getMsgBuffer();
 
-  AMSMessage& msg_min =
-      *(std::min_element(messages.begin(),
-                         messages.end(),
-                         [](const AMSMessage& a, const AMSMessage& b) {
-                           return a.id() < b.id();
-                         }));
+  if (messages.size() > 0) {
+    AMSMessage& msg_min =
+        *(std::min_element(messages.begin(),
+                           messages.end(),
+                           [](const AMSMessage& a, const AMSMessage& b) {
+                             return a.id() < b.id();
+                           }));
+    DBG(RMQInterface,
+        "[r%d] restarting RMQPublisher: %lu buffered messages to re-send "
+        "(starting from msg #%d).",
+        _rId,
+        messages.size(),
+        msg_min.id())
+  }
 
-  DBG(RMQPublisher,
-      "[r%d] we have %lu buffered messages that will get re-send "
-      "(starting from msg #%d).",
-      _rId,
-      messages.size(),
-      msg_min.id())
+  auto logger = _publisher->getLogger();
 
   // Stop the faulty publisher
   _publisher->stop();
   _publisher_thread.join();
   _publisher.reset();
-  connected = false;
+  _publisher_connected = false;
 
   _publisher = std::make_shared<RMQPublisher>(
-      _rId, *_address, _cacert, _queue_sender, std::move(messages));
+      _rId, *_address, _cacert, _queue_sender, std::move(messages), logger);
   _publisher_thread = std::thread([&]() { _publisher->start(); });
-  connected = true;
+  _publisher_connected = true;
+  CALIPER(CALI_MARK_END("RMQ_RESTART_PUBLISHER");)
 }
 
 void RMQInterface::close()
 {
-  if (!_publisher_thread.joinable() || !_consumer_thread.joinable()) {
-    DBG(RMQInterface, "Threads are not joinable")
-    return;
+  if (_publisher_connected) {
+    bool status = _publisher->close(100, 10);
+    CWARNING(RMQInterface,
+             !status,
+             "Could not gracefully close publisher TCP connection")
+
+    DBG(RMQInterface, "Number of messages sent: %d", _msg_tag)
+    DBG(RMQInterface,
+        "Number of unacknowledged messages are %d",
+        _publisher->unacknowledged())
+    _publisher->stop();
+    if (_publisher_thread.joinable()) _publisher_thread.join();
+    _publisher_connected = false;
   }
-  bool status = _publisher->close(100, 10);
-  CWARNING(RabbitMQDB,
-           !status,
-           "Could not gracefully close publisher TCP connection")
 
-  DBG(RabbitMQInterface, "Number of messages sent: %d", _msg_tag)
-  DBG(RabbitMQInterface,
-      "Number of unacknowledged messages are %d",
-      _publisher->unacknowledged())
-  _publisher->stop();
-  _publisher_thread.join();
-
-  status = _consumer->close(100, 10);
-  CWARNING(RabbitMQDB,
-           !status,
-           "Could not gracefully close consumer TCP connection")
-  _consumer->stop();
-  _consumer_thread.join();
-
-  connected = false;
+  if (_consumer_connected) {
+    bool status = _consumer->close(100, 10);
+    CWARNING(RMQInterface,
+             !status,
+             "Could not gracefully close consumer TCP connection")
+    _consumer->stop();
+    if (_consumer_thread.joinable()) _consumer_thread.join();
+    _consumer_connected = false;
+  }
 }
