@@ -10,7 +10,7 @@ import os
 import shutil
 import signal
 import time
-from abc import ABC, abstractclassmethod, abstractmethod
+from abc import ABC, classmethod, abstractmethod
 from enum import Enum
 from multiprocessing import Process
 from multiprocessing import Queue as mp_queue
@@ -425,7 +425,7 @@ class FSWriteTask(Task):
         with AMSMonitor(obj=self, tag="internal_loop", accumulate=False):
             while True:
                 # This is a blocking call
-                print(f"{self.__class__.__name__} Receives messages at queue:", self.i_queue)
+                print(f"{self.__class__.__name__} Receives messages at queue: {self.i_queue} writing to {self.out_dir}")
                 item = self.i_queue.get(block=True)
                 print(f"{self.__class__.__name__} Received messages at queue:", self.i_queue)
                 if item.is_terminate():
@@ -483,7 +483,7 @@ class PushToStore(Task):
 
     def __init__(self, i_queue, ams_config, db_path, store):
         """
-        Tnitializes the PushToStore Task. It reads files from i_queue, if the file
+        Initializes the PushToStore Task. It reads files from i_queue, if the file
         is not under db_path, it copies the file to this location and if store defined
         it makes the kosh-store aware about the existence of the file.
         """
@@ -742,7 +742,8 @@ class Pipeline(ABC):
         parser.set_defaults(store=True)
         return
 
-    @abstractclassmethod
+    @classmethod
+    @abstractmethod
     def from_cli(cls):
         pass
 
@@ -944,8 +945,8 @@ class RMQPipeline(Pipeline):
             config.rabbitmq_user,
             config.rabbitmq_password,
             config.rabbitmq_cert,
-            config.rabbitmq_outbound_queue,
-            config.rabbitmq_ml_status_queue if args.update_rmq_models else None,
+            config.rabbitmq_queue_physics,
+            config.rabbitmq_exchange_training if args.update_rmq_models else None
         )
 
     def requires_model_update(self):

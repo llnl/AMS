@@ -318,12 +318,6 @@ public:
 
     REPORT_MEM_USAGE(Workflow, "Start")
 
-    // // TODO: Remove only for TESTS
-    // for (int i = 0; i < 10; i++) {
-    //   std::cout << "Sleeping in workflow .." << std::endl;
-    //   std::this_thread::sleep_for(std::chrono::seconds(1));
-    // }
-
     if (!UQModel->hasSurrogate()) {
       FPTypeValue **tmpInputs = const_cast<FPTypeValue **>(inputs);
 

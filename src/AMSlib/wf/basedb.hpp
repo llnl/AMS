@@ -66,12 +66,11 @@ namespace fs = std::experimental::filesystem;
 #include <chrono>
 #include <deque>
 #include <future>
-#include <iomanip>
-#include <nlohmann/json.hpp>
 #include <random>
-#include <sstream>
 #include <thread>
 #include <tuple>
+
+#include <nlohmann/json.hpp>
 
 #endif  // __ENABLE_RMQ__
 
@@ -1036,7 +1035,9 @@ protected:
    *  @param[in]  class_name    Class name
    *  @param[in]  sep           Separator
    */
-  void _updateMonitoringFile(uint64_t rank, std::string class_name, std::string sep);
+  void _updateMonitoringFile(uint64_t rank,
+                             std::string class_name,
+                             std::string sep);
 
 
 public:
@@ -1146,14 +1147,13 @@ public:
  * @brief Represents an object responsible of logging AMS activities
  * 
  * FIXME: This design could be improved with template specialization
- * to allow user to specify they own key (instead of publisher)
+ * to allow user to specify their own key (instead of "publisher")
  */
 class AMSPublisherLogging : public AMSPerfLogging
 {
   using json = nlohmann::json;
 
 public:
-
   AMSPublisherLogging() = default;
 
   /**
@@ -1162,9 +1162,7 @@ public:
    */
   AMSPublisherLogging(uint64_t rId, std::string output_file);
 
-  ~AMSPublisherLogging();
-
-  void initialize();
+  ~AMSPublisherLogging() = default;
 
   /**
    *  @brief Update the internal output file name
@@ -1207,66 +1205,6 @@ public:
   void logErrorAMSMessage(int id, const char* err);
 
 };  // class AMSPublisherLogging
-
-// /**
-//  * @brief Represents an object responsible of logging AMS activities
-//  */
-// class AMSConsumerLogging : public AMSPerfLogging
-// {
-//   using json = nlohmann::json;
-
-// public:
-//   AMSConsumerLogging() = default;
-
-//   /**
-//    *  @brief Constructor
-//    *  @param[in]  rId          Distributed ID
-//    */
-//   AMSConsumerLogging(uint64_t rId, std::string output_file);
-
-//   ~AMSConsumerLogging();
-
-//   /**
-//    *  @brief Update the internal output file name
-//    *  with rank as follows:
-//    *     if output file is "stem.ext" -> stem{sep}{rank}.ext
-//    * For example, stem-0.ext for rank 0 with "-" separator
-//    *  @param[in]  rank          MPI rank
-//    */
-//   void updateMonitoringFile(uint64_t rank, std::string sep);
-
-//   /**
-//    *  @brief  Log when the connection is ready to be used.
-//    */
-//   void logReadyConnection();
-
-//   /**
-//    *  @brief  Log when the connection is closed.
-//    */
-//   void logClosedConnection();
-
-//   /**
-//    *  @brief  Log when an AMS message has been sent
-//    *  @param[in]  id      The ID (tag) of the message
-//    *  @param[in]  size    The size in bytes of the message
-//    */
-//   void logAMSMessage(int id, int size);
-
-//   /**
-//    *  @brief  Log when an AMS message has been acknowledged (or not)
-//    *  @param[in]  id      The ID (tag) of the message
-//    *  @param[in]  acked   True if the message was successfuly acknowledged
-//    */
-//   void logAckAMSMessage(int id, bool acked);
-
-//   /**
-//    *  @brief  Log error when an AMS message communication fails
-//    *  @param[in]  id      The ID (tag) of the message
-//    *  @param[in]  err    The error message
-//    */
-//   void logErrorAMSMessage(int id, const char* err);
-
-// };  // class AMSConsumerLogging
 
 /**
  * @brief Specific handler for RabbitMQ connections based on libevent.
@@ -2099,14 +2037,17 @@ public:
    * @brief Check if this interface supports monitoring
    * @return True if monitoring is supported
    */
-  bool isMonitoringActivated() const {
+  bool isMonitoringActivated() const
+  {
 #ifdef __ENABLE_MPI__
-  char name[MPI_MAX_PROCESSOR_NAME];
-  int len;
-  MPI_Get_processor_name(name, &len);
-    std::cerr << "MPI  : isMonitoringActivated(" << _logger << " | " << name << "): " << _logger.use_count() << std::endl;
+    char name[MPI_MAX_PROCESSOR_NAME];
+    int len;
+    MPI_Get_processor_name(name, &len);
+    std::cerr << "MPI  : isMonitoringActivated(" << _logger << " | " << name
+              << "): " << _logger.use_count() << std::endl;
 #else
-    std::cerr << "NoMPI: isMonitoringActivated(" << _logger << "): " << _logger.use_count() << std::endl;
+    std::cerr << "NoMPI: isMonitoringActivated(" << _logger
+              << "): " << _logger.use_count() << std::endl;
 #endif
     return _logger != nullptr;
   }

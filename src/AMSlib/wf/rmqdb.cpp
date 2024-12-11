@@ -7,9 +7,6 @@
 
 #include "wf/basedb.hpp"
 
-// #include <iomanip>
-// #include <sstream>
-
 using namespace ams::db;
 using json = nlohmann::json;
 
@@ -197,7 +194,7 @@ AMSMessageInbound::AMSMessageInbound(uint64_t id,
       body(std::move(body)),
       exchange(std::move(exchange)),
       routing_key(std::move(routing_key)),
-      redelivered(redelivered){};
+      redelivered(redelivered) {};
 
 
 bool AMSMessageInbound::empty() { return body.empty() || routing_key.empty(); }
@@ -253,10 +250,9 @@ AMSPerfLogging::AMSPerfLogging(uint64_t rId, std::string output_file)
 
 void AMSPerfLogging::updateMPIRank(uint64_t rank)
 {
-  //std::lock_guard<std::mutex> lock(_mutex);
   lock();
   // FIXME: Not a big fan of calling MPI directly here
-  //        For now it's okay, but we should have some kind of interface
+  //        For now it's okay, but we should have some kind of interface/shim
   //        between AMS and MPI/any distributed backend
 #ifdef __ENABLE_MPI__
   char name[MPI_MAX_PROCESSOR_NAME];
@@ -268,7 +264,9 @@ void AMSPerfLogging::updateMPIRank(uint64_t rank)
   unlock();
 }
 
-void AMSPerfLogging::_updateMonitoringFile(uint64_t rank, std::string class_name, std::string sep)
+void AMSPerfLogging::_updateMonitoringFile(uint64_t rank,
+                                           std::string class_name,
+                                           std::string sep)
 {
   lock();
   auto ext = _output_file.extension();
@@ -327,7 +325,7 @@ void AMSPerfLogging::toJSON(int tab_width)
  */
 
 AMSPublisherLogging::AMSPublisherLogging(uint64_t rId, std::string output_file)
-  : AMSPerfLogging(rId, std::move(output_file))
+    : AMSPerfLogging(rId, std::move(output_file))
 {
   lock();
   _data["publisher"] = {};
@@ -338,13 +336,6 @@ AMSPublisherLogging::AMSPublisherLogging(uint64_t rId, std::string output_file)
 void AMSPublisherLogging::updateMonitoringFile(uint64_t rank, std::string sep)
 {
   _updateMonitoringFile(rank, "publisher", sep);
-}
-
-AMSPublisherLogging::~AMSPublisherLogging()
-{
-  // TODO: Remove that debug print
-  std::cout << "~AMSPublisherLogging(" << _data["mpi_rank"] << "):\n"
-            << dump() << std::endl;
 }
 
 void AMSPublisherLogging::logReadyConnection()
@@ -402,87 +393,6 @@ void AMSPublisherLogging::logErrorAMSMessage(int id, const char* err)
   }
   unlock();
 }
-
-// /**
-//  * AMSConsumerLogging
-//  */
-
-// AMSConsumerLogging::AMSConsumerLogging(uint64_t rId, std::string output_file)
-//   : AMSPerfLogging(rId, std::move(output_file))
-// {
-//   lock();
-//   _data["consumer"] = {};
-//   _data["publisher"]["msgs"] = json::array();
-//   unlock();
-// }
-
-// void AMSConsumerLogging::updateMonitoringFile(uint64_t rank, std::string sep)
-// {
-//   _updateMonitoringFile(rank, "consumer", sep);
-// }
-
-// AMSConsumerLogging::~AMSPublisherLogging()
-// {
-//   // TODO: Remove that debug print
-//   std::cout << "~AMSConsumerLogging(" << _data["mpi_rank"] << "):\n"
-//             << dump() << std::endl;
-// }
-
-// void AMSConsumerLogging::logReadyConnection()
-// {
-//   lock();
-//   _data["consumer"]["connection_ready"] = getNanoTimestamp();
-//   unlock();
-// }
-
-// void AMSConsumerLogging::logClosedConnection()
-// {
-//   lock();
-//   _data["consumer"]["connection_closed"] = getNanoTimestamp();
-//   unlock();
-// }
-
-// void AMSConsumerLogging::logAMSMessage(int id, int size)
-// {
-//   lock();
-//   uint64_t ts = getNanoTimestamp();
-//   json json_msg;
-//   json_msg["id"] = id;
-//   json_msg["size_bytes"] = size;
-//   json_msg["ts_send"] = ts;
-//   _data["consumer"]["msgs"].push_back(json_msg);
-//   unlock();
-// }
-
-// void AMSConsumerLogging::logAckAMSMessage(int id, bool acked)
-// {
-//   lock();
-//   uint64_t ts = getNanoTimestamp();
-//   for (auto& element : _data["consumer"]["msgs"]) {
-//     if (element["id"] == id) {
-//       _data["consumer"]["msgs"][id]["ack"] = acked;
-//       if (acked) {
-//         _data["consumer"]["msgs"][id]["ts_ack"] = ts;
-//         uint64_t prev_ts = _data["consumer"]["msgs"][id]["ts_send"];
-//         _data["consumer"]["msgs"][id]["duration_msec"] = (ts - prev_ts) / 1e6;
-//       }
-//     }
-//   }
-//   unlock();
-// }
-
-// void AMSConsumerLogging::logErrorAMSMessage(int id, const char* err)
-// {
-//   lock();
-//   for (auto& element : _data["consumer"]["msgs"]) {
-//     if (element["id"] == id) {
-//       std::lock_guard<std::mutex> lock(_mutex);
-//       _data["consumer"]["msgs"][id]["ack"] = false;
-//       _data["consumer"]["msgs"][id]["error"] = err;
-//     }
-//   }
-//   unlock();
-// }
 
 /**
  * RMQHandler
