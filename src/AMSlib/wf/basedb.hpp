@@ -8,8 +8,9 @@
 #ifndef __AMS_BASE_DB__
 #define __AMS_BASE_DB__
 
-
-#include <H5Ipublic.h>
+#ifdef __AMS_ENABLE_CALIPER__
+#include <caliper/cali_macros.h>
+#endif
 
 #include <cstdint>
 #include <experimental/filesystem>
@@ -38,6 +39,7 @@ namespace fs = std::experimental::filesystem;
 #endif
 
 #ifdef __ENABLE_HDF5__
+#include <H5Ipublic.h>
 #include <hdf5.h>
 #define HDF5_ERROR(Eid)                                             \
   if (Eid < 0) {                                                    \
@@ -67,6 +69,8 @@ namespace fs = std::experimental::filesystem;
 #include <random>
 #include <thread>
 #include <tuple>
+
+#include <nlohmann/json.hpp>
 
 #endif  // __ENABLE_RMQ__
 
@@ -221,6 +225,7 @@ private:
               std::vector<TypeValue*>& inputs,
               std::vector<TypeValue*>& outputs)
   {
+    CALIPER(CALI_MARK_BEGIN("CSV_STORE");)
     DBG(DB,
         "DB of type %s stores %ld elements of input/output dimensions (%lu, "
         "%lu)",
@@ -251,6 +256,7 @@ private:
       }
       fd << outputs[num_out - 1][i] << "\n";
     }
+    CALIPER(CALI_MARK_END("CSV_STORE");)
   }
 
 
@@ -1003,6 +1009,202 @@ private:
 
 };  // class AMSMessageInbound
 
+/**
+ * @brief Represents an object responsible of logging AMS activities
+ */
+class AMSPerfLogging
+{
+  using json = nlohmann::json;
+
+private:
+  /** @brief Distributed rank */
+  uint64_t _rId;
+  /** @brief Path where to output the logging content */
+  fs::path _output_file;
+
+protected:
+  /** @brief Underlying JSON representation */
+  json _data;
+
+  /**
+   *  @brief Internal method to update the internal output file name
+   *  with rank and class name as follows:
+   *     if output file is "stem.ext" -> stem{sep}{class_name}{sep}{rank}.ext
+   * For example, stem-publisher-0.ext for rank 0, class name publisher with "-" separator
+   *  @param[in]  rank          MPI rank
+   *  @param[in]  class_name    Class name
+   *  @param[in]  sep           Separator
+   */
+  void _updateMonitoringFile(uint64_t rank,
+                             std::string class_name,
+                             std::string sep);
+
+
+public:
+  static std::mutex _mutex;
+
+  AMSPerfLogging() = default;
+
+  /**
+   *  @brief Constructor
+   *  @param[in]  rId          Distributed ID
+   */
+  AMSPerfLogging(uint64_t rId, std::string output_file);
+
+  virtual ~AMSPerfLogging() = default;
+
+  /**
+   *  @brief Update the object with the MPI Rank
+   *  @param[in]  rank          MPI rank
+   */
+  void updateMPIRank(uint64_t rank);
+
+  /**
+   *  @brief Update the internal output file name
+   *  with rank as follows:
+   *     if output file is "stem.ext" -> stem{sep}{rank}.ext
+   * For example, stem-0.ext for rank 0 with "-" separator
+   *  @param[in]  rank          MPI rank
+   */
+  virtual void updateMonitoringFile(uint64_t rank, std::string sep) = 0;
+
+  /**
+   *  @brief Return a timestamp based on given format
+   *  @param[in]  fmt     Format
+   *  @return             Return the timestamp as a string
+   */
+  std::string getTimestamp(std::string fmt = "%Y-%m-%dT%H:%M:%S%z");
+
+  /**
+   *  @brief Return a timestamp in nanoseconds
+   *  @return             Return current timestamp in nanoseconds
+   */
+  uint64_t getNanoTimestamp();
+
+  /**
+   *  @brief Lock the logger (mutex)
+   */
+  void lock();
+
+  /**
+   *  @brief Unlock the logger (mutex)
+   */
+  void unlock();
+
+  /**
+   *  @brief  Log when the connection is ready to be used.
+   */
+  virtual void logReadyConnection() = 0;
+
+  /**
+   *  @brief  Log when the connection is closed.
+   */
+  virtual void logClosedConnection() = 0;
+
+  /**
+   *  @brief  Log when an AMS message has been sent
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  size    The size in bytes of the message
+   */
+  virtual void logAMSMessage(int id, int size) = 0;
+
+  /**
+   *  @brief  Log when an AMS message has been acknowledged (or not)
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  acked   True if the message was successfuly acknowledged
+   */
+  virtual void logAckAMSMessage(int id, bool acked) = 0;
+
+  /**
+   *  @brief  Log error when an AMS message communication fails
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  err    The error message
+   */
+  virtual void logErrorAMSMessage(int id, const char* err) = 0;
+
+  /**
+   *  @brief  Dump the content of the logger as a string
+   *  @param[in]  tab_width      JSON indentation
+   *  @return                    Return JSON string
+   */
+  std::string dump(int tab_width = 2);
+
+  /**
+   *  @brief  Write the current state of the logger to the internal JSON file
+   *  @param[in]  tab_width      JSON indentation
+   */
+  void toJSON(int tab_width = 2);
+
+  /**
+   *  @brief  Write the current state of the logger to a JSON file
+   *  @param[in]  output_file    Path of the JSON file
+   *  @param[in]  tab_width      JSON indentation
+   */
+  void toJSON(const std::string& output_file, int tab_width = 2);
+};  // class AMSPerfLogging
+
+/**
+ * @brief Represents an object responsible of logging AMS activities
+ * 
+ * FIXME: This design could be improved with template specialization
+ * to allow user to specify their own key (instead of "publisher")
+ */
+class AMSPublisherLogging : public AMSPerfLogging
+{
+  using json = nlohmann::json;
+
+public:
+  AMSPublisherLogging() = default;
+
+  /**
+   *  @brief Constructor
+   *  @param[in]  rId          Distributed ID
+   */
+  AMSPublisherLogging(uint64_t rId, std::string output_file);
+
+  ~AMSPublisherLogging() = default;
+
+  /**
+   *  @brief Update the internal output file name
+   *  with rank as follows:
+   *     if output file is "stem.ext" -> stem{sep}{rank}.ext
+   * For example, stem-0.ext for rank 0 with "-" separator
+   *  @param[in]  rank          MPI rank
+   */
+  void updateMonitoringFile(uint64_t rank, std::string sep);
+
+  /**
+   *  @brief  Log when the connection is ready to be used.
+   */
+  void logReadyConnection();
+
+  /**
+   *  @brief  Log when the connection is closed.
+   */
+  void logClosedConnection();
+
+  /**
+   *  @brief  Log when an AMS message has been sent
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  size    The size in bytes of the message
+   */
+  void logAMSMessage(int id, int size);
+
+  /**
+   *  @brief  Log when an AMS message has been acknowledged (or not)
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  acked   True if the message was successfuly acknowledged
+   */
+  void logAckAMSMessage(int id, bool acked);
+
+  /**
+   *  @brief  Log error when an AMS message communication fails
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  err    The error message
+   */
+  void logErrorAMSMessage(int id, const char* err);
+
+};  // class AMSPublisherLogging
 
 /**
  * @brief Specific handler for RabbitMQ connections based on libevent.
@@ -1010,12 +1212,16 @@ private:
 class RMQHandler : public AMQP::LibEventHandler
 {
 protected:
-  /** @brief Path to TLS certificate (if empty, no TLS certificate)*/
+  using json = nlohmann::json;
+  /** @brief Path to TLS certificate */
   std::string _cacert;
   /** @brief MPI rank (0 if no MPI support) */
   uint64_t _rId;
   /** @brief LibEvent I/O loop */
   std::shared_ptr<struct event_base> _loop;
+
+  /** @brief Performance logging object */
+  std::shared_ptr<AMSPerfLogging> _logger;
 
   std::promise<RMQConnectionStatus> establish_connection;
   std::future<RMQConnectionStatus> established;
@@ -1032,10 +1238,12 @@ public:
    *  @param[in]  loop         Event Loop
    *  @param[in]  rId          MPI rank
    *  @param[in]  cacert       SSL Cacert
+   *  @param[in]  logger       AMS Logging object
    */
   RMQHandler(uint64_t rId,
              std::shared_ptr<struct event_base> loop,
-             std::string cacert = "");
+             std::string cacert,
+             std::shared_ptr<AMSPerfLogging> logger = nullptr);
 
   ~RMQHandler() = default;
 
@@ -1061,6 +1269,69 @@ public:
    */
   bool connectionValid();
 
+  /**
+   *  @brief  Move out of the handler the logging object 
+   *          (warning the handler will be unable to perform
+   *          logging operation after that). It is useful
+   *          when restartin the Handler because the underlying
+   *          communication layer died.
+   *  @return     The AMSPerfLogging object
+   */
+  std::shared_ptr<AMSPerfLogging>& getInternalLogger();
+
+protected:
+  /**
+   *  @brief  Check if the instance supports performance profiling.
+   *  @return     True if connection this instance support logging
+   */
+  bool loggingEnabled();
+
+  /**
+   *  @brief  Log when the connection is ready to be used.
+   */
+  void logReadyConnection();
+
+  /**
+   *  @brief  Log when the connection is closed.
+   */
+  void logClosedConnection();
+
+  /**
+   *  @brief  Log when an AMS message has been sent
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  size    The size in bytes of the message
+   */
+  void logAMSMessage(int id, int size);
+
+  /**
+   *  @brief  Log when an AMS message has been acknowledged (or not)
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  acked   True if the message was successfuly acknowledged
+   */
+  void logAckAMSMessage(int id, bool acked);
+
+  /**
+   *  @brief  Log error when an AMS message communication fails
+   *  @param[in]  id      The ID (tag) of the message
+   *  @param[in]  err    The error message
+   */
+  void logErrorAMSMessage(int id, const char* err);
+
+  void logSOME();
+
+  /**
+   *  @brief  Write logging data to JSON file
+   *  @param[in]  output_file      Name of the JSON file
+   *  @param[in]  tab_width        Indentation width
+   */
+  void writeLoggingtoJSON(const std::string& output_file, int tab_width = 2);
+
+  /**
+   *  @brief  Write logging data to internal JSON file
+   *  @param[in]  tab_width        Indentation width
+   */
+  void writeLoggingtoJSON(int tab_width = 2);
+
 private:
   /**
    *  @brief Method that is called after a TCP connection has been set up, and
@@ -1074,6 +1345,16 @@ private:
    * to break up
    */
   virtual bool onSecuring(AMQP::TcpConnection* connection, SSL* ssl) override;
+
+  /**
+   *  Method that is called when the heartbeat frequency is negotiated.
+   *  if it returns 0, the heartbeat is deactivated
+   *  @param  connection      The connection that suggested a heartbeat interval
+   *  @param  interval        The suggested interval from the server
+   *  @return uint16_t        The interval to use
+   */
+  virtual uint16_t onNegotiate(AMQP::TcpConnection* connection,
+                               uint16_t interval) override;
 
   /**
    *  @brief Method that is called when the secure TLS connection has been
@@ -1157,17 +1438,18 @@ private:
 public:
   /**
    *  @brief Constructor
-   *  @param[in]  loop         Event Loop
-   *  @param[in]  cacert       SSL Cacert
-   *  @param[in]  routing_key  Routing key
-   *  @param[in]  exchange     Exchange
+   *  @param[in]  loop             Event Loop
+   *  @param[in]  cacert           SSL Cacert
+   *  @param[in]  routing_key      Routing key
+   *  @param[in]  exchange         Exchange
    */
   RMQConsumerHandler(uint64_t rId,
                      std::shared_ptr<struct event_base> loop,
                      std::string cacert,
                      std::string exchange,
                      std::string routing_key,
-                     AMQP::ExchangeType extype = AMQP::fanout);
+                     AMQP::ExchangeType extype = AMQP::fanout,
+                     std::shared_ptr<AMSPerfLogging> logger = nullptr);
 
   /**
    *  @brief Delete the message with given ID
@@ -1240,7 +1522,8 @@ public:
               const AMQP::Address& address,
               std::string cacert,
               std::string routing_key,
-              std::string exchange);
+              std::string exchange,
+              std::shared_ptr<AMSPerfLogging> logger = nullptr);
 
   /**
    *  @brief Start the underlying I/O loop (blocking call)
@@ -1334,7 +1617,8 @@ public:
   RMQPublisherHandler(uint64_t rId,
                       std::shared_ptr<struct event_base> loop,
                       std::string cacert,
-                      std::string queue);
+                      std::string queue,
+                      std::shared_ptr<AMSPerfLogging> logger = nullptr);
 
   ~RMQPublisherHandler() = default;
 
@@ -1409,6 +1693,8 @@ private:
  */
 class RMQPublisher
 {
+  using json = nlohmann::json;
+
 private:
   /** @brief Connection to the broker */
   AMQP::TcpConnection* _connection;
@@ -1436,13 +1722,14 @@ public:
       const AMQP::Address& address,
       std::string cacert,
       std::string queue,
-      std::vector<AMSMessage>&& msgs_to_send = std::vector<AMSMessage>());
+      std::vector<AMSMessage>&& msgs_to_send = std::vector<AMSMessage>(),
+      std::shared_ptr<AMSPerfLogging> logger = nullptr);
 
   /**
    * @brief Check if the underlying RabbitMQ connection is ready and usable
    * @return True if the publisher is ready to publish
    */
-  bool ready_publish();
+  bool readyPublish();
 
   /**
    * @brief Wait that the connection is ready (blocking call)
@@ -1479,6 +1766,12 @@ public:
    * @return A vector of AMSMessage
    */
   std::vector<AMSMessage>& getMsgBuffer();
+
+  /**
+   * @brief Return the internal monitoring object (warning move the ptr).
+   * @return A pointer on AMSPerfLogging
+   */
+  std::shared_ptr<AMSPerfLogging>& getLogger();
 
   /**
    *  @brief    Total number of messages successfully acknowledged
@@ -1529,9 +1822,9 @@ public:
  *    "service-port": 31495,
  *    "service-host": "url.czapps.llnl.gov",
  *    "rabbitmq-cert": "tls-cert.crt",
- *    "rabbitmq-outbound-queue": "test3",
- *    "rabbitmq-exchange": "ams-fanout",
- *    "rabbitmq-routing-key": "training"
+ *    "rabbitmq-queue-physics": "test3",
+ *    "rabbitmq-exchange-training": "ams-fanout",
+ *    "rabbitmq-key-training": "training"
  *  }
  *
  * The TLS certificate must be generated by the user and the absolute paths are preferred.
@@ -1546,7 +1839,7 @@ public:
  * Therefore, we have two threads per MPI rank.
  *
  * Here, RMQInterface::publish() has access to internal RabbitMQ channels and can publish the message 
- * on the outbound queue (rabbitmq-outbound-queue in the JSON configuration).
+ * on the outbound queue (rabbitmq-queue-physics in the JSON configuration).
  * Note that storing data like that is much faster than with writing files as a call to RabbitMQDB::store()
  * is virtually free, the actual data sending part is taking place in a thread and does not slow down
  * the main simulation (MPI).
@@ -1590,11 +1883,25 @@ private:
   std::shared_ptr<RMQConsumer> _consumer;
   /** @brief Thread in charge of the consumer */
   std::thread _consumer_thread;
-  /** @brief True if connected to RabbitMQ */
-  bool connected;
+  /** @brief True if publisher is connected to RabbitMQ */
+  bool _publisher_connected;
+  /** @brief True if consumer connected to RabbitMQ */
+  bool _consumer_connected;
+  /** @brief Performance logging object */
+  std::shared_ptr<AMSPerfLogging> _logger;
 
 public:
-  RMQInterface() : connected(false), _rId(0) {}
+  /** @brief Performance logging object */
+  int rank;
+
+  RMQInterface();
+
+  RMQInterface(const RMQInterface& c) = delete;
+  RMQInterface& operator=(const RMQInterface&) = delete;
+
+  RMQInterface(const RMQInterface&& c) = delete;
+  RMQInterface& operator=(const RMQInterface&&) = delete;
+
 
   /**
    * @brief Connect to a RabbitMQ server
@@ -1609,30 +1916,56 @@ public:
    * @param[in] outbound_queue Name of the queue on which AMSlib publishes (send) messages
    * @param[in] exchange Exchange for incoming messages
    * @param[in] routing_key Routing key for incoming messages (must match what the AMS Python side is using)
-   * @return True if connection succeeded
+   * @param[in] update_surrogate Boolean, true if we allow module update
+   * @param[in] monitoring_file Name of the file used for monitoring
+   * @return A tuple with two boolean (first for publisher connection, second for consumer), True if connection is valid
    */
-  bool connect(std::string rmq_name,
-               std::string rmq_password,
-               std::string rmq_user,
-               std::string rmq_vhost,
-               int service_port,
-               std::string service_host,
-               std::string rmq_cert,
-               std::string outbound_queue,
-               std::string exchange,
-               std::string routing_key);
+  std::pair<bool, bool> connect(std::string rmq_name,
+                                std::string rmq_password,
+                                std::string rmq_user,
+                                std::string rmq_vhost,
+                                int service_port,
+                                std::string service_host,
+                                std::string rmq_cert,
+                                std::string outbound_queue,
+                                std::string exchange,
+                                std::string routing_key,
+                                bool update_surrogate,
+                                std::string monitoring_file);
 
   /**
    * @brief Check if the RabbitMQ connection is connected.
    * @return True if connected
    */
-  bool isConnected() const { return connected; }
+  bool isConnected() const
+  {
+    return _publisher_connected || _consumer_connected;
+  }
 
   /**
    * @brief Set the internal ID of the interface (usually MPI rank).
    * @param[in] id The ID
    */
   void setId(uint64_t id) { _rId = id; }
+
+  /**
+   * @brief Set the internal ID of the interface (usually MPI rank).
+   * @param[in] rank The ID
+   */
+  void updateMonitoringMPIRank(uint64_t rank)
+  {
+    if (_logger) _logger->updateMPIRank(rank);
+  }
+
+  /**
+   * @brief Modify the internal output filename to include MPI rank
+   * @param[in] rank The MPI rank
+   * @param[in] sep String separator
+   */
+  void updateMonitoringFile(uint64_t rank, std::string sep = "-")
+  {
+    if (_logger) _logger->updateMonitoringFile(rank, sep);
+  }
 
   /**
    * @brief Try to restart the RabbitMQ publisher (restart the thread managing messages publishing)
@@ -1652,6 +1985,7 @@ public:
                std::vector<TypeValue*>& inputs,
                std::vector<TypeValue*>& outputs)
   {
+    CALIPER(CALI_MARK_BEGIN("RMQ_STORE");)
     DBG(RMQInterface,
         "[tag=%d] stores %ld elements of input/output "
         "dimensions (%ld, %ld)",
@@ -1662,8 +1996,9 @@ public:
 
     AMSMessage msg(_msg_tag, _rId, domain_name, num_elements, inputs, outputs);
 
-    if (!_publisher->connectionValid()) {
-      connected = false;
+    if (!_publisher->connectionValid() || _msg_tag == 3) {
+      _publisher->close(100, 3);
+      _publisher_connected = false;
       restartPublisher();
       bool status = _publisher->waitToEstablish(100, 10);
       if (!status) {
@@ -1672,10 +2007,11 @@ public:
         FATAL(RMQInterface,
               "Could not establish publisher RabbitMQ connection");
       }
-      connected = true;
+      _publisher_connected = true;
     }
     _publisher->publish(std::move(msg));
     _msg_tag++;
+    CALIPER(CALI_MARK_END("RMQ_STORE");)
   }
 
   /**
@@ -1692,8 +2028,28 @@ public:
     // NOTE: The architecture here is not great for now, we have redundant call to getLatestModel
     // Solution: when switching to C++ use std::variant to return an std::optional
     // the std::optional would be a string if a model is available otherwise it's a bool false
+    if (!_consumer) return false;
     auto data = _consumer->getLatestModel();
     return !std::get<1>(data).empty();
+  }
+
+  /**
+   * @brief Check if this interface supports monitoring
+   * @return True if monitoring is supported
+   */
+  bool isMonitoringActivated() const
+  {
+#ifdef __ENABLE_MPI__
+    char name[MPI_MAX_PROCESSOR_NAME];
+    int len;
+    MPI_Get_processor_name(name, &len);
+    std::cerr << "MPI  : isMonitoringActivated(" << _logger << " | " << name
+              << "): " << _logger.use_count() << std::endl;
+#else
+    std::cerr << "NoMPI: isMonitoringActivated(" << _logger
+              << "): " << _logger.use_count() << std::endl;
+#endif
+    return _logger != nullptr;
   }
 
   /**
@@ -1703,6 +2059,7 @@ public:
    */
   std::string getLatestModel(bool remove_msg = true)
   {
+    if (!_consumer) return "";
     auto res = _consumer->getLatestModel();
     bool empty = std::get<1>(res).empty();
     if (remove_msg && !empty) {
@@ -1714,7 +2071,7 @@ public:
 
   ~RMQInterface()
   {
-    if (connected) close();
+    if (_publisher_connected || _consumer_connected) close();
   }
 };
 
@@ -1743,7 +2100,7 @@ public:
     /* We set manually the MPI rank here because when
     * RMQInterface was statically initialized, MPI was not
     * necessarily initialized and ready. So we provide the
-    * option of setting the distributed ID afterward.
+    * option of setting the MPI distributed ID afterward.
     * 
     * Note: this ID is encoded into AMSMessage but for
     * logging we use a randomly generated ID to stay
@@ -1751,6 +2108,10 @@ public:
     * before setId is called).
     */
     interface.setId(id);
+    if (interface.isMonitoringActivated()) {
+      interface.updateMonitoringMPIRank(id);
+      interface.updateMonitoringFile(id);
+    }
   }
 
   /**
@@ -1888,7 +2249,7 @@ private:
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
-  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false){};
+  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false) {}
 
 protected:
   RMQInterface rmq_interface;
@@ -1911,7 +2272,6 @@ public:
           e.second.use_count() - 1);
       if (e.second.use_count() > 0) e.second->close();
     }
-
     if (rmq_interface.isConnected()) {
       rmq_interface.close();
     }
@@ -1949,7 +2309,7 @@ public:
              "Requesting debug database but %d db type does not support it",
              dbType);
 #ifdef __ENABLE_DB__
-    DBG(DBManager, "Instantiating data base");
+    DBG(DBManager, "[r%d] Instantiating data base", rId);
 
     if ((dbType == AMSDBType::AMS_CSV || dbType == AMSDBType::AMS_HDF5) &&
         !fs_interface.isConnected()) {
@@ -1996,8 +2356,9 @@ public:
                                 bool isDebug = false)
   {
     DBG(DBManager,
-        "Requested DB for domain: '%s' Under Name: '%s' DB Configured to "
+        "[r%d] Requested DB for domain: '%s' Under Name: '%s' DB Configured to "
         "operate with '%s'",
+        rId,
         domainName.c_str(),
         dbLabel.c_str(),
         getDBTypeAsStr(dbType).c_str())
@@ -2014,8 +2375,11 @@ public:
       auto db = createDB(domainName, dbLabel, dbType, rId, isDebug);
       db_instances.insert(std::make_pair(std::string(domainName), db));
       DBG(DBManager,
-          "Creating new Database writting to file: %s",
+          "[r%d] Creating new Database writting to file: %s",
+          rId,
           domainName.c_str());
+
+      rmq_interface.rank = rId;
       return db;
     }
 
@@ -2072,7 +2436,8 @@ public:
                           std::string& outbound_queue,
                           std::string& exchange,
                           std::string& routing_key,
-                          bool update_surrogate)
+                          bool update_surrogate,
+                          std::string monitoring_file)
   {
     fs::path Path(rmq_cert);
     std::error_code ec;
@@ -2093,7 +2458,9 @@ public:
                           rmq_cert,
                           outbound_queue,
                           exchange,
-                          routing_key);
+                          routing_key,
+                          update_surrogate,
+                          monitoring_file);
 #else
     FATAL(DBManager,
           "Requsted RMQ database but AMS is not built with such support "
