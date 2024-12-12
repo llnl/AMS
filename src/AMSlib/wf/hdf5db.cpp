@@ -5,17 +5,96 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
+#include <ATen/core/ATen_fwd.h>
+#include <H5Ipublic.h>
+#include <H5Tpublic.h>
+#include <H5public.h>
+#include <c10/core/ScalarTypeToTypeMeta.h>
+#include <torch/torch.h>
+#include <torch/types.h>
+
+#include <stdexcept>
+
+#include "util/ArrayRef.hpp"
+#include "utils.hpp"
 #include "wf/basedb.hpp"
+
 
 using namespace ams::db;
 
+static std::string SmallVectorToString(ams::MutableArrayRef<hsize_t> shape)
+{
+  std::ostringstream oss;
+  oss << "[";
+  for (size_t i = 0; i < shape.size(); ++i) {
+    oss << shape[i];
+    if (i < shape.size() - 1) {
+      oss << ", ";
+    }
+  }
+  oss << "]";
+  return oss.str();
+}
+
+static std::string tensorSizeToString(const at::IntArrayRef shape)
+{
+  std::ostringstream oss;
+  oss << "[";
+  for (size_t i = 0; i < shape.size(); ++i) {
+    oss << shape[i];
+    if (i < shape.size() - 1) {
+      oss << ", ";
+    }
+  }
+  oss << "]";
+  return oss.str();
+}
+
+// Helper function to convert torch::Dtype to a string
+static std::string dtypeToString(torch::Dtype dtype)
+{
+  static const std::unordered_map<torch::Dtype, std::string> dtypeMap = {
+      {torch::kFloat32, "float32"},
+      {torch::kFloat, "float32"},  // Alias for float32
+      {torch::kFloat64, "float64"},
+      {torch::kDouble, "float64"},  // Alias for float64
+      {torch::kInt32, "int32"},
+      {torch::kInt64, "int64"},
+      {torch::kBool, "bool"},
+      {torch::kUInt8, "uint8"},
+      {torch::kInt8, "int8"},
+      {torch::kHalf, "float16"},
+      {torch::kBFloat16, "bfloat16"}};
+  return dtypeMap.count(dtype) ? dtypeMap.at(dtype) : "unknown dtype";
+}
+// Helper function to convert torch::Dtype to a string
+static hid_t torchDTypeToHDF5Type(torch::Dtype dtype)
+{
+  static const std::unordered_map<torch::Dtype, hid_t> dtypeMap = {
+      {torch::kFloat32, H5T_NATIVE_FLOAT},
+      {torch::kFloat, H5T_NATIVE_FLOAT},  // Alias for float32
+      {torch::kFloat64, H5T_NATIVE_DOUBLE},
+      {torch::kDouble, H5T_NATIVE_DOUBLE},  // Alias for float64
+      {torch::kInt32, H5T_NATIVE_INT},
+      {torch::kInt64, H5T_NATIVE_LONG},
+      {torch::kBool, H5T_NO_CLASS},
+      {torch::kUInt8, H5T_NO_CLASS},
+      {torch::kInt8, H5T_NO_CLASS},
+      {torch::kHalf, H5T_NO_CLASS},
+      {torch::kBFloat16, H5T_NO_CLASS}};
+  return dtypeMap.count(dtype) ? dtypeMap.at(dtype) : H5T_NO_CLASS;
+}
+
 hid_t hdf5DB::getDataSet(hid_t group,
                          std::string dName,
+                         ams::SmallVector<hsize_t>& currentShape,
+                         const at::IntArrayRef Shape,
                          hid_t dataType,
                          const size_t Chunk)
 {
-  // Our datasets a.t.m are 1-D vectors
-  const int nDims = 1;
+  const int nDims = Shape.size();
+  currentShape.resize(nDims);
+  currentShape.assign(nDims, 0);
   // We always start from 0
   hsize_t dims = 0;
   hid_t dset = -1;
@@ -26,162 +105,163 @@ hid_t hdf5DB::getDataSet(hid_t group,
     dset = H5Dopen(group, dName.c_str(), H5P_DEFAULT);
     HDF5_ERROR(dset);
     // We are assuming symmetrical data sets a.t.m
-    if (totalElements == 0) {
-      hid_t dspace = H5Dget_space(dset);
-      const int ndims = H5Sget_simple_extent_ndims(dspace);
-      hsize_t dims[ndims];
-      H5Sget_simple_extent_dims(dspace, dims, NULL);
-      totalElements = dims[0];
+    hid_t dspace = H5Dget_space(dset);
+    const int file_ndims = H5Sget_simple_extent_ndims(dspace);
+    if (file_ndims != nDims) {
+      throw std::runtime_error(
+          "File system file with current tensor shape to not match");
     }
+    hsize_t dims[nDims];
+    H5Sget_simple_extent_dims(dspace, dims, NULL);
+    currentShape[0] = dims[0];
     return dset;
-  } else {
-    // We will extend the data-set size, so we use unlimited option
-    hsize_t maxDims = H5S_UNLIMITED;
-    hid_t fileSpace = H5Screate_simple(nDims, &dims, &maxDims);
-    HDF5_ERROR(fileSpace);
-
-    hid_t pList = H5Pcreate(H5P_DATASET_CREATE);
-    HDF5_ERROR(pList);
-
-    herr_t ec = H5Pset_layout(pList, H5D_CHUNKED);
-    HDF5_ERROR(ec);
-
-    // cDims impacts performance considerably.
-    // TODO: Align this with the caching mechanism for this option to work
-    // out.
-    hsize_t cDims = Chunk;
-    H5Pset_chunk(pList, nDims, &cDims);
-    dset = H5Dcreate(group,
-                     dName.c_str(),
-                     dataType,
-                     fileSpace,
-                     H5P_DEFAULT,
-                     pList,
-                     H5P_DEFAULT);
-    HDF5_ERROR(dset);
-    H5Sclose(fileSpace);
-    H5Pclose(pList);
   }
+
+  // We will extend the data-set size, so we use unlimited option
+  hsize_t max_dims[Shape.size()];
+  hsize_t initial_shape[Shape.size()];
+  for (int i = 0; i < Shape.size(); i++) {
+    max_dims[i] = Shape[i];
+    initial_shape[i] = 0;
+  }
+  max_dims[0] = H5S_UNLIMITED;
+  hid_t fileSpace = H5Screate_simple(nDims, initial_shape, max_dims);
+  HDF5_ERROR(fileSpace);
+
+  hid_t pList = H5Pcreate(H5P_DATASET_CREATE);
+  HDF5_ERROR(pList);
+
+  herr_t ec = H5Pset_layout(pList, H5D_CHUNKED);
+  HDF5_ERROR(ec);
+
+  // cDims impacts performance considerably.
+  // TODO: Align this with the caching mechanism for this option to work
+  // out.
+  max_dims[0] = Chunk;
+  H5Pset_chunk(pList, nDims, max_dims);
+  dset = H5Dcreate(group,
+                   dName.c_str(),
+                   dataType,
+                   fileSpace,
+                   H5P_DEFAULT,
+                   pList,
+                   H5P_DEFAULT);
+  HDF5_ERROR(dset);
+  H5Sclose(fileSpace);
+  H5Pclose(pList);
   return dset;
 }
 
 
-void hdf5DB::createDataSets(size_t numElements,
-                            const size_t numIn,
-                            const size_t numOut)
+void hdf5DB::createDataSets(at::IntArrayRef InShapes, at::IntArrayRef OutShapes)
 {
-  for (int i = 0; i < numIn; i++) {
-    hid_t dSet =
-        getDataSet(HFile, std::string("input_") + std::to_string(i), HDType);
-    HDIsets.push_back(dSet);
-  }
+  HDIset = getDataSet(HFile, "input_data", currentInputShape, InShapes, HDType);
 
-  for (int i = 0; i < numOut; i++) {
-    hid_t dSet =
-        getDataSet(HFile, std::string("output_") + std::to_string(i), HDType);
-    HDOsets.push_back(dSet);
-  }
-
-  if (storePredicate()) {
-    pSet = getDataSet(HFile, "predicate", H5T_NATIVE_HBOOL);
-  }
+  HDOset =
+      getDataSet(HFile, "output_data", currentOutputShape, OutShapes, HDType);
 }
 
-template <typename TypeValue>
-void hdf5DB::writeDataToDataset(std::vector<hid_t>& dsets,
-                                std::vector<TypeValue*>& data,
-                                size_t numElements)
+void hdf5DB::writeDataToDataset(ams::MutableArrayRef<hsize_t> currentShape,
+                                hid_t& dset,
+                                const at::Tensor& tensor_data)
 {
-  int index = 0;
-  for (auto* I : data) {
-    writeVecToDataset(dsets[index++],
-                      static_cast<void*>(I),
-                      numElements,
-                      HDType);
+  herr_t status;
+
+  // Ensure tensor is contiguous
+  torch::Tensor tensor_contiguous = tensor_data.contiguous();
+
+  // Get tensor dimensions
+  std::vector<hsize_t> tensor_dims(tensor_contiguous.sizes().begin(),
+                                   tensor_contiguous.sizes().end());
+  int rank = tensor_dims.size();
+
+  // Initialize currentShape if it's empty (e.g., first write or reopening an existing file)
+  if (currentShape.empty()) {
+    hid_t fileSpace = H5Dget_space(dset);
+    if (fileSpace < 0) {
+      throw std::runtime_error("Failed to get dataspace from dataset.");
+    }
+    if (H5Sget_simple_extent_dims(fileSpace, currentShape.data(), NULL) < 0) {
+      H5Sclose(fileSpace);
+      throw std::runtime_error("Failed to retrieve dataset dimensions.");
+    }
+    H5Sclose(fileSpace);
   }
-}
 
-void hdf5DB::writeVecToDataset(hid_t dSet,
-                               void* data,
-                               size_t elements,
-                               hid_t DType)
-{
-  const int nDims = 1;
-  hsize_t dims = elements;
-  hsize_t start;
-  hsize_t count;
-  hid_t memSpace = H5Screate_simple(nDims, &dims, NULL);
-  HDF5_ERROR(memSpace);
+  // Create a memory representation for the data to be stored
+  hid_t memSpace = H5Screate_simple(rank, tensor_dims.data(), NULL);
+  if (memSpace < 0) {
+    throw std::runtime_error("Failed to create memory dataspace.");
+  }
 
-  dims = totalElements + elements;
-  H5Dset_extent(dSet, &dims);
+  // Prepare the dataset for new data
+  ams::SmallVector<hsize_t> newShape(tensor_dims.begin(), tensor_dims.end());
+  newShape[0] += currentShape[0];  // Update the first dimension
+  status = H5Dset_extent(dset, newShape.data());
+  if (status < 0) {
+    throw std::runtime_error("Failed to extend dataset's dimensions.");
+  }
 
-  hid_t fileSpace = H5Dget_space(dSet);
-  HDF5_ERROR(fileSpace);
 
-  // Data set starts at offset totalElements
-  start = totalElements;
-  // And we append additional elements
-  count = elements;
+  // Refresh fileSpace after extending
+  hid_t fileSpace = H5Dget_space(dset);
+  if (fileSpace < 0) {
+    throw std::runtime_error(
+        "Failed to get refreshed dataspace after extending dataset.");
+  }
+
+  // Debugging: Check dimensions of fileSpace
+  std::vector<hsize_t> file_dims(rank);
+  H5Sget_simple_extent_dims(fileSpace, file_dims.data(), NULL);
+
   // Select hyperslab
-  herr_t err = H5Sselect_hyperslab(
-      fileSpace, H5S_SELECT_SET, &start, NULL, &count, NULL);
-  HDF5_ERROR(err);
+  herr_t err = H5Sselect_hyperslab(fileSpace,
+                                   H5S_SELECT_SET,
+                                   currentShape.data(),
+                                   NULL,
+                                   tensor_dims.data(),
+                                   NULL);
+  if (err < 0) {
+    H5Sclose(fileSpace);
+    H5Sclose(memSpace);
+    throw std::runtime_error("Failed to select hyperslab.");
+  }
 
-  H5Dwrite(dSet, DType, memSpace, fileSpace, H5P_DEFAULT, data);
+  // Write the tensor data to the dataset
+  status = H5Dwrite(dset,
+                    HDType,
+                    memSpace,
+                    fileSpace,
+                    H5P_DEFAULT,
+                    tensor_contiguous.data_ptr());
+  if (status < 0) {
+    throw std::runtime_error("Failed to write data to dataset.");
+  }
+
+  // Update currentShape
+  currentShape[0] += newShape[0];
+
+  // Close HDF5 objects
+  H5Sclose(memSpace);
   H5Sclose(fileSpace);
 }
 
 
-template <typename TypeValue>
-void hdf5DB::_store(size_t num_elements,
-                    std::vector<TypeValue*>& inputs,
-                    std::vector<TypeValue*>& outputs,
-                    bool* predicate)
+void hdf5DB::_store(const at::Tensor& inputs, const at::Tensor& outputs)
 {
-  CALIPER(CALI_MARK_BEGIN("STORE_HDF5");)
-  if (isDouble<TypeValue>::default_value())
-    HDType = H5T_NATIVE_DOUBLE;
-  else
-    HDType = H5T_NATIVE_FLOAT;
-
-
-  CFATAL(HDF5DB,
-         storePredicate() && predicate == nullptr,
-         "DB Configured to store predicates, predicate is not provided")
-
-
   DBG(DB,
-      "DB of type %s stores %ld elements of input/output dimensions (%lu, "
-      "%lu)",
+      "DB of type %s stores input/output tensors of  shapes(%s, "
+      "%s)",
       type().c_str(),
-      num_elements,
-      inputs.size(),
-      outputs.size())
-  const size_t num_in = inputs.size();
-  const size_t num_out = outputs.size();
+      tensorSizeToString(inputs.sizes()).c_str(),
+      tensorSizeToString(outputs.sizes()).c_str());
 
-  if (HDIsets.empty()) {
-    createDataSets(num_elements, num_in, num_out);
+  if (HDIset == -1 || HDOset == -1) {
+    createDataSets(inputs.sizes(), outputs.sizes());
   }
 
-  CFATAL(HDF5DB,
-         (HDIsets.size() != num_in || HDOsets.size() != num_out),
-         "The data dimensionality is different than the one in the "
-         "DB")
-
-  writeDataToDataset(HDIsets, inputs, num_elements);
-  writeDataToDataset(HDOsets, outputs, num_elements);
-
-  if (storePredicate() && predicate != nullptr) {
-    writeVecToDataset(pSet,
-                      static_cast<void*>(predicate),
-                      num_elements,
-                      H5T_NATIVE_HBOOL);
-  }
-
-  totalElements += num_elements;
-  CALIPER(CALI_MARK_END("STORE_HDF5");)
+  writeDataToDataset(currentInputShape, HDIset, inputs);
+  writeDataToDataset(currentOutputShape, HDOset, outputs);
 }
 
 
@@ -190,8 +270,7 @@ hdf5DB::hdf5DB(std::string path,
                std::string fn,
                uint64_t rId,
                bool predicate)
-    : FileDB(path, fn, predicate ? ".debug.h5" : ".h5", rId),
-      predicateStore(predicate)
+    : FileDB(path, fn, ".h5", rId), HDOset(-1), HDIset(-1)
 {
   std::error_code ec;
   bool exists = fs::exists(this->fn);
@@ -220,7 +299,6 @@ hdf5DB::hdf5DB(std::string path,
     H5Sclose(dataspace_id);
   }
   HDF5_ERROR(HFile);
-  totalElements = 0;
   HDType = -1;
 }
 
@@ -233,32 +311,25 @@ hdf5DB::~hdf5DB()
   //    HDF5_ERROR(err);
 }
 
-void hdf5DB::store(size_t num_elements,
-                   std::vector<float*>& inputs,
-                   std::vector<float*>& outputs,
-                   bool* predicate)
+void hdf5DB::store(const at::Tensor& inputs, const at::Tensor& outputs)
 {
-  if (HDType == -1) {
-    HDType = H5T_NATIVE_FLOAT;
+  if (inputs.dtype() != outputs.dtype()) {
+    throw std::invalid_argument(
+        "Storing into HDF5 database requires all tensors to have the same "
+        "datatype. Now they have:" +
+        dtypeToString(torch::typeMetaToScalarType(inputs.dtype())) + " and " +
+        dtypeToString(torch::typeMetaToScalarType(outputs.dtype())));
   }
 
-  CFATAL(HDF5DB,
-         HDType != H5T_NATIVE_FLOAT,
-         "Database %s initialized to work on 'float' received different "
-         "datatypes",
-         fn.c_str());
-
-  _store(num_elements, inputs, outputs, predicate);
-}
-
-
-void hdf5DB::store(size_t num_elements,
-                   std::vector<double*>& inputs,
-                   std::vector<double*>& outputs,
-                   bool* predicate)
-{
   if (HDType == -1) {
-    HDType = H5T_NATIVE_DOUBLE;
+    HDType = torchDTypeToHDF5Type(torch::typeMetaToScalarType(inputs.dtype()));
   }
-  _store(num_elements, inputs, outputs, predicate);
+
+  if (HDType == -1 || HDType == H5T_NO_CLASS)
+    throw std::invalid_argument(
+        "Data base can not deduce the data type of the tensors" +
+        dtypeToString(torch::typeMetaToScalarType(inputs.dtype())) + " and " +
+        dtypeToString(torch::typeMetaToScalarType(outputs.dtype())));
+
+  _store(inputs, outputs);
 }
