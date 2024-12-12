@@ -17,7 +17,7 @@ function(BUILD_UNIT_TEST exe source)
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)
   target_include_directories(${exe} PRIVATE ${CMAKE_BINARY_DIR}/include/)
   target_link_directories(${exe} PRIVATE ${AMS_APP_LIB_DIRS})
-  target_link_libraries(${exe} PRIVATE ${AMS_APP_LIBRARIES} stdc++fs)
+  target_link_libraries(${exe} PRIVATE ${AMS_APP_LIBRARIES} stdc++fs AMS)
 
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
 
@@ -82,10 +82,10 @@ endif()
 
 
 
-BUILD_UNIT_TEST(ams_verify_dtype "verify_dtype.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/ml/surrogate.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/wf/logger.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/wf/debug.cpp")
-BUILD_UNIT_TEST(ams_verify_device "verify_device.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/ml/surrogate.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/wf/logger.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/wf/debug.cpp")
-BUILD_UNIT_TEST(ams_evaluate_model "evaluate_model.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/ml/surrogate.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/wf/logger.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/wf/debug.cpp")
-BUILD_UNIT_TEST(ams_convert_and_evaluate_model "evalute_model_conversions.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/ml/surrogate.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/wf/logger.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/wf/debug.cpp;${CMAKE_SOURCE_DIR}/src/AMSlib/util/SmallVector.cpp;")
+BUILD_UNIT_TEST(ams_verify_dtype verify_dtype.cpp)
+BUILD_UNIT_TEST(ams_verify_device verify_device.cpp)
+BUILD_UNIT_TEST(ams_evaluate_model evaluate_model.cpp)
+BUILD_UNIT_TEST(ams_convert_and_evaluate_model evalute_model_conversions.cpp)
 
 #detect datatype
 ADD_TORCH_UNIT_TEST(Surrogate::DType::HOST::Double::Random ams_verify_dtype double ${CMAKE_CURRENT_BINARY_DIR}/models/double_cpu_random.pt)

@@ -8,6 +8,9 @@
 #ifndef __AMS_BASE_DB__
 #define __AMS_BASE_DB__
 
+#include <ATen/core/TensorBody.h>
+#include <H5Ipublic.h>
+
 #include <cstdint>
 #include <experimental/filesystem>
 #include <fstream>
@@ -22,18 +25,12 @@
 
 #include "AMS.h"
 #include "debug.h"
+#include "util/ArrayRef.hpp"
 #include "wf/debug.h"
 #include "wf/resource_manager.hpp"
 #include "wf/utils.hpp"
 
 namespace fs = std::experimental::filesystem;
-
-#ifdef __ENABLE_REDIS__
-#include <sw/redis++/redis++.h>
-
-#include <iomanip>
-#warning Redis is currently not supported/tested
-#endif
 
 #ifdef __ENABLE_HDF5__
 #include <H5Ipublic.h>
@@ -114,8 +111,7 @@ public:
   virtual AMSDBType dbType() = 0;
 
   /**
-   * @brief Takes an input and an output vector each holding 1-D vectors data, and
-   * store. them in persistent data storage.
+   * @brief Takes an input and an output Tensor.
    * @param[in] num_elements Number of elements of each 1-D vector
    * @param[in] inputs Vector of 1-D vectors containing the inputs to be stored
    * @param[in] inputs Vector of 1-D vectors, each 1-D vectors contains
@@ -124,16 +120,8 @@ public:
    * 'num_elements'  values to be stored
    */
 
-  virtual void store(size_t num_elements,
-                     std::vector<double*>& inputs,
-                     std::vector<double*>& outputs,
-                     bool* predicate = nullptr) = 0;
+  virtual void store(const at::Tensor& inputs, const at::Tensor& outputs) = 0;
 
-
-  virtual void store(size_t num_elements,
-                     std::vector<float*>& inputs,
-                     std::vector<float*>& outputs,
-                     bool* predicate = nullptr) = 0;
 
   uint64_t getId() const { return id; }
 
@@ -142,8 +130,6 @@ public:
   virtual bool updateModel() { return false; }
 
   virtual std::string getLatestModel() { return {}; }
-
-  virtual bool storePredicate() const { return false; }
 };
 
 /**
@@ -210,134 +196,8 @@ public:
     this->fn = fs::absolute(Path).string();
     DBG(DB, "File System DB writes to file %s", this->fn.c_str())
   }
-};
 
-
-class csvDB final : public FileDB
-{
-private:
-  /** @brief file descriptor */
-  bool writeHeader;
-  std::fstream fd;
-
-  PERFFASPECT()
-  template <typename TypeValue>
-  void _store(size_t num_elements,
-              std::vector<TypeValue*>& inputs,
-              std::vector<TypeValue*>& outputs)
-  {
-    DBG(DB,
-        "DB of type %s stores %ld elements of input/output dimensions (%lu, "
-        "%lu)",
-        type().c_str(),
-        num_elements,
-        inputs.size(),
-        outputs.size())
-
-    CALIPER(CALI_MARK_BEGIN("STORE_CSV");)
-    const size_t num_in = inputs.size();
-    const size_t num_out = outputs.size();
-
-    if (writeHeader) {
-      for (size_t i = 0; i < num_in; i++)
-        fd << "input_" << i << ":";
-      for (size_t i = 0; i < num_out - 1; i++)
-        fd << "output_" << i << ":";
-      fd << "output_" << num_out - 1 << "\n";
-      writeHeader = false;
-    }
-
-    for (size_t i = 0; i < num_elements; i++) {
-      for (size_t j = 0; j < num_in; j++) {
-        fd << inputs[j][i] << ":";
-      }
-
-      for (size_t j = 0; j < num_out - 1; j++) {
-        fd << outputs[j][i] << ":";
-      }
-      fd << outputs[num_out - 1][i] << "\n";
-    }
-    CALIPER(CALI_MARK_END("STORE_CSV");)
-  }
-
-
-public:
-  csvDB(const csvDB&) = delete;
-  csvDB& operator=(const csvDB&) = delete;
-
-  /**
-   * @brief constructs the class and opens the file to write to
-   * @param[in] fn Name of the file to store data to
-   * @param[in] rId a unique Id for each process taking part in a distributed
-   * execution (rank-id)
-   */
-  csvDB(std::string path, std::string fn, uint64_t rId)
-      : FileDB(path, fn, ".csv", rId)
-  {
-    writeHeader = !fs::exists(this->fn);
-    fd.open(this->fn, std::ios_base::app | std::ios_base::out);
-    if (!fd.is_open()) {
-      std::cerr << "Cannot open db file: " << this->fn << std::endl;
-    }
-    DBG(DB, "DB Type: %s", type().c_str())
-  }
-
-  /**
-   * @brief deconstructs the class and closes the file
-   */
-  ~csvDB()
-  {
-    DBG(DB, "Closing File: %s %s", type().c_str(), this->fn.c_str())
-    fd.close();
-  }
-
-  virtual void store(size_t num_elements,
-                     std::vector<float*>& inputs,
-                     std::vector<float*>& outputs,
-                     bool* predicate = nullptr) override
-  {
-    CFATAL(CSV,
-           predicate != nullptr,
-           "CSV database does not support storing uq-predicates")
-
-    _store(num_elements, inputs, outputs);
-  }
-
-  virtual void store(size_t num_elements,
-                     std::vector<double*>& inputs,
-                     std::vector<double*>& outputs,
-                     bool* predicate = nullptr) override
-  {
-
-    CFATAL(CSV,
-           predicate != nullptr,
-           "CSV database does not support storing uq-predicates")
-
-    _store(num_elements, inputs, outputs);
-  }
-
-
-  /**
-   * @brief Define the type of the DB (File, Redis etc)
-   */
-  std::string type() override { return "csv"; }
-
-  /**
-   * @brief Return the DB enumerationt type (File, Redis etc)
-   */
-  AMSDBType dbType() override { return AMSDBType::AMS_CSV; };
-
-  /**
-   * @brief Takes an input and an output vector each holding 1-D vectors data, and
-   * store them into a csv file delimited by ':'. This should never be used for
-   * large scale simulations as txt/csv format will be extremely slow.
-   * @param[in] num_elements Number of elements of each 1-D vector
-   * @param[in] inputs Vector of 1-D vectors containing the inputs to bestored
-   * @param[in] inputs Vector of 1-D vectors, each 1-D vectors contains
-   * 'num_elements'  values to be stored
-   * @param[in] outputs Vector of 1-D vectors, each 1-D vectors contains
-   * 'num_elements'  values to be stored
-   */
+  std::string getFilename() const { return fn; }
 };
 
 
@@ -347,25 +207,18 @@ class hdf5DB final : public FileDB
 private:
   /** @brief file descriptor */
   hid_t HFile;
-  /** @brief vector holding the hdf5 dataset descriptor.
-   * We currently store every input on a separate dataset
+  /** @brief The hdf5 dataset descriptor for input data.
    */
-  std::vector<hid_t> HDIsets;
+  hid_t HDIset;
 
-  /** @brief vector holding the hdf5 dataset descriptor.
-   * We currently store every output on a separate dataset
+  /** @brief the hdf5 dataset descriptor for output data.
    */
-  std::vector<hid_t> HDOsets;
-
-  /** @brief Total number of elements we have in our file   */
-  hsize_t totalElements;
+  hid_t HDOset;
 
   hid_t HDType;
 
-  /** @brief the dataset descriptor of the predicates */
-  hid_t pSet;
-
-  const bool predicateStore;
+  ams::SmallVector<hsize_t> currentInputShape;
+  ams::SmallVector<hsize_t> currentOutputShape;
 
   /** @brief create or get existing hdf5 dataset with the provided name
    * storing data as Ckunked pieces. The Chunk value controls the chunking
@@ -378,6 +231,8 @@ private:
    */
   hid_t getDataSet(hid_t group,
                    std::string dName,
+                   ams::SmallVector<hsize_t>& currentShape,
+                   const at::IntArrayRef Shape,
                    hid_t dataType,
                    const size_t Chunk = 1024L);
 
@@ -389,9 +244,8 @@ private:
    * @param[in] numIn number of input 1-D vectors
    * @param[in] numOut number of output 1-D vectors
    */
-  void createDataSets(size_t numElements,
-                      const size_t numIn,
-                      const size_t numOut);
+  void createDataSets(const at::IntArrayRef InShapes,
+                      const at::IntArrayRef OutShapes);
 
   /**
    * @brief Write all the data in the vectors in the respective datasets.
@@ -401,25 +255,13 @@ private:
    * to be written in the db.
    * @param[in] numElements The number of elements each vector has
    */
-  template <typename TypeValue>
-  void writeDataToDataset(std::vector<hid_t>& dsets,
-                          std::vector<TypeValue*>& data,
-                          size_t numElements);
 
-  /** @brief Writes a single 1-D vector to the dataset
-   * @param[in] dSet the dataset to write the data to
-   * @param[in] data the data we need to write
-   * @param[in] elements the number of data elements we have
-   * @param[in] datatype of elements we will write
-   */
-  void writeVecToDataset(hid_t dSet, void* data, size_t elements, hid_t DType);
+  void writeDataToDataset(ams::MutableArrayRef<hsize_t> currentShape,
+                          hid_t& dset,
+                          const at::Tensor& tensor_data);
 
   PERFFASPECT()
-  template <typename TypeValue>
-  void _store(size_t num_elements,
-              std::vector<TypeValue*>& inputs,
-              std::vector<TypeValue*>& outputs,
-              bool* predicate = nullptr);
+  void _store(const at::Tensor& inputs, const at::Tensor& outputs);
 
 public:
   // Delete copy constructors. We do not want to copy the DB around
@@ -456,209 +298,19 @@ public:
 
 
   /**
-   * @brief Takes an input and an output vector each holding 1-D vectors data,
-   * and store them into a hdf5 file delimited by ':'. This should never be used
-   * for large scale simulations as txt/hdf5 format will be extremely slow.
-   * @param[in] num_elements Number of elements of each 1-D vector
-   * @param[in] inputs Vector of 1-D vectors containing the inputs to bestored
-   * @param[in] inputs Vector of 1-D vectors, each 1-D vectors contains
-   * 'num_elements'  values to be stored
-   * @param[in] outputs Vector of 1-D vectors, each 1-D vectors contains
-   * 'num_elements'  values to be stored
+   * @brief Takes an input and an output tensor each holding data,
+   * and stores them into a hdf5 file. 
+   * @param[in] inputs Tensor containing the inputs to bestored
+   * @param[in] outputs Tensor containing the outputs to bestored
    */
-  void store(size_t num_elements,
-             std::vector<float*>& inputs,
-             std::vector<float*>& outputs,
-             bool* predicate = nullptr) override;
-
-
-  /**
-   * @brief Takes an input and an output vector each holding 1-D vectors data,
-   * and store them into a hdf5 file delimited by ':'. This should never be used
-   * for large scale simulations as txt/hdf5 format will be extremely slow.
-   * @param[in] num_elements Number of elements of each 1-D vector
-   * @param[in] inputs Vector of 1-D vectors containing the inputs to bestored
-   * @param[in] inputs Vector of 1-D vectors, each 1-D vectors contains
-   * 'num_elements'  values to be stored
-   * @param[in] outputs Vector of 1-D vectors, each 1-D vectors contains
-   * 'num_elements'  values to be stored
-   */
-  void store(size_t num_elements,
-             std::vector<double*>& inputs,
-             std::vector<double*>& outputs,
-             bool* predicate = nullptr) override;
-
-  /**
-   * @brief Returns whether the DB can also store predicate information for debug
-   * purposes
-   */
-  bool storePredicate() const override { return predicateStore; }
+  void store(const at::Tensor& inputs, const at::Tensor& outputs) override;
 };
+
 #endif
 
 
-#ifdef __ENABLE_REDIS__
-template <typename TypeValue>
-class RedisDB : public BaseDB<TypeValue>
-{
-  const std::string _fn;  // path to the file storing the DB access config
-  uint64_t _dbid;
-  sw::redis::Redis* _redis;
-  uint64_t keyId;
-
-public:
-  RedisDB(const RedisDB&) = delete;
-  RedisDB& operator=(const RedisDB&) = delete;
-
-  /**
-   * @brief constructs the class and opens the file to write to
-   * @param[in] fn Name of the file to store data to
-   * @param[in] rId a unique Id for each process taking part in a distributed
-   * execution (rank-id)
-   */
-  RedisDB(std::string fn, uint64_t rId)
-      : BaseDB<TypeValue>(rId), _fn(fn), _redis(nullptr), keyId(0)
-  {
-    _dbid = reinterpret_cast<uint64_t>(this);
-    auto connection_info = read_json(fn);
-
-    sw::redis::ConnectionOptions connection_options;
-    connection_options.type = sw::redis::ConnectionType::TCP;
-    connection_options.host = connection_info["host"];
-    connection_options.port = std::stoi(connection_info["service-port"]);
-    connection_options.password = connection_info["database-password"];
-    connection_options.db = 0;  // Optionnal, 0 is the default
-    connection_options.tls.enabled =
-        true;  // Required to connect to PDS within LC
-    connection_options.tls.cacert = connection_info["cert"];
-
-    sw::redis::ConnectionPoolOptions pool_options;
-    pool_options.size = 100;  // Pool size, i.e. max number of connections.
-
-    _redis = new sw::redis::Redis(connection_options, pool_options);
-  }
-
-  ~RedisDB()
-  {
-    std::cerr << "Deleting RedisDB object\n";
-    delete _redis;
-  }
-
-  inline std::string type() override { return "RedisDB"; }
-
-  /**
-   * @brief Return the DB enumerationt type (File, Redis etc)
-   */
-  AMSDBType dbType() { return AMSDBType::REDIS; };
-
-
-  inline std::string info() { return _redis->info(); }
-
-  // Return the number of keys in the DB
-  inline long long dbsize() { return _redis->dbsize(); }
-
-  /* !
-   * ! WARNING: Flush the entire Redis, accross all DBs!
-   * !
-   */
-  inline void flushall() { _redis->flushall(); }
-
-  /*
-   * ! WARNING: Flush the entire current DB!
-   * !
-   */
-  inline void flushdb() { _redis->flushdb(); }
-
-  std::unordered_map<std::string, std::string> read_json(std::string fn)
-  {
-    std::ifstream config;
-    std::unordered_map<std::string, std::string> connection_info = {
-        {"database-password", ""},
-        {"host", ""},
-        {"service-port", ""},
-        {"cert", ""},
-    };
-
-    config.open(fn, std::ifstream::in);
-    if (config.is_open()) {
-      std::string line;
-      // Quite inefficient parsing (to say the least..) but the file to parse is
-      // small (4 lines)
-      // TODO: maybe use Boost or another JSON library
-      while (std::getline(config, line)) {
-        if (line.find("{") != std::string::npos ||
-            line.find("}") != std::string::npos) {
-          continue;
-        }
-        line.erase(std::remove(line.begin(), line.end(), ' '), line.end());
-        line.erase(std::remove(line.begin(), line.end(), ','), line.end());
-        line.erase(std::remove(line.begin(), line.end(), '"'), line.end());
-
-        std::string key = line.substr(0, line.find(':'));
-        line.erase(0, line.find(":") + 1);
-        connection_info[key] = line;
-        // std::cerr << "key=" << key << " and value=" << line << std::endl;
-      }
-      config.close();
-    } else {
-      std::cerr << "Config located at: " << fn << std::endl;
-      throw std::runtime_error("Could not open Redis config file");
-    }
-    return connection_info;
-  }
-
-  void store(size_t num_elements,
-             std::vector<TypeValue*>& inputs,
-             std::vector<TypeValue*>& outputs,
-             bool predicate = nullptr) override
-  {
-
-    CFATAL(REDIS,
-           predicate != nullptr,
-           "REDIS database does not support storing uq-predicates")
-
-    const size_t num_in = inputs.size();
-    const size_t num_out = outputs.size();
-
-    // TODO:
-    //      Make insertion more efficient.
-    //      Right now it's pretty naive and expensive
-    auto start = std::chrono::high_resolution_clock::now();
-
-    for (size_t i = 0; i < num_elements; i++) {
-      std::string key = std::to_string(_dbid) + ":" + std::to_string(keyId) +
-                        ":" +
-                        std::to_string(i);  // In Redis a key must be a string
-      std::ostringstream fd;
-      for (size_t j = 0; j < num_in; j++) {
-        fd << inputs[j][i] << ":";
-      }
-      for (size_t j = 0; j < num_out - 1; j++) {
-        fd << outputs[j][i] << ":";
-      }
-      fd << outputs[num_out - 1][i];
-      std::string val(fd.str());
-      _redis->set(key, val);
-    }
-
-    keyId += 1;
-
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-    auto nb_keys = this->dbsize();
-
-    std::cout << std::setprecision(2) << "Inserted " << num_elements
-              << " keys [Total keys = " << nb_keys << "]  into RedisDB [Total "
-              << duration.count() << "ms, "
-              << static_cast<double>(num_elements) / duration.count()
-              << " key/ms]" << std::endl;
-  }
-};
-
-#endif  // __ENABLE_REDIS__
-
 #ifdef __ENABLE_RMQ__
+// TODO IMPLEMENT THIS AFTER everything else is working
 
 enum class ConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
 
@@ -2148,8 +1800,6 @@ public:
     }
 
     switch (dbType) {
-      case AMSDBType::AMS_CSV:
-        return std::make_shared<csvDB>(fs_interface.path(), dbLabel, rId);
 #ifdef __ENABLE_HDF5__
       case AMSDBType::AMS_HDF5:
         return std::make_shared<hdf5DB>(
