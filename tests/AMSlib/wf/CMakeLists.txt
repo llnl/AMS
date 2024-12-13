@@ -30,6 +30,7 @@ endfunction()
 
 BUILD_UNIT_TEST(domain_to_application domain_to_application.cpp)
 BUILD_UNIT_TEST(subselect_tensors subselect_tensors.cpp)
+BUILD_UNIT_TEST(scatter_physics scatter_physics.cpp)
 
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::DomainToApplication::FLOAT::FLOAT domain_to_application float float cpu)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::DomainToApplication::DOUBLE::FLOAT domain_to_application double float cpu)
@@ -40,13 +41,20 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::DomainToApplication::DOUBLE::DOUBLE domai
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::SubSelect::Double subselect_tensors double cpu)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::SubSelect::Float subselect_tensors float cpu)
 
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::ScatterPhysics::Double scatter_physics double cpu)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::ScatterPhysics::Float scatter_physics float cpu)
+
+
 if (ENABLE_CUDA)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::FLOAT::FLOAT domain_to_application float float cuda)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::DOUBLE::FLOAT domain_to_application double float cuda)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::FLOAT::DOUBLE domain_to_application float double cuda)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::DOUBLE::DOUBLE domain_to_application double double cuda)
 
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::SubSelect::Double subselect_tensors double cuda)
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::SubSelect::Float subselect_tensors float cuda)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::SubSelect::Double subselect_tensors double cuda)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::SubSelect::Float subselect_tensors float cuda)
+
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::ScatterPhysics::Double scatter_physics double cuda)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::ScatterPhysics::Float scatter_physics float cuda)
 endif()
 
