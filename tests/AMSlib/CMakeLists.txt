@@ -310,4 +310,5 @@
 
 add_subdirectory(torch)
 add_subdirectory(db)
+add_subdirectory(wf)
 #  add_test(NAME AMSEndToEndFromJSON::Random10::Random50::Double::DB::${db_type}::HOST COMMAND bash -c "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 9 \"double\" 1 1024 app_random_10 app_random_50;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 9 \"double\" 1024 app_random_10 app_random_50")
