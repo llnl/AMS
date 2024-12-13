@@ -8,18 +8,20 @@
 #ifndef __AMS_WORKFLOW_HPP__
 #define __AMS_WORKFLOW_HPP__
 
+#include <c10/core/DeviceType.h>
+
+#include <memory>
+#include <stdexcept>
+
 #include "debug.h"
 #ifdef __AMS_ENABLE_CALIPER__
 #include <caliper/cali_macros.h>
 #endif
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <vector>
+#include <ATen/core/TensorBody.h>
 
 #include "AMS.h"
-#include "ml/uq.hpp"
+#include "ml/surrogate.hpp"
 #include "resource_manager.hpp"
 #include "util/ArrayRef.hpp"
 #include "util/SmallVector.hpp"
@@ -41,18 +43,11 @@
 //! ----------------------------------------------------------------------------
 namespace ams
 {
-template <typename FPTypeValue>
 class AMSWorkflow
 {
 
-  static_assert(std::is_floating_point<FPTypeValue>::value,
-                "HDCache supports floating-point values (floats, doubles, and "
-                "long doubles) only!");
-
-  using data_handler = ams::DataHandler<FPTypeValue>;
-
   /** @brief The application call back to perform the original SPMD physics
-   * execution */
+     * execution */
   AMSPhysicFn AppCall;
 
   /** @brief A string identifier describing the domain-model being solved. */
@@ -62,20 +57,20 @@ class AMSWorkflow
   std::string dbLabel;
 
   /** @brief The module that performs uncertainty quantification (UQ) */
-  std::unique_ptr<UQ<FPTypeValue>> UQModel;
+  std::shared_ptr<SurrogateModel> MLModel;
 
   /** The metric/type of UQ we will use to select between physics and ml computations **/
   const AMSUQPolicy uqPolicy = AMSUQPolicy::AMS_UQ_END;
 
   /** @brief The database to store data for which we cannot apply the current
-   * model */
+     * model */
   std::shared_ptr<ams::db::BaseDB> DB;
 
   /** @brief The process id. For MPI runs this is the rank */
   const int rId;
 
   /** @brief The total number of processes participating in the simulation
-   * (world_size for MPI) */
+     * (world_size for MPI) */
   int wSize;
 
   /** @brief  Location of the original application data  (CPU or GPU) */
@@ -83,6 +78,10 @@ class AMSWorkflow
 
   /** @brief execution policy of the distributed system. Load balance or not. */
   AMSExecPolicy ePolicy;
+
+
+  /** @brief The maximum distance of the predicate for a sample prediction to be considered as valid **/
+  const float threshold;
 
 #ifdef __ENABLE_MPI__
   /** @brief MPI Communicator for all ranks that call collectively the evaluate function **/
@@ -93,85 +92,43 @@ class AMSWorkflow
   bool isDistributed;
 
   /** \brief Store the data in the database and copies
-   * data from the GPU to the CPU and then to the database.
-   * To store GPU resident data we use a 1MB of "pinned"
-   * memory as a buffer
-   * @param[in] num_elements Number of elements of each 1-D vector
-   * @param[in] inputs vector to 1-D vectors storing num_elements
-   * items to be stored in the database
-   * @param[in] outputs vector to 1-D vectors storing num_elements
-   * items to be stored in the database
-   */
-  void store(size_t num_elements,
-             std::vector<FPTypeValue *> &inputs,
-             std::vector<FPTypeValue *> &outputs,
-             bool *predicate = nullptr)
+     * data from the GPU to the CPU and then to the database.
+     * To store GPU resident data we use a 1MB of "pinned"
+     * memory as a buffer
+     * @param[in] num_elements Number of elements of each 1-D vector
+     * @param[in] inputs vector to 1-D vectors storing num_elements
+     * items to be stored in the database
+     * @param[in] outputs vector to 1-D vectors storing num_elements
+     * items to be stored in the database
+     */
+  void store(ArrayRef<torch::Tensor> Inputs, ArrayRef<torch::Tensor> Outputs)
   {
-    // 1 MB of buffer size;
-    // TODO: Fix magic number
-    // TODO: This is likely not efficient for RabbitMQ backend at scale
-    //       We could just linearize the whole input+output and do one send (or two) per cycle
-    static const long bSize = 1 * 1024 * 1024;
-    const int numIn = inputs.size();
-    const int numOut = outputs.size();
-    auto &rm = ams::ResourceManager::getInstance();
-
-    // No database, so just de-allocate and return
     if (!DB) return;
 
-    std::vector<FPTypeValue *> hInputs, hOutputs;
-    bool *hPredicate = nullptr;
-
+    c10::SmallVector<torch::Tensor> ConvertedInputs(Inputs.begin(),
+                                                    Inputs.end());
+    c10::SmallVector<torch::Tensor> ConvertedOutputs(Outputs.begin(),
+                                                     Outputs.end());
+    auto Input = torch::cat(ConvertedInputs, Inputs[0].sizes().size() - 1);
+    auto Output = torch::cat(ConvertedOutputs, Outputs[0].sizes().size() - 1);
+    // No database, so just de-allocate and return
     if (appDataLoc == AMSResourceType::AMS_HOST) {
-      return DB->store(num_elements, inputs, outputs, predicate);
+      return DB->store(Input, Output);
     }
-
-    for (int i = 0; i < inputs.size(); i++) {
-      FPTypeValue *pPtr =
-          rm.allocate<FPTypeValue>(num_elements, AMSResourceType::AMS_HOST);
-      rm.copy(inputs[i], AMS_DEVICE, pPtr, AMS_HOST, num_elements);
-      hInputs.push_back(pPtr);
-    }
-
-    for (int i = 0; i < outputs.size(); i++) {
-      FPTypeValue *pPtr =
-          rm.allocate<FPTypeValue>(num_elements, AMSResourceType::AMS_HOST);
-      rm.copy(outputs[i], AMS_DEVICE, pPtr, AMS_HOST, num_elements);
-      hOutputs.push_back(pPtr);
-    }
-
-    if (predicate) {
-      hPredicate = rm.allocate<bool>(num_elements, AMSResourceType::AMS_HOST);
-      rm.copy(predicate, AMS_DEVICE, hPredicate, AMS_HOST, num_elements);
-    }
+    if (Input.device() == c10::DeviceType::CUDA) Input = Input.cpu();
+    if (Output.device() == c10::DeviceType::CUDA) Output = Output.cpu();
 
     // Store to database
-    DB->store(num_elements, hInputs, hOutputs, hPredicate);
-    rm.deallocate(hInputs, AMSResourceType::AMS_HOST);
-    rm.deallocate(hOutputs, AMSResourceType::AMS_HOST);
-    if (predicate) rm.deallocate(hPredicate, AMSResourceType::AMS_HOST);
+    DB->store(Input, Output);
 
     return;
   }
 
-  void store(size_t num_elements,
-             std::vector<const FPTypeValue *> &inputs,
-             std::vector<FPTypeValue *> &outputs,
-             bool *predicate = nullptr)
-  {
-    std::vector<FPTypeValue *> mInputs;
-    for (auto I : inputs) {
-      mInputs.push_back(const_cast<FPTypeValue *>(I));
-    }
-
-    store(num_elements, mInputs, outputs, predicate);
-  }
-
   /** \brief Check if we can perform a surrogate model update.
-   *  AMS can update surrogate model only when all MPI ranks have received 
-   * the latest model from RabbitMQ.
-   * @return True if surrogate model can be updated
-   */
+     *  AMS can update surrogate model only when all MPI ranks have received 
+     * the latest model from RabbitMQ.
+     * @return True if surrogate model can be updated
+     */
   bool updateModel()
   {
     if (!DB || !DB->allowModelUpdate()) return false;
@@ -186,27 +143,14 @@ class AMSWorkflow
   }
 
 public:
-  AMSWorkflow()
-      : AppCall(nullptr),
-        DB(nullptr),
-        appDataLoc(AMSResourceType::AMS_HOST),
-#ifdef __ENABLE_MPI__
-        comm(MPI_COMM_NULL),
-#endif
-        ePolicy(AMSExecPolicy::AMS_UBALANCED)
-  {
-  }
-
   AMSWorkflow(AMSPhysicFn _AppCall,
-              std::string &uq_path,
               std::string &surrogate_path,
               std::string &domain_name,
               std::string &db_label,
               bool isDebugDB,
               AMSResourceType app_data_loc,
-              FPTypeValue threshold,
+              float threshold,
               const AMSUQPolicy uq_policy,
-              const int nClusters,
               int _pId = 0,
               int _wSize = 1)
       : AppCall(_AppCall),
@@ -219,14 +163,16 @@ public:
 #ifdef __ENABLE_MPI__
         comm(MPI_COMM_NULL),
 #endif
+        threshold(threshold),
         ePolicy(AMSExecPolicy::AMS_UBALANCED)
   {
     DB = nullptr;
     auto &dbm = ams::db::DBManager::getInstance();
 
-    DB = dbm.getDB(domainName, dbLabel, rId, isDebugDB);
-    UQModel = std::make_unique<UQ<FPTypeValue>>(
-        appDataLoc, uqPolicy, uq_path, nClusters, surrogate_path, threshold);
+    DB = dbm.getDB(domainName, dbLabel, rId);
+    MLModel = nullptr;
+    if (!surrogate_path.empty())
+      MLModel = SurrogateModel::getInstance(surrogate_path);
   }
 
   void set_physics(AMSPhysicFn _AppCall) { AppCall = _AppCall; }
@@ -246,96 +192,120 @@ public:
 #endif
   }
 
+
+  static SmallVector<at::Tensor> subSelectTensors(ArrayRef<at::Tensor> Tensors,
+                                                  at::Tensor &Mask)
+  {
+    SmallVector<at::Tensor> NewVector;
+    for (auto O : Tensors) {
+      NewVector.push_back(O.index({Mask}));
+    }
+    return NewVector;
+  }
+
+  static void ScatterPhysicOutputsToOrigDomain(
+      ArrayRef<at::Tensor> ComputedTensors,
+      torch::Tensor &Predicate,
+      ArrayRef<torch::Tensor> AppTensors)
+  {
+    if (ComputedTensors.size() != AppTensors.size()) {
+      throw std::runtime_error(
+          "Expecting equal sized tensors when composing Original and domain "
+          "memories\n");
+    }
+    for (int i = 0; i < ComputedTensors.size(); i++) {
+      AppTensors[i].masked_scatter_(Predicate, ComputedTensors[i]);
+    }
+  }
+
+
+  static int MLDomainToApplication(at::Tensor Src,
+                                   MutableArrayRef<at::Tensor> Dest,
+                                   at::Tensor Predicate,
+                                   int offset)
+  {
+    int outerDim = Src.dim() - 1;
+    for (auto &dst : Dest) {
+      int ConcatAxisSize = dst.sizes()[dst.dim() - 1];
+      at::Tensor Slice =
+          Src.narrow(outerDim, offset, ConcatAxisSize).to(dst.options());
+      dst.index_put_({Predicate}, Slice.index({Predicate}));
+      offset += ConcatAxisSize;
+    }
+    return offset;
+  }
+
+
   ~AMSWorkflow() { DBG(Workflow, "Destroying Workflow Handler"); }
 
   /** @brief This is the main entry point of AMSLib and replaces the original
-   * execution path of the application.
-   * @param[in] probDescr an opaque type that will be forwarded to the
-   * application upcall
-   * @param[in] totalElements the total number of elements to apply the SPMD
-   * function on
-   * @param[in] inputs the inputs of the computation.
-   * @param[out] outputs the computed outputs.
-   * @param[in] Comm The MPI Communicatotor for all ranks participating in the
-   * SPMD execution.
-   *
-   * @details The function corresponds to the main driver of the AMSLib.
-   * Assuming an original 'foo' function void foo ( void *cls, int numElements,
-   * void **inputs, void **outputs){ parallel_for(I : numElements){
-   *       cls->physics(inputs[0][I], outputs[0][I]);
-   *    }
-   * }
-   *
-   * The AMS transformation would functionaly look like this:
-   * void AMSfoo ( void *cls, int numElements, void **inputs, void **outputs){
-   *    parallel_for(I : numElements){
-   *       if ( UQ (I) ){
-   *          Surrogate(inputs[0][I], outputs[0][I])
-   *       }
-   *       else{
-   *        cls->physics(inputs[0][I], outputs[0][I]);
-   *        DB->Store(inputs[0][I], outputs[0][I]);
-   *       }
-   *    }
-   * }
-   *
-   * Yet, AMS assumes a SPMD physics function (in the example cls->physics).
-   * Therefore, the AMS transformation is taking place at the level of the SPMD
-   * execution. The following transformation is equivalent void AMSfoo( void
-   * *cls, int numElements, void **inputs, void **outputs){ predicates =
-   * UQ(inputs, numElements); modelInputs, physicsInputs = partition(predicates,
-   * inputs); modelOuputs, physicsOutputs = partition(predicates, output);
-   *    foo(cls, physicsInputs.size(), physicsInputs, physicsOutputs);
-   *    surrogate(modelInputs, modelOuputs, modelOuputs.size());
-   *    DB->Store(physicsInputs, physicsOutputs);
-   *    concatenate(outptuts, modelOuputs, predicate);
-   * }
-   *
-   * This transformation can exploit the parallel nature of all the required
-   * steps.
-   */
+     * execution path of the application.
+     * @param[in] probDescr an opaque type that will be forwarded to the
+     * application upcall
+     * @param[in] totalElements the total number of elements to apply the SPMD
+     * function on
+     * @param[in] inputs the inputs of the computation.
+     * @param[out] outputs the computed outputs.
+     * @param[in] Comm The MPI Communicatotor for all ranks participating in the
+     * SPMD execution.
+     *
+     * @details The function corresponds to the main driver of the AMSLib.
+     * Assuming an original 'foo' function void foo ( void *cls, int numElements,
+     * void **inputs, void **outputs){ parallel_for(I : numElements){
+     *       cls->physics(inputs[0][I], outputs[0][I]);
+     *    }
+     * }
+     *
+     * The AMS transformation would functionaly look like this:
+     * void AMSfoo ( void *cls, int numElements, void **inputs, void **outputs){
+     *    parallel_for(I : numElements){
+     *       if ( UQ (I) ){
+     *          Surrogate(inputs[0][I], outputs[0][I])
+     *       }
+     *       else{
+     *        cls->physics(inputs[0][I], outputs[0][I]);
+     *        DB->Store(inputs[0][I], outputs[0][I]);
+     *       }
+     *    }
+     * }
+     *
+     * Yet, AMS assumes a SPMD physics function (in the example cls->physics).
+     * Therefore, the AMS transformation is taking place at the level of the SPMD
+     * execution. The following transformation is equivalent void AMSfoo( void
+     * *cls, int numElements, void **inputs, void **outputs){ predicates =
+     * UQ(inputs, numElements); modelInputs, physicsInputs = partition(predicates,
+     * inputs); modelOuputs, physicsOutputs = partition(predicates, output);
+     *    foo(cls, physicsInputs.size(), physicsInputs, physicsOutputs);
+     *    surrogate(modelInputs, modelOuputs, modelOuputs.size());
+     *    DB->Store(physicsInputs, physicsOutputs);
+     *    concatenate(outptuts, modelOuputs, predicate);
+     * }
+     *
+     * This transformation can exploit the parallel nature of all the required
+     * steps.
+     */
   void evaluate(void *probDescr,
-                const int totalElements,
-                const FPTypeValue **inputs,
-                FPTypeValue **outputs,
-                int inputDim,
-                int outputDim)
+                ams::MutableArrayRef<at::Tensor> Ins,
+                ams::MutableArrayRef<at::Tensor> InOuts,
+                ams::MutableArrayRef<at::Tensor> Outs)
   {
     CALIPER(CALI_MARK_BEGIN("AMSEvaluate");)
 
-    CDEBUG(Workflow,
-           rId == 0,
-           "Entering Evaluate "
-           "with problem dimensions [(%d, %d, %d, %d)]",
-           totalElements,
-           inputDim,
-           totalElements,
-           outputDim);
-    // To move around the inputs, outputs we bundle them as std::vectors
-    std::vector<const FPTypeValue *> origInputs(inputs, inputs + inputDim);
-    std::vector<FPTypeValue *> origOutputs(outputs, outputs + outputDim);
-    auto &rm = ams::ResourceManager::getInstance();
+    SmallVector<at::Tensor> InputTensors(Ins.begin(), Ins.end());
+    SmallVector<at::Tensor> OutputTensors(Ins.begin(), Ins.end());
+    for (auto Tensor : InOuts) {
+      InputTensors.push_back(Tensor);
+      OutputTensors.push_back(Tensor);
+    }
+
+    // Here we create a copy of the inputs/outputs. This is "necessary". To correctly handle
+    // input-output cases and to also to set them to right precision.
 
     REPORT_MEM_USAGE(Workflow, "Start")
 
-    if (!UQModel->hasSurrogate()) {
-      FPTypeValue **tmpInputs = const_cast<FPTypeValue **>(inputs);
-
-      std::vector<FPTypeValue *> tmpIn(tmpInputs, tmpInputs + inputDim);
-      DBG(Workflow, "No-Model, I am calling Physics code (for all data)");
-      CALIPER(CALI_MARK_BEGIN("PHYSICS MODULE");)
-      AppCall(probDescr,
-              totalElements,
-              reinterpret_cast<const void **>(origInputs.data()),
-              reinterpret_cast<void **>(origOutputs.data()));
-      CALIPER(CALI_MARK_END("PHYSICS MODULE");)
-      if (DB) {
-        CALIPER(CALI_MARK_BEGIN("DBSTORE");)
-        store(totalElements, tmpIn, origOutputs);
-        CALIPER(CALI_MARK_END("DBSTORE");)
-      }
-      CALIPER(CALI_MARK_END("AMSEvaluate");)
-      return;
+    if (!MLModel) {
+      // FIXME This needs to be updated accordingly and call the new interface.
+      throw std::runtime_error("Pending implementation\n");
     }
 
     CALIPER(CALI_MARK_BEGIN("UPDATEMODEL");)
@@ -345,133 +315,91 @@ public:
             rId == 0,
             "Updating surrogate model with %s",
             model.c_str())
-      UQModel->updateModel(model);
+      // UQModel->updateModel(model);
     }
     CALIPER(CALI_MARK_END("UPDATEMODEL");)
 
-    // The predicate with which we will split the data on a later step
-    bool *predicate = rm.allocate<bool>(totalElements, appDataLoc);
-
     // -------------------------------------------------------------
-    // STEP 1: call the UQ module to look at input uncertainties
-    //         to decide if making a ML inference makes sense
+    // STEP 1: call the ML Model to get both the prediction and the predicates.
     // -------------------------------------------------------------
-    CALIPER(CALI_MARK_BEGIN("UQ_MODULE");)
-    UQModel->evaluate(totalElements, origInputs, origOutputs, predicate);
-    CALIPER(CALI_MARK_END("UQ_MODULE");)
+    CALIPER(CALI_MARK_BEGIN("SURROGATE");)
+    // The predicate with which we will split the data on a lateMLInputsr step
+    auto [MLOutputs, Predicate] =
+        MLModel->evaluate(InputTensors, uqPolicy, threshold);
 
-    DBG(Workflow, "Computed Predicates")
+    CALIPER(CALI_MARK_END("SURROGATE");)
 
-    // Pointer values which store input data values
-    // to be computed using the eos function.
-    std::vector<FPTypeValue *> packedInputs;
-
-    for (int i = 0; i < inputDim; i++) {
-      packedInputs.emplace_back(
-          rm.allocate<FPTypeValue>(totalElements, appDataLoc));
-    }
-
-    DBG(Workflow, "Allocated input resources")
+    //Copy out the results of the ML Model to the correct indices, this needs to happen
+    CALIPER(CALI_MARK_BEGIN("MLDomainToApplication");)
+    int offset = MLDomainToApplication(MLOutputs, Outs, Predicate, 0);
+    MLDomainToApplication(MLOutputs, InOuts, Predicate, offset);
+    CALIPER(CALI_MARK_END("MLDomainToApplication");)
 
 
-    // -----------------------------------------------------------------
-    // STEP 3: call physics module only where predicate = false
-    // -----------------------------------------------------------------
-    // ---- 3a: we need to pack the sparse data based on the uq flag
+    if (Predicate.sum().item<int64_t>() == 0) return;
+
+    // Revert pedicates and use it to pick the Physic points outputs.
+    auto WrongMLIndices = torch::logical_not(Predicate);
+
+    // Physis* tensors have the points which the model could not accurately predict
     CALIPER(CALI_MARK_BEGIN("PACK");)
-    const long packedElements = data_handler::pack(
-        appDataLoc, predicate, totalElements, origInputs, packedInputs);
+    SmallVector<at::Tensor> PhysicIns(subSelectTensors(Ins, WrongMLIndices));
+    SmallVector<at::Tensor> PhysicInOuts(
+        subSelectTensors(InOuts, WrongMLIndices));
+    // TODO: Outs does not need sub select, we will write all of these from scratch
+    SmallVector<at::Tensor> PhysicOuts(subSelectTensors(Outs, WrongMLIndices));
     CALIPER(CALI_MARK_END("PACK");)
 
-    // Pointer values which store output data values
-    // to be computed using the eos function.
-    std::vector<FPTypeValue *> packedOutputs;
-    for (int i = 0; i < outputDim; i++) {
-      packedOutputs.emplace_back(
-          rm.allocate<FPTypeValue>(packedElements, appDataLoc));
-    }
+    // Copy and clone. This important to take place before AppCall is executed. To keep a copy of the input values
+    // that will be overwritten.
+    SmallVector<at::Tensor> PhysicInOutsBefore;
+    for (auto S : PhysicInOuts)
+      PhysicInOutsBefore.push_back(S.clone());
 
-    {
-      void **iPtr = reinterpret_cast<void **>(packedInputs.data());
-      void **oPtr = reinterpret_cast<void **>(packedOutputs.data());
-      long lbElements = packedElements;
+    // We call the application here
+    CALIPER(CALI_MARK_BEGIN("PHYSICS MODULE");)
+    //AppCall(probDescr, PhysicIns, PhysicInOuts, PhysicOuts);
+#warning put back in when interface is clean.
+    CALIPER(CALI_MARK_END("PHYSICS MODULE");)
 
-      // FIXME: I don't like the way we separate code here.
-      // Simple modification can make it easier to read.
-      // if (should_load_balance)  -> Code for load balancing
-      // else -> current code
-#ifdef __ENABLE_MPI__
-      CALIPER(CALI_MARK_BEGIN("LOAD BALANCE MODULE");)
-      AMSLoadBalancer<FPTypeValue> lBalancer(rId, wSize, packedElements, comm);
-      if (should_load_balance()) {
-        lBalancer.init(inputDim, outputDim, appDataLoc);
-        lBalancer.scatterInputs(packedInputs, appDataLoc);
-        iPtr = reinterpret_cast<void **>(lBalancer.inputs());
-        oPtr = reinterpret_cast<void **>(lBalancer.outputs());
-        lbElements = lBalancer.getBalancedSize();
-      }
-      CALIPER(CALI_MARK_END("LOAD BALANCE MODULE");)
-#endif
 
-      // ---- 3b: call the physics module and store in the data base
-      if (packedElements > 0) {
-        CALIPER(CALI_MARK_BEGIN("PHYSICS MODULE");)
-        AppCall(probDescr, lbElements, iPtr, oPtr);
-        CALIPER(CALI_MARK_END("PHYSICS MODULE");)
-      }
-
-#ifdef __ENABLE_MPI__
-      CALIPER(CALI_MARK_BEGIN("LOAD BALANCE MODULE");)
-      if (should_load_balance()) {
-        lBalancer.gatherOutputs(packedOutputs, appDataLoc);
-      }
-      CALIPER(CALI_MARK_END("LOAD BALANCE MODULE");)
-#endif
-    }
-
-    // ---- 3c: unpack the data
     CALIPER(CALI_MARK_BEGIN("UNPACK");)
-    data_handler::unpack(
-        appDataLoc, predicate, totalElements, packedOutputs, origOutputs);
+    // Copy out the computation results to the original tensors/buffers
+    ScatterPhysicOutputsToOrigDomain(PhysicOuts, WrongMLIndices, Outs);
+    ScatterPhysicOutputsToOrigDomain(PhysicInOuts, WrongMLIndices, InOuts);
     CALIPER(CALI_MARK_END("UNPACK");)
+
 
     DBG(Workflow, "Finished physics evaluation")
 
     if (DB) {
       CALIPER(CALI_MARK_BEGIN("DBSTORE");)
-      if (!DB->storePredicate()) {
-        DBG(Workflow,
-            "Storing data (#elements = %d) to database",
-            packedElements);
-        store(packedElements, packedInputs, packedOutputs);
-      } else {
-        DBG(Workflow,
-            "Storing data (#elements = %d) to database including predicates",
-            totalElements);
-        store(totalElements, origInputs, origOutputs, predicate);
+      SmallVector<at::Tensor> StoreInputTensors(PhysicIns.begin(),
+                                                PhysicIns.end());
+      SmallVector<at::Tensor> StoreOutputTensors(PhysicOuts.begin(),
+                                                 PhysicOuts.end());
+      for (auto Tensor : PhysicInOutsBefore)
+        StoreInputTensors.push_back(Tensor);
+      for (auto Tensor : PhysicInOuts) {
+        StoreOutputTensors.push_back(Tensor);
       }
 
+      DBG(Workflow,
+          "Storing data (#elements = %ld) to database",
+          StoreInputTensors[0].sizes()[0]);
+      store(StoreInputTensors, StoreOutputTensors);
       CALIPER(CALI_MARK_END("DBSTORE");)
     }
 
-    // -----------------------------------------------------------------
-    // Deallocate temporal data
-    // -----------------------------------------------------------------
-    for (int i = 0; i < inputDim; i++)
-      rm.deallocate(packedInputs[i], appDataLoc);
-    for (int i = 0; i < outputDim; i++)
-      rm.deallocate(packedOutputs[i], appDataLoc);
-
-    rm.deallocate(predicate, appDataLoc);
 
     DBG(Workflow, "Finished AMSExecution")
     CINFO(Workflow,
           rId == 0,
           "Computed %ld "
           "using physics out of the %ld items (%.2f)",
-          packedElements,
-          totalElements,
-          (float)(packedElements) / float(totalElements))
+          PhysicIns[0].sizes()[0],
+          InputTensors[0].sizes()[0],
+          (float)(PhysicIns[0].sizes()[0]) / float(InputTensors[0].sizes()[0]));
 
     REPORT_MEM_USAGE(Workflow, "End")
     CALIPER(CALI_MARK_END("AMSEvaluate");)

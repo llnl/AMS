@@ -92,12 +92,12 @@ public:
 
   std::tuple<torch::Tensor, torch::Tensor> _evaluate(torch::Tensor& inputs,
                                                      AMSUQPolicy policy,
-                                                     float threshold);
+                                                     const float threshold);
 
   std::tuple<torch::Tensor, torch::Tensor> evaluate(
       ams::MutableArrayRef<at::Tensor> Inputs,
       AMSUQPolicy policy,
-      float threshold);
+      const float threshold);
 
 
   inline bool is_gpu() const
