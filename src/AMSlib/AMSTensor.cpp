@@ -1,11 +1,11 @@
 #include "AMS.h"
+#include "AMSTensor.hpp"
 #include "ArrayRef.hpp"
 #include "SmallVector.hpp"
-#include "ams_tensor.hpp"
-#include "wf/data_handler.hpp"
 #include "wf/resource_manager.hpp"
 #include "wf/utils.hpp"
 
+using namespace ams;
 
 /**
    * @brief Computes the number of elements in the tensor given its shape.
@@ -13,15 +13,15 @@
    * @return The total number of elements in the tensor.
    */
 template <typename T>
-static inline size_t computeNumElements(ams::ArrayRef<T> shapes)
+static inline AMSTensor::IntDimType computeNumElements(ams::ArrayRef<T> shapes)
 {
   return std::accumulate(shapes.begin(),
                          shapes.end(),
                          1,
-                         std::multiplies<std::size_t>());
+                         std::multiplies<AMSTensor::IntDimType>());
 }
 // Helper function to check if the tensor is contiguous in memory
-bool AMSTensor::isContiguous(size_t expected_stride) const
+bool AMSTensor::isContiguous(AMSTensor::IntDimType expected_stride) const
 {
   for (int i = _shape.size() - 1; i >= 0; --i) {
     if (_strides[i] != expected_stride) return false;
@@ -31,8 +31,8 @@ bool AMSTensor::isContiguous(size_t expected_stride) const
 }
 
 
-AMSTensor::AMSTensor(ams::ArrayRef<size_t> shapes,
-                     ams::ArrayRef<size_t> strides,
+AMSTensor::AMSTensor(ams::ArrayRef<AMSTensor::IntDimType> shapes,
+                     ams::ArrayRef<AMSTensor::IntDimType> strides,
                      AMSDType dType,
                      AMSResourceType location,
                      bool view)
@@ -58,8 +58,8 @@ AMSTensor::AMSTensor(ams::ArrayRef<size_t> shapes,
 }
 
 
-AMSTensor AMSTensor::create(ams::ArrayRef<size_t> shapes,
-                            ams::ArrayRef<size_t> strides,
+AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
+                            ams::ArrayRef<AMSTensor::IntDimType> strides,
                             AMSDType dType,
                             AMSResourceType location)
 {
@@ -67,8 +67,8 @@ AMSTensor AMSTensor::create(ams::ArrayRef<size_t> shapes,
 }
 
 AMSTensor AMSTensor::view(uint8_t* data,
-                          ams::ArrayRef<size_t> shapes,
-                          ams::ArrayRef<size_t> strides,
+                          ams::ArrayRef<AMSTensor::IntDimType> shapes,
+                          ams::ArrayRef<AMSTensor::IntDimType> strides,
                           AMSDType dType,
                           AMSResourceType location)
 {
@@ -132,7 +132,8 @@ AMSTensor& AMSTensor::operator=(AMSTensor&& other) noexcept
   return *this;
 }
 
-AMSTensor AMSTensor::transpose(size_t axis1, size_t axis2) const
+AMSTensor AMSTensor::transpose(AMSTensor::IntDimType axis1,
+                               AMSTensor::IntDimType axis2) const
 {
   // Ensure the axes are within bounds
   if (axis1 >= _shape.size() || axis2 >= _shape.size()) {

@@ -8,6 +8,11 @@
 #ifndef __AMS_SURROGATE_HPP__
 #define __AMS_SURROGATE_HPP__
 
+#include <ATen/core/interned_strings.h>
+#include <ATen/core/ivalue.h>
+#include <torch/cuda.h>
+#include <torch/script.h>  // One-stop header.
+
 #include <experimental/filesystem>
 #include <memory>
 #include <stdexcept>
@@ -16,15 +21,7 @@
 #include <unordered_map>
 
 #include "AMS.h"
-#include "util/ArrayRef.hpp"
-//#include "wf/device.hpp"
-
-#include <ATen/core/interned_strings.h>
-#include <ATen/core/ivalue.h>
-#include <torch/cuda.h>
-#include <torch/script.h>  // One-stop header.
-
-#include "wf/data_handler.hpp"
+#include "ArrayRef.hpp"
 #include "wf/debug.h"
 
 //! ----------------------------------------------------------------------------
@@ -35,9 +32,9 @@ class SurrogateModel
 
 private:
   const std::string _model_path;
-  AMSResourceType model_device;
+  ams::AMSResourceType model_device;
   torch::DeviceType torch_device;
-  AMSDType model_dtype;
+  ams::AMSDType model_dtype;
   torch::Dtype torch_dtype;
   const bool _is_DeltaUQ;
 
@@ -102,22 +99,25 @@ public:
 
   inline bool is_gpu() const
   {
-    return model_device == AMSResourceType::AMS_DEVICE;
+    return model_device == ams::AMSResourceType::AMS_DEVICE;
   }
 
   inline bool is_cpu() const
   {
-    return model_device == AMSResourceType::AMS_HOST;
+    return model_device == ams::AMSResourceType::AMS_HOST;
   }
 
-  inline bool is_resource(AMSResourceType rType) const
+  inline bool is_resource(ams::AMSResourceType rType) const
   {
     return model_device == rType;
   }
 
-  inline bool is_float() const { return model_dtype == AMS_SINGLE; }
-  inline bool is_double() const { return model_dtype == AMS_DOUBLE; }
-  inline bool is_type(AMSDType dType) const { return model_dtype == dType; }
+  inline bool is_float() const { return model_dtype == ams::AMS_SINGLE; }
+  inline bool is_double() const { return model_dtype == ams::AMS_DOUBLE; }
+  inline bool is_type(ams::AMSDType dType) const
+  {
+    return model_dtype == dType;
+  }
 
 
   //
@@ -141,8 +141,8 @@ public:
   //  }
 
   //  AMSResourceType getModelResource() const { return model_device; }
-  std::tuple<AMSResourceType, torch::DeviceType> getModelResourceType();
-  std::tuple<AMSDType, torch::Dtype> getModelDataType();
+  std::tuple<ams::AMSResourceType, torch::DeviceType> getModelResourceType();
+  std::tuple<ams::AMSDType, torch::Dtype> getModelDataType();
 };
 
 #endif

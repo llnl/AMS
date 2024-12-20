@@ -308,6 +308,7 @@
 >>>>>>> b6e616f (Updated basedb-hdf5)
 
 
+add_subdirectory(models)
 add_subdirectory(torch)
 add_subdirectory(db)
 add_subdirectory(wf)

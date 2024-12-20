@@ -3,8 +3,9 @@
 #include <torch/torch.h>
 #include <torch/types.h>
 
+#include <algorithm>  // For std::shuffle
 #include <iostream>
-#include <locale>
+#include <random>  // For std::mt19937 and std::uniform_int_distribution
 #include <stdexcept>
 #include <string>
 

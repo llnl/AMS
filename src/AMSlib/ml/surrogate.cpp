@@ -12,6 +12,7 @@
 #include "surrogate.hpp"
 #include "wf/debug.h"
 
+using namespace ams;
 static std::string getDTypeAsString(torch::Dtype dtype)
 {
   if (dtype == torch::kFloat32) return "float32";
@@ -218,6 +219,7 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
     throw std::invalid_argument(
         "Input Vector should always contain at least one tensor");
   }
+
   torch::DeviceType InputDevice = Inputs[0].device().type();
   torch::Dtype InputDType = torch::typeMetaToScalarType(Inputs[0].dtype());
   auto CAxis = Inputs[0].sizes().size() - 1;
@@ -246,6 +248,7 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
   }
 
   auto ITensor = torch::cat(ConvertedInputs, CAxis);
+
   auto [OTensor, Predicate] = _evaluate(ITensor, policy, threshold);
   if (InputDevice != torch_device) {
     OTensor = OTensor.to(InputDevice);
