@@ -1,0 +1,78 @@
+#include <c10/core/DeviceType.h>
+#include <torch/torch.h>
+
+#include "AMS.h"
+#include "AMSTensor.hpp"
+
+using namespace ams;
+
+static AMSResourceType torchDeviceToAMSDevice(c10::DeviceType dType)
+{
+  switch (dType) {
+    case c10::DeviceType::CUDA:
+    case c10::DeviceType::HIP:
+      return AMSResourceType::AMS_DEVICE;
+    case c10::DeviceType::CPU:
+      return AMSResourceType::AMS_HOST;
+    default:
+      return AMSResourceType::AMS_UNKNOWN;
+  }
+  return AMSResourceType::AMS_UNKNOWN;
+}
+
+static AMSDType torchDTypeToAMSType(torch::Dtype dtype)
+{
+  static const std::unordered_map<torch::Dtype, AMSDType> dtypeMap = {
+      {torch::kFloat32, AMSDType::AMS_SINGLE},
+      {torch::kFloat, AMSDType::AMS_SINGLE},  // Alias for float32
+      {torch::kFloat64, AMSDType::AMS_DOUBLE},
+      {torch::kDouble, AMSDType::AMS_DOUBLE},  // Alias for float64
+      {torch::kInt32, AMSDType::AMS_UNKNOWN_TYPE},
+      {torch::kInt64, AMSDType::AMS_UNKNOWN_TYPE},
+      {torch::kBool, AMSDType::AMS_UNKNOWN_TYPE},
+      {torch::kUInt8, AMSDType::AMS_UNKNOWN_TYPE},
+      {torch::kInt8, AMSDType::AMS_UNKNOWN_TYPE},
+      {torch::kHalf, AMSDType::AMS_UNKNOWN_TYPE},
+      {torch::kBFloat16, AMSDType::AMS_UNKNOWN_TYPE}};
+
+  return dtypeMap.count(dtype) ? dtypeMap.at(dtype)
+                               : AMSDType::AMS_UNKNOWN_TYPE;
+}
+static ams::SmallVector<ams::AMSTensor> torchToAMSTensors(
+    ams::MutableArrayRef<torch::Tensor> tensorVector)
+{
+  ams::SmallVector<ams::AMSTensor> ams_tensors;
+  for (auto tensor : tensorVector) {
+    // We should be able to completely remove these conversion by using some template "magic."
+    // I will leave these for later though
+    auto dType = torchDTypeToAMSType(tensor.scalar_type());
+    auto rType = torchDeviceToAMSDevice(tensor.device().type());
+    // In both cases, I am effectively only forwarding the pointer of begin/end to ams.
+    // this is a cheap operating. It should boil down to: shapes.start = tensor.sizes.start, shapes.end = tensor.sizes.end;
+    auto shapes = ArrayRef(tensor.sizes().begin(), tensor.strides().size());
+    auto strides = ArrayRef(tensor.strides().begin(), tensor.strides().size());
+    if (dType == AMSDType::AMS_SINGLE)
+      ams_tensors.push_back(AMSTensor::view(
+          (uint8_t*)(tensor.data_ptr<float>()), shapes, strides, dType, rType));
+    else if (dType == AMSDType::AMS_DOUBLE)
+      ams_tensors.push_back(
+          AMSTensor::view((uint8_t*)(tensor.data_ptr<double>()),
+                          shapes,
+                          strides,
+                          dType,
+                          rType));
+  }
+  return ams_tensors;
+}
+
+void callApplication(EOSLambda CallBack,
+                     ams::MutableArrayRef<torch::Tensor> Ins,
+                     ams::MutableArrayRef<torch::Tensor> InOuts,
+                     ams::MutableArrayRef<torch::Tensor> Outs)
+{
+  auto AMSIns = torchToAMSTensors(Ins);
+  auto AMSInOuts = torchToAMSTensors(InOuts);
+  auto AMSOuts = torchToAMSTensors(Outs);
+  CallBack(AMSIns, AMSInOuts, AMSOuts);
+  return;
+}

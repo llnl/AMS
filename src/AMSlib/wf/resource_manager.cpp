@@ -8,8 +8,11 @@
 #include <cstdlib>
 #include <cstring>
 
+#ifdef __ENABLE_CUDA__
+#include <cuda_runtime.h>
+#endif
+
 #include "debug.h"
-#include "device.hpp"
 #include "resource_manager.hpp"
 
 namespace ams
@@ -25,7 +28,7 @@ const std::string AMSAllocator::getName() const { return name; }
 
 
 struct AMSDefaultDeviceAllocator final : AMSAllocator {
-  AMSDefaultDeviceAllocator(std::string name) : AMSAllocator(name){};
+  AMSDefaultDeviceAllocator(std::string name) : AMSAllocator(name) {};
   ~AMSDefaultDeviceAllocator()
   {
     DBG(AMSDefaultDeviceAllocator, "Destroying default device allocator");
@@ -33,10 +36,21 @@ struct AMSDefaultDeviceAllocator final : AMSAllocator {
 
   void *allocate(size_t num_bytes, size_t alignment)
   {
-    return DeviceAllocate(num_bytes);
+#ifdef __ENABLE_CUDA__
+    void *devPtr;
+    cudaMalloc(&devPtr, num_bytes);
+    return devPtr;
+#else
+    return nullptr;
+#endif
   }
 
-  void deallocate(void *ptr) { return DeviceFree(ptr); }
+  void deallocate(void *ptr)
+  {
+#ifdef __ENABLE_CUDA__
+    cudaFree(ptr);
+#endif
+  }
 };
 
 struct AMSDefaultHostAllocator final : AMSAllocator {
@@ -60,10 +74,21 @@ struct AMSDefaultPinnedAllocator final : AMSAllocator {
 
   void *allocate(size_t num_bytes, size_t alignment)
   {
-    return DevicePinnedAlloc(num_bytes);
+#ifdef __ENABLE_CUDA__
+    void *ptr;
+    cudaHostAlloc(&ptr, num_bytes, cudaHostAllocPortable);
+    return ptr;
+#else
+    return nullptr;
+#endif
   }
 
-  void deallocate(void *ptr) { DeviceFreePinned(ptr); }
+  void deallocate(void *ptr)
+  {
+#ifdef __ENABLE_CUDA__
+    cudaFreeHost(ptr);
+#endif
+  }
 };
 
 
@@ -84,26 +109,30 @@ void _raw_copy(void *src,
           std::memcpy(dest, src, num_bytes);
           break;
         case AMSResourceType::AMS_DEVICE:
-          HtoDMemcpy(dest, src, num_bytes);
+#ifdef __ENABLE_CUDA__
+          cudaMemcpy(dest, src, num_bytes, cudaMemcpyHostToDevice);
+#endif
           break;
         default:
           FATAL(ResourceManager, "Unknown device type to copy to from HOST");
           break;
       }
       break;
+#ifdef __ENABLE_CUDA__
     case AMSResourceType::AMS_DEVICE:
       switch (dest_dev) {
         case AMSResourceType::AMS_DEVICE:
-          DtoDMemcpy(dest, src, num_bytes);
+          cudaMemcpy(dest, src, num_bytes, cudaMemcpyDeviceToDevice);
           break;
         case AMSResourceType::AMS_HOST:
         case AMSResourceType::AMS_PINNED:
-          DtoHMemcpy(dest, src, num_bytes);
+          cudaMemcpy(dest, src, num_bytes, cudaMemcpyDeviceToHost);
           break;
         default:
           FATAL(ResourceManager, "Unknown device type to copy to from DEVICE");
           break;
       }
+#endif
       break;
     default:
       FATAL(ResourceManager, "Unknown device type to copy from");

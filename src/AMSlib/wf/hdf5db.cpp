@@ -15,7 +15,7 @@
 
 #include <stdexcept>
 
-#include "util/ArrayRef.hpp"
+#include "ArrayRef.hpp"
 #include "utils.hpp"
 #include "wf/basedb.hpp"
 
@@ -268,8 +268,7 @@ void hdf5DB::_store(const at::Tensor& inputs, const at::Tensor& outputs)
 hdf5DB::hdf5DB(std::string path,
                std::string domain_name,
                std::string fn,
-               uint64_t rId,
-               bool predicate)
+               uint64_t rId)
     : FileDB(path, fn, ".h5", rId), HDOset(-1), HDIset(-1)
 {
   std::error_code ec;

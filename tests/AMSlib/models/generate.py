@@ -81,7 +81,7 @@ def main():
         max_val = torch.max(fake_uq, axis=1).values
         scale = 0.49 / max_val
         fake_uq *= scale.unsqueeze(0).T
-        fake_uq[0, 2] = 0.51
+        fake_uq[1, 2] = 0.51
         model = TuppleModel(8, 8, fake_uq)
     elif args.uq == "random":
         model = SimpleModel(8, 8)

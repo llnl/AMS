@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include "AMS-config.h"
+#include "AMSTensor.hpp"
 
 #ifdef __AMS_ENABLE_CALIPER__
 #include <caliper/cali-manager.h>
@@ -37,6 +38,11 @@ typedef void *MPI_Comm;
 #define PERFFASPECT()
 #endif
 
+using EOSLambda = std::function<void(const ams::SmallVector<ams::AMSTensor> &,
+                                     ams::SmallVector<ams::AMSTensor> &,
+                                     ams::SmallVector<ams::AMSTensor> &)>;
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -45,16 +51,6 @@ typedef void (*AMSPhysicFn)(void *, long, const void *const *, void *const *);
 
 typedef int64_t AMSExecutor;
 typedef int AMSCAbstrModel;
-
-typedef enum { AMS_SINGLE = 0, AMS_DOUBLE } AMSDType;
-
-typedef enum {
-  AMS_UNKNOWN = -1,
-  AMS_HOST = 0,
-  AMS_DEVICE = 1,
-  AMS_PINNED = 2,
-  AMS_RSEND
-} AMSResourceType;
 
 typedef enum { AMS_UBALANCED = 0, AMS_BALANCED } AMSExecPolicy;
 
@@ -78,22 +74,22 @@ typedef struct {
   size_t *shape;
   size_t *strides;
   int dims;
-  AMSDType dType;            // AMS_SINGLE/AMS_DOUBLE
-  AMSResourceType location;  // CPU/GPU/Pinned
+  ams::AMSDType dType;            // AMS_SINGLE/AMS_DOUBLE
+  ams::AMSResourceType location;  // CPU/GPU/Pinned
 } AMSCTensor;
 
 >>>>>>> c52415d (Concat test case 1, works)
 
 AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
-                              AMSDType data_type,
-                              AMSResourceType resource_type,
+                              ams::AMSDType data_type,
+                              ams::AMSResourceType resource_type,
                               AMSPhysicFn call_back,
                               int process_id,
                               int world_size);
 
 #ifdef __AMS_ENABLE_MPI__
 AMSExecutor AMSCreateDistributedExecutor(AMSCAbstrModel model,
-                                         AMSDType data_type,
+                                         ams::AMSDType data_type,
                                          AMSResourceType resource_type,
                                          AMSPhysicFn call_back,
                                          MPI_Comm comm,
@@ -122,8 +118,8 @@ void AMSExecute(AMSExecutor executor,
 
 void AMSDestroyExecutor(AMSExecutor executor);
 
-void AMSSetAllocator(AMSResourceType resource, const char *alloc_name);
-const char *AMSGetAllocatorName(AMSResourceType device);
+void AMSSetAllocator(ams::AMSResourceType resource, const char *alloc_name);
+const char *AMSGetAllocatorName(ams::AMSResourceType device);
 void AMSConfigureFSDatabase(AMSDBType db_type, const char *db_path);
 
 #ifdef __cplusplus
