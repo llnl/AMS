@@ -21,10 +21,11 @@
 #include <ATen/core/TensorBody.h>
 
 #include "AMS.h"
+#include "ArrayRef.hpp"
+#include "SmallVector.hpp"
+#include "interface.hpp"
 #include "ml/surrogate.hpp"
 #include "resource_manager.hpp"
-#include "util/ArrayRef.hpp"
-#include "util/SmallVector.hpp"
 #include "wf/basedb.hpp"
 
 #ifdef __ENABLE_MPI__
@@ -45,10 +46,6 @@ namespace ams
 {
 class AMSWorkflow
 {
-
-  /** @brief The application call back to perform the original SPMD physics
-     * execution */
-  AMSPhysicFn AppCall;
 
   /** @brief A string identifier describing the domain-model being solved. */
   std::string domainName;
@@ -73,9 +70,6 @@ class AMSWorkflow
      * (world_size for MPI) */
   int wSize;
 
-  /** @brief  Location of the original application data  (CPU or GPU) */
-  AMSResourceType appDataLoc;
-
   /** @brief execution policy of the distributed system. Load balance or not. */
   AMSExecPolicy ePolicy;
 
@@ -91,6 +85,27 @@ class AMSWorkflow
   /** @brief Is the evaluate a distributed execution **/
   bool isDistributed;
 
+  void storeComputedData(ArrayRef<torch::Tensor> Ins,
+                         ArrayRef<torch::Tensor> InOutsBefore,
+                         ArrayRef<torch::Tensor> Outs,
+                         ArrayRef<torch::Tensor> InOutsAfter)
+  {
+    CALIPER(CALI_MARK_BEGIN("DBSTORE");)
+    SmallVector<torch::Tensor> StoreInputTensors(Ins.begin(), Ins.end());
+    SmallVector<torch::Tensor> StoreOutputTensors(Outs.begin(), Outs.end());
+    for (auto Tensor : InOutsBefore)
+      StoreInputTensors.push_back(Tensor);
+    for (auto Tensor : InOutsAfter) {
+      StoreOutputTensors.push_back(Tensor);
+    }
+
+    DBG(Workflow,
+        "Storing data (#elements = %ld) to database",
+        StoreInputTensors[0].sizes()[0]);
+    store(StoreInputTensors, StoreOutputTensors);
+    CALIPER(CALI_MARK_END("DBSTORE");)
+  }
+
   /** \brief Store the data in the database and copies
      * data from the GPU to the CPU and then to the database.
      * To store GPU resident data we use a 1MB of "pinned"
@@ -105,19 +120,19 @@ class AMSWorkflow
   {
     if (!DB) return;
 
+
+    auto tOptions = torch::TensorOptions()
+                        .dtype(torch::kFloat32)
+                        .device(c10::DeviceType::CPU);
+
     c10::SmallVector<torch::Tensor> ConvertedInputs(Inputs.begin(),
                                                     Inputs.end());
     c10::SmallVector<torch::Tensor> ConvertedOutputs(Outputs.begin(),
                                                      Outputs.end());
-    auto Input = torch::cat(ConvertedInputs, Inputs[0].sizes().size() - 1);
-    auto Output = torch::cat(ConvertedOutputs, Outputs[0].sizes().size() - 1);
-    // No database, so just de-allocate and return
-    if (appDataLoc == AMSResourceType::AMS_HOST) {
-      return DB->store(Input, Output);
-    }
-    if (Input.device() == c10::DeviceType::CUDA) Input = Input.cpu();
-    if (Output.device() == c10::DeviceType::CUDA) Output = Output.cpu();
-
+    auto Input =
+        torch::cat(ConvertedInputs, Inputs[0].sizes().size() - 1).to(tOptions);
+    auto Output = torch::cat(ConvertedOutputs, Outputs[0].sizes().size() - 1)
+                      .to(tOptions);
     // Store to database
     DB->store(Input, Output);
 
@@ -143,22 +158,17 @@ class AMSWorkflow
   }
 
 public:
-  AMSWorkflow(AMSPhysicFn _AppCall,
-              std::string &surrogate_path,
+  AMSWorkflow(std::string &surrogate_path,
               std::string &domain_name,
               std::string &db_label,
-              bool isDebugDB,
-              AMSResourceType app_data_loc,
               float threshold,
               const AMSUQPolicy uq_policy,
               int _pId = 0,
               int _wSize = 1)
-      : AppCall(_AppCall),
-        domainName(domain_name),
+      : domainName(domain_name),
         dbLabel(db_label),
         rId(_pId),
         wSize(_wSize),
-        appDataLoc(app_data_loc),
         uqPolicy(uq_policy),
 #ifdef __ENABLE_MPI__
         comm(MPI_COMM_NULL),
@@ -172,10 +182,18 @@ public:
     DB = dbm.getDB(domainName, dbLabel, rId);
     MLModel = nullptr;
     if (!surrogate_path.empty())
-      MLModel = SurrogateModel::getInstance(surrogate_path);
+      MLModel = SurrogateModel::getInstance(
+          surrogate_path,
+          uqPolicy == AMSUQPolicy::AMS_DELTAUQ_MAX ||
+              uqPolicy == AMSUQPolicy::AMS_DELTAUQ_MEAN);
   }
 
-  void set_physics(AMSPhysicFn _AppCall) { AppCall = _AppCall; }
+  std::string getDBFilename() const
+  {
+    if (!DB) return "";
+    return DB->getFilename();
+  }
+
 
 #ifdef __ENABLE_MPI__
   void set_communicator(MPI_Comm communicator) { comm = communicator; }
@@ -193,10 +211,11 @@ public:
   }
 
 
-  static SmallVector<at::Tensor> subSelectTensors(ArrayRef<at::Tensor> Tensors,
-                                                  at::Tensor &Mask)
+  static SmallVector<torch::Tensor> subSelectTensors(
+      ArrayRef<torch::Tensor> Tensors,
+      torch::Tensor &Mask)
   {
-    SmallVector<at::Tensor> NewVector;
+    SmallVector<torch::Tensor> NewVector;
     for (auto O : Tensors) {
       NewVector.push_back(O.index({Mask}));
     }
@@ -204,30 +223,30 @@ public:
   }
 
   static void ScatterPhysicOutputsToOrigDomain(
-      ArrayRef<at::Tensor> ComputedTensors,
+      ArrayRef<torch::Tensor> computedDomain,
       torch::Tensor &Predicate,
-      ArrayRef<torch::Tensor> AppTensors)
+      MutableArrayRef<torch::Tensor> entireDomain)
   {
-    if (ComputedTensors.size() != AppTensors.size()) {
+    if (computedDomain.size() != entireDomain.size()) {
       throw std::runtime_error(
           "Expecting equal sized tensors when composing Original and domain "
           "memories\n");
     }
-    for (int i = 0; i < ComputedTensors.size(); i++) {
-      AppTensors[i].masked_scatter_(Predicate, ComputedTensors[i]);
+    for (int i = 0; i < computedDomain.size(); i++) {
+      entireDomain[i].index_put_({Predicate}, computedDomain[i]);
     }
   }
 
 
-  static int MLDomainToApplication(at::Tensor Src,
-                                   MutableArrayRef<at::Tensor> Dest,
-                                   at::Tensor Predicate,
+  static int MLDomainToApplication(torch::Tensor Src,
+                                   MutableArrayRef<torch::Tensor> Dest,
+                                   torch::Tensor Predicate,
                                    int offset)
   {
     int outerDim = Src.dim() - 1;
     for (auto &dst : Dest) {
       int ConcatAxisSize = dst.sizes()[dst.dim() - 1];
-      at::Tensor Slice =
+      torch::Tensor Slice =
           Src.narrow(outerDim, offset, ConcatAxisSize).to(dst.options());
       dst.index_put_({Predicate}, Slice.index({Predicate}));
       offset += ConcatAxisSize;
@@ -284,15 +303,15 @@ public:
      * This transformation can exploit the parallel nature of all the required
      * steps.
      */
-  void evaluate(void *probDescr,
-                ams::MutableArrayRef<at::Tensor> Ins,
-                ams::MutableArrayRef<at::Tensor> InOuts,
-                ams::MutableArrayRef<at::Tensor> Outs)
+  void evaluate(EOSLambda CallBack,
+                ams::MutableArrayRef<torch::Tensor> Ins,
+                ams::MutableArrayRef<torch::Tensor> InOuts,
+                ams::MutableArrayRef<torch::Tensor> Outs)
   {
     CALIPER(CALI_MARK_BEGIN("AMSEvaluate");)
 
-    SmallVector<at::Tensor> InputTensors(Ins.begin(), Ins.end());
-    SmallVector<at::Tensor> OutputTensors(Ins.begin(), Ins.end());
+    SmallVector<torch::Tensor> InputTensors(Ins.begin(), Ins.end());
+    SmallVector<torch::Tensor> OutputTensors(Ins.begin(), Ins.end());
     for (auto Tensor : InOuts) {
       InputTensors.push_back(Tensor);
       OutputTensors.push_back(Tensor);
@@ -304,8 +323,19 @@ public:
     REPORT_MEM_USAGE(Workflow, "Start")
 
     if (!MLModel) {
-      // FIXME This needs to be updated accordingly and call the new interface.
-      throw std::runtime_error("Pending implementation\n");
+      // We need to clone only inout data to guarantee
+      // we have a copy of them when writting the database
+      SmallVector<torch::Tensor> PhysicInOutsBefore;
+      for (auto S : InOuts)
+        PhysicInOutsBefore.push_back(S.clone());
+
+      // We call the application here
+      CALIPER(CALI_MARK_BEGIN("PHYSICS MODULE");)
+      callApplication(CallBack, Ins, InOuts, Outs);
+      CALIPER(CALI_MARK_END("PHYSICS MODULE");)
+
+      storeComputedData(Ins, PhysicInOutsBefore, Outs, InOuts);
+      return;
     }
 
     CALIPER(CALI_MARK_BEGIN("UPDATEMODEL");)
@@ -335,31 +365,30 @@ public:
     MLDomainToApplication(MLOutputs, InOuts, Predicate, offset);
     CALIPER(CALI_MARK_END("MLDomainToApplication");)
 
-
-    if (Predicate.sum().item<int64_t>() == 0) return;
-
     // Revert pedicates and use it to pick the Physic points outputs.
     auto WrongMLIndices = torch::logical_not(Predicate);
 
+    if (WrongMLIndices.sum().item<int64_t>() == 0) return;
+
     // Physis* tensors have the points which the model could not accurately predict
     CALIPER(CALI_MARK_BEGIN("PACK");)
-    SmallVector<at::Tensor> PhysicIns(subSelectTensors(Ins, WrongMLIndices));
-    SmallVector<at::Tensor> PhysicInOuts(
+    SmallVector<torch::Tensor> PhysicIns(subSelectTensors(Ins, WrongMLIndices));
+    SmallVector<torch::Tensor> PhysicInOuts(
         subSelectTensors(InOuts, WrongMLIndices));
     // TODO: Outs does not need sub select, we will write all of these from scratch
-    SmallVector<at::Tensor> PhysicOuts(subSelectTensors(Outs, WrongMLIndices));
+    SmallVector<torch::Tensor> PhysicOuts(
+        subSelectTensors(Outs, WrongMLIndices));
     CALIPER(CALI_MARK_END("PACK");)
 
     // Copy and clone. This important to take place before AppCall is executed. To keep a copy of the input values
     // that will be overwritten.
-    SmallVector<at::Tensor> PhysicInOutsBefore;
+    SmallVector<torch::Tensor> PhysicInOutsBefore;
     for (auto S : PhysicInOuts)
       PhysicInOutsBefore.push_back(S.clone());
 
     // We call the application here
     CALIPER(CALI_MARK_BEGIN("PHYSICS MODULE");)
-    //AppCall(probDescr, PhysicIns, PhysicInOuts, PhysicOuts);
-#warning put back in when interface is clean.
+    callApplication(CallBack, PhysicIns, PhysicInOuts, PhysicOuts);
     CALIPER(CALI_MARK_END("PHYSICS MODULE");)
 
 
@@ -373,22 +402,10 @@ public:
     DBG(Workflow, "Finished physics evaluation")
 
     if (DB) {
-      CALIPER(CALI_MARK_BEGIN("DBSTORE");)
-      SmallVector<at::Tensor> StoreInputTensors(PhysicIns.begin(),
-                                                PhysicIns.end());
-      SmallVector<at::Tensor> StoreOutputTensors(PhysicOuts.begin(),
-                                                 PhysicOuts.end());
-      for (auto Tensor : PhysicInOutsBefore)
-        StoreInputTensors.push_back(Tensor);
-      for (auto Tensor : PhysicInOuts) {
-        StoreOutputTensors.push_back(Tensor);
-      }
-
-      DBG(Workflow,
-          "Storing data (#elements = %ld) to database",
-          StoreInputTensors[0].sizes()[0]);
-      store(StoreInputTensors, StoreOutputTensors);
-      CALIPER(CALI_MARK_END("DBSTORE");)
+      storeComputedData(PhysicIns,
+                        PhysicInOutsBefore,
+                        PhysicOuts,
+                        PhysicInOuts);
     }
 
 

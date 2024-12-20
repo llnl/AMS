@@ -24,8 +24,8 @@
 #include <vector>
 
 #include "AMS.h"
+#include "ArrayRef.hpp"
 #include "debug.h"
-#include "util/ArrayRef.hpp"
 #include "wf/debug.h"
 #include "wf/resource_manager.hpp"
 #include "wf/utils.hpp"
@@ -130,6 +130,8 @@ public:
   virtual bool updateModel() { return false; }
 
   virtual std::string getLatestModel() { return {}; }
+
+  virtual std::string getFilename() const { return ""; }
 };
 
 /**
@@ -278,8 +280,7 @@ public:
   hdf5DB(std::string path,
          std::string domain_name,
          std::string fn,
-         uint64_t rId,
-         bool predicate = false);
+         uint64_t rId);
 
   /**
    * @brief deconstructs the class and closes the file
@@ -1781,13 +1782,9 @@ public:
   std::shared_ptr<BaseDB> createDB(std::string& domainName,
                                    std::string& dbLabel,
                                    AMSDBType dbType,
-                                   uint64_t rId = 0,
-                                   bool isDebug = false)
+                                   uint64_t rId = 0)
   {
-    CWARNING(DBManager,
-             (isDebug && dbType != AMSDBType::AMS_HDF5),
-             "Requesting debug database but %d db type does not support it",
-             dbType);
+
 #ifdef __ENABLE_DB__
     DBG(DBManager, "Instantiating data base");
 
@@ -1802,8 +1799,10 @@ public:
     switch (dbType) {
 #ifdef __ENABLE_HDF5__
       case AMSDBType::AMS_HDF5:
-        return std::make_shared<hdf5DB>(
-            fs_interface.path(), domainName, dbLabel, rId, isDebug);
+        return std::make_shared<hdf5DB>(fs_interface.path(),
+                                        domainName,
+                                        dbLabel,
+                                        rId);
 #endif
 #ifdef __ENABLE_RMQ__
       case AMSDBType::AMS_RMQ:
@@ -1830,8 +1829,7 @@ public:
   */
   std::shared_ptr<BaseDB> getDB(std::string& domainName,
                                 std::string& dbLabel,
-                                uint64_t rId = 0,
-                                bool isDebug = false)
+                                uint64_t rId = 0)
   {
     DBG(DBManager,
         "Requested DB for domain: '%s' Under Name: '%s' DB Configured to "
@@ -1849,7 +1847,7 @@ public:
 
     auto db_iter = db_instances.find(std::string(key));
     if (db_iter == db_instances.end()) {
-      auto db = createDB(domainName, dbLabel, dbType, rId, isDebug);
+      auto db = createDB(domainName, dbLabel, dbType, rId);
       db_instances.insert(std::make_pair(std::string(domainName), db));
       DBG(DBManager,
           "Creating new Database writting to file: %s",
@@ -1937,6 +1935,9 @@ public:
           "enabled")
 #endif
   }
+
+  size_t getNumInstances() const { return db_instances.size(); }
+  void clean() { db_instances.clear(); }
 };
 
 }  // namespace db

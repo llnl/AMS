@@ -8,6 +8,8 @@
 #ifndef __AMS_UTILS_HPP__
 #define __AMS_UTILS_HPP__
 
+#include <ATen/core/TensorBody.h>
+
 #include <algorithm>
 #include <array>
 #include <iostream>
@@ -15,6 +17,7 @@
 #include <vector>
 
 #include "AMS.h"
+#include "SmallVector.hpp"
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -49,8 +52,6 @@ public:
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-void random_uq_host(bool *uq_flags, int ndata, double acceptable_error);
-
 template <typename T>
 inline bool is_real_equal(T l, T r)
 {
@@ -58,17 +59,31 @@ inline bool is_real_equal(T l, T r)
 }
 
 
-static inline size_t dtype_to_size(AMSDType dType)
+static inline size_t dtype_to_size(ams::AMSDType dType)
 {
   switch (dType) {
-    case AMSDType::AMS_DOUBLE:
+    case ams::AMSDType::AMS_DOUBLE:
       return sizeof(double);
-    case AMSDType::AMS_SINGLE:
+    case ams::AMSDType::AMS_SINGLE:
       return sizeof(float);
     default:
       throw std::runtime_error("Requesting the size of unknown object");
   }
 }
 
-// -----------------------------------------------------------------------------
+static inline std::string shapeToString(const at::Tensor& tensor)
+{
+  std::ostringstream oss;
+  oss << tensor.sizes();
+  return oss.str();
+}
+
+namespace ams
+{
+namespace tensor
+{
+SmallVector<at::Tensor> maskTensor(at::Tensor& Src, at::Tensor& Mask);
+}  // namespace tensor
+}  // namespace ams
+
 #endif
