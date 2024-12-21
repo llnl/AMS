@@ -6,6 +6,25 @@ build-backend = "setuptools.build_meta"
 name = "ams-wf"
 version = "1.0"
 requires-python = ">=3.9"
+maintainers = [
+    { name = "Konstantinos Parasyris", email = "parasyris1@llnl.gov" },
+    { name = "Loic Pottier", email = "pottier1@llnl.gov" },
+    { name = "Robert C. Blake", email = "blake14@llnl.gov" },
+]
+authors = [
+    { name = "Harsh Bhatia", email = "hbhatia@llnl.gov" },
+    { name = "Tapasya A. Patki", email = "patki1@llnl.gov" },
+    { name = "Stephanie Brink", email = "brink2@llnl.gov" },
+    { name = "Loic Pottier", email = "pottier1@llnl.gov" },
+    { name = "Thomas M. Stitt", email = "stitt4@llnl.gov" },
+    { name = "Konstantinos Parasyris", email = "parasyris1@llnl.gov" },
+    { name = "Daniel J. Milroy", email = "milroy1@llnl.gov" },
+    { name = "Daniel E. Laney", email = "laney1@llnl.gov" },
+    { name = "Robert C. Blake", email = "blake14@llnl.gov" },
+    { name = "Jae-Seung Yeom", email = "yeom2@llnl.gov" },
+    { name = "Peer-Timo Bremer", email = "bremer5@llnl.gov" },
+    { name = "Charles Doutriaux", email = "doutriaux1@llnl.gov" },
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Operating System :: POSIX :: Linux",

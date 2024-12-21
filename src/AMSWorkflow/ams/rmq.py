@@ -26,7 +26,6 @@ class AMSMessage(object):
 
     def __init__(self, body: str):
         self.body = body
-
         self.num_elements = None
         self.hsize = None
         self.dtype_byte = None
@@ -368,6 +367,7 @@ class AsyncConsumer(object):
         on_message_cb: Optional[Callable] = None,
         on_close_cb: Optional[Callable] = None,
         logger: Optional[logging.Logger] = None,
+        # monitoring_file: Optional[Path] = None
     ):
         """Create a new instance of the consumer class, passing in the AMQP
         URL used to connect to RabbitMQ.
@@ -404,6 +404,12 @@ class AsyncConsumer(object):
         self._prefetch_count = prefetch_count
         self._on_message_cb = on_message_cb
         self._on_close_cb = on_close_cb
+
+        if not isinstance(self._on_message_cb, Callable):
+            raise ValueError(f"{self._on_message_cb} must be a Callable")
+
+        if not isinstance(self._on_close_cb, Callable):
+            raise ValueError(f"{self._on_close_cb} must be a Callable")
 
     def __enter__(self):
         self.run()
@@ -553,8 +559,7 @@ class AsyncConsumer(object):
 
         """
         self.logger.debug(f"Channel was closed. {reason}")
-        if isinstance(self._on_close_cb, Callable):
-            self._on_close_cb()  # running user callback
+        self._on_close_cb()  # running user callback
         self.close_connection()
 
     def setup_queue(self, queue_name):
@@ -656,8 +661,7 @@ class AsyncConsumer(object):
 
         """
         self.logger.info(f"Received message #{basic_deliver.delivery_tag} from {properties}")
-        if isinstance(self._on_message_cb, Callable):
-            self._on_message_cb(_unused_channel, basic_deliver, properties, body)
+        self._on_message_cb(_unused_channel, basic_deliver, properties, body)
         self.acknowledge_message(basic_deliver.delivery_tag)
 
     def acknowledge_message(self, delivery_tag):
@@ -885,6 +889,30 @@ class AMSFanOutProducer(AMSSyncProducer):
 
 @dataclass
 class AMSRMQConfiguration:
+    """
+    This class parse the credentials to connect
+    to the RabbitMQ server.
+    The expected format is the same as AMSlib.
+        {
+            "db" : {
+                "dbType" : "rmq",
+                "rmq_config" : {
+                    "service-port": 0,
+                    "service-host": "",
+                    "rabbitmq-erlang-cookie": "",
+                    "rabbitmq-name": "",
+                    "rabbitmq-password": "",
+                    "rabbitmq-user": "",
+                    "rabbitmq-vhost": "",
+                    "rabbitmq-cert": "",
+                    "rabbitmq-queue-physics": "",
+                    "rabbitmq-exchange-training": "",
+                    "rabbitmq-key-training": ""
+                },
+                "update_surrogate": true|false
+            }
+        }
+    """
     service_port: int
     service_host: str
     rabbitmq_erlang_cookie: str
@@ -893,13 +921,9 @@ class AMSRMQConfiguration:
     rabbitmq_user: str
     rabbitmq_vhost: str
     rabbitmq_cert: str
-    # rabbitmq_inbound_queue: str
-    # rabbitmq_outbound_queue: str
     rabbitmq_queue_physics: str
     rabbitmq_exchange_training: str
     rabbitmq_key_training: str
-    # rabbitmq_ml_submit_queue: str
-    # rabbitmq_ml_status_queue: str
 
     def __post_init__(self):
         if not Path(self.rabbitmq_cert).exists():
@@ -912,6 +936,11 @@ class AMSRMQConfiguration:
 
         with open(json_file, "r") as fd:
             data = json.load(fd)
+        if "db" not in data:
+            raise RuntimeError(f"Incorrect configuration {json_file}: missing \'db\' key")
+        if "rmq_config" not in data["db"]:
+            raise RuntimeError(f"Incorrect configuration {json_file}: missing \'rmq_config\' key in \'db\'")
+        data = data["db"]["rmq_config"]
         data = {key.replace("-", "_"): value for key, value in data.items()}
 
         return cls(**data)
@@ -931,7 +960,5 @@ class AMSRMQConfiguration:
                 "rabbitmq-queue-physics": self.rabbitmq_queue_physics,
                 "rabbitmq-exchange-training": self.rabbitmq_exchange_training,
                 "rabbitmq-key-training": self.rabbitmq_key_training
-                # "rabbitmq-ml-submit-queue": self.rabbitmq_ml_submit_queue,
-                # "rabbitmq-ml-status-queue": self.rabbitmq_ml_status_queue
             }
         raise

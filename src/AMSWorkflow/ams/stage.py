@@ -10,15 +10,13 @@ import os
 import shutil
 import signal
 import time
-from abc import ABC, classmethod, abstractmethod
+from abc import ABC, abstractmethod
 from enum import Enum
 from multiprocessing import Process
 from multiprocessing import Queue as mp_queue
 from pathlib import Path
 from queue import Queue as ser_queue
 from threading import Thread
-from typing import Callable
-import warnings
 
 import numpy as np
 from ams.config import AMSInstance
@@ -274,6 +272,7 @@ class RMQDomainDataLoaderTask(Task):
         policy,
         prefetch_count=1,
         signals=[signal.SIGTERM, signal.SIGINT, signal.SIGUSR1],
+        # signals=list(signal.Signals)
     ):
         self.o_queue = o_queue
         self.cert = cert
@@ -356,7 +355,7 @@ class RMQDomainDataLoaderTask(Task):
                 signal.signal(s, self.signal_wrapper(self.__class__.__name__, os.getpid()))
         print(f"{self.__class__.__name__} PID is:", os.getpid())
         self.rmq_consumer.run()
-        print("Returning")
+        print(f"Returning from {self.__class__.__name__}")
 
 
 class RMQControlMessageTask(RMQDomainDataLoaderTask):

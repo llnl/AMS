@@ -17,6 +17,7 @@
 #include <cstring>
 #include <limits>
 #include <mfem.hpp>
+#include <thread>
 #include <umpire/Umpire.hpp>
 #include <umpire/strategy/QuickPool.hpp>
 
@@ -60,7 +61,11 @@ template <typename DType>
 struct Problem {
   int num_inputs;
   int num_outputs;
-  Problem(int ni, int no) : num_inputs(ni), num_outputs(no) {}
+  int sleep_msec;  // in milliseconds
+  Problem(int ni, int no, int sleep_msec = 0)
+      : num_inputs(ni), num_outputs(no), sleep_msec(sleep_msec)
+  {
+  }
 
   void run(long num_elements, DType **inputs, DType **outputs)
   {
@@ -74,8 +79,8 @@ struct Problem {
         outputs[j][i] = sum;
       }
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_msec));
   }
-
 
   const DType *initialize_inputs(DType *inputs, long length)
   {
@@ -96,6 +101,7 @@ struct Problem {
     CALIPER(CALI_CXX_MARK_LOOP_BEGIN(mainloop_id, "mainloop");)
 
     for (int i = 0; i < iterations; i++) {
+      std::cout << "Iteration [" << i << "]\n";
       CALIPER(CALI_CXX_MARK_LOOP_ITERATION(mainloop_id, i);)
       int elements = num_elements;  // * ((DType)(rand()) / RAND_MAX) + 1;
       std::vector<const DType *> inputs;
@@ -135,7 +141,7 @@ struct Problem {
 
 void callBackDouble(void *cls, long elements, void **inputs, void **outputs)
 {
-  std::cout << "Called the double precision model\n";
+  std::cout << "  > Called the double precision model\n";
   static_cast<Problem<double> *>(cls)->run(elements,
                                            (double **)(inputs),
                                            (double **)(outputs));
@@ -144,7 +150,7 @@ void callBackDouble(void *cls, long elements, void **inputs, void **outputs)
 
 void callBackSingle(void *cls, long elements, void **inputs, void **outputs)
 {
-  std::cout << "Called the single precision model\n";
+  std::cout << "  > Called the single precision model\n";
   static_cast<Problem<float> *>(cls)->run(elements,
                                           (float **)(inputs),
                                           (float **)(outputs));
@@ -179,11 +185,8 @@ int main(int argc, char **argv)
   int num_inputs = 8;
   int num_outputs = 9;
   int num_iterations = 1;
+  int sleep_msec = 0;
   bool verbose = false;
-  bool reqDB = false;
-#ifdef __ENABLE_DB__
-  reqDB = true;
-#endif
 
   // -------------------------------------------------------------------------
   // setup command line parser
@@ -200,6 +203,12 @@ int main(int argc, char **argv)
                  "--precision",
                  "Set precision (single or double)");
 
+  // Sleeping time
+  args.AddOption(&sleep_msec,
+                 "-ms",
+                 "--msleep",
+                 "Sleep for x milliseconds for each iteration");
+
   // data parameters
   args.AddOption(&num_elems,
                  "-e",
@@ -211,13 +220,6 @@ int main(int argc, char **argv)
 
   // random speed and packing
   args.AddOption(&seed, "-s", "--seed", "Seed for rand (default 0)");
-
-  args.AddOption(&db_config,
-                 "-db",
-                 "--dbconfig",
-                 "Path to directory where applications will store their data "
-                 "(for CSV/HDF5)",
-                 reqDB);
 
   args.AddOption(&db_type,
                  "-dt",
@@ -323,7 +325,7 @@ int main(int argc, char **argv)
   std::cout << "Total elements per rank: " << num_elems << "\n";
 
   if (data_type == AMSDType::AMS_SINGLE) {
-    Problem<float> prob(num_inputs, num_outputs);
+    Problem<float> prob(num_inputs, num_outputs, sleep_msec);
 #ifdef __ENABLE_MPI__
     AMSExecutor wf = AMSCreateDistributedExecutor(ams_model,
                                                   AMSDType::AMS_SINGLE,
@@ -342,7 +344,7 @@ int main(int argc, char **argv)
 #endif
     prob.ams_run(wf, resource, num_iterations, num_elems);
   } else {
-    Problem<double> prob(num_inputs, num_outputs);
+    Problem<double> prob(num_inputs, num_outputs, sleep_msec);
 #ifdef __ENABLE_MPI__
     AMSExecutor wf = AMSCreateDistributedExecutor(ams_model,
                                                   AMSDType::AMS_DOUBLE,
@@ -366,6 +368,6 @@ int main(int argc, char **argv)
   adiak::fini()
 #endif
 
-  MPI_CALL(MPI_Finalize());
+      MPI_CALL(MPI_Finalize());
   return 0;
 }

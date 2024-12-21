@@ -1204,9 +1204,8 @@ std::pair<bool, bool> RMQInterface::connect(std::string rmq_name,
       service_host, service_port, login, rmq_vhost, is_secure);
 
   // Conditionnal logger (can be deactivated)
-  bool activate_monitoring = true;
   _logger = nullptr;
-  if (activate_monitoring)
+  if (!monitoring_file.empty())
     _logger = std::make_shared<AMSPublisherLogging>(_rId, monitoring_file);
 
   _publisher = std::make_shared<RMQPublisher>(_rId,

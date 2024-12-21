@@ -385,6 +385,7 @@ private:
     std::string routing_key =
         getEntry<std::string>(rmq_entry, "rabbitmq-key-training");
     bool update_surrogate = getEntry<bool>(entry, "update_surrogate");
+    bool monitoring = getEntry<bool>(entry, "monitoring");
 
     // We allow connection to RabbitMQ without TLS certificate
     std::string rmq_cert = "";
@@ -402,8 +403,13 @@ private:
       update_surrogate = false;
     }
 
-    //FIX ME: ADD options to give name to file via command line
-    std::string monitoring_file = "ams-rmq.json";
+    // Passing an empty monitoring_file deactivate RMQ monitoring
+    std::string monitoring_file = "";
+    if (monitoring) {
+      auto now = std::chrono::system_clock::now();
+      auto ts = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+      monitoring_file = "ams-rmq-" + std::to_string(ts) + ".json";
+    }
 
     auto &DB = ams::db::DBManager::getInstance();
     DB.instantiate_rmq_db(port,

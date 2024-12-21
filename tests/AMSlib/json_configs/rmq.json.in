@@ -14,7 +14,8 @@
       "rabbitmq-exchange-training": "",
       "rabbitmq-key-training": ""
     },
-    "update_surrogate": false
+    "update_surrogate": false,
+    "monitoring": false
   },
   "ml_models" : {
     "random_50": {

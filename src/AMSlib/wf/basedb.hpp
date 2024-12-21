@@ -66,11 +66,10 @@ namespace fs = std::experimental::filesystem;
 #include <chrono>
 #include <deque>
 #include <future>
+#include <nlohmann/json.hpp>
 #include <random>
 #include <thread>
 #include <tuple>
-
-#include <nlohmann/json.hpp>
 
 #endif  // __ENABLE_RMQ__
 
@@ -2037,20 +2036,7 @@ public:
    * @brief Check if this interface supports monitoring
    * @return True if monitoring is supported
    */
-  bool isMonitoringActivated() const
-  {
-#ifdef __ENABLE_MPI__
-    char name[MPI_MAX_PROCESSOR_NAME];
-    int len;
-    MPI_Get_processor_name(name, &len);
-    std::cerr << "MPI  : isMonitoringActivated(" << _logger << " | " << name
-              << "): " << _logger.use_count() << std::endl;
-#else
-    std::cerr << "NoMPI: isMonitoringActivated(" << _logger
-              << "): " << _logger.use_count() << std::endl;
-#endif
-    return _logger != nullptr;
-  }
+  bool isMonitoringActivated() const { return _logger != nullptr; }
 
   /**
    * @brief Return the latest model and, by default, delete the corresponding message from the Consumer
