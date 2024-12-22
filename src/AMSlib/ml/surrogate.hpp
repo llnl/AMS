@@ -24,6 +24,56 @@
 #include "ArrayRef.hpp"
 #include "wf/debug.h"
 
+
+namespace UQ
+{
+static inline bool isDeltaUQ(ams::AMSUQPolicy policy)
+{
+  if (policy >= ams::AMSUQPolicy::AMS_DELTAUQ_MEAN &&
+      policy <= ams::AMSUQPolicy::AMS_DELTAUQ_MAX) {
+    return true;
+  }
+  return false;
+}
+
+static inline bool isRandomUQ(ams::AMSUQPolicy policy)
+{
+  return policy == ams::AMSUQPolicy::AMS_RANDOM;
+}
+
+
+static inline bool isUQPolicy(ams::AMSUQPolicy policy)
+{
+  if (ams::AMSUQPolicy::AMS_UQ_BEGIN < policy &&
+      policy < ams::AMSUQPolicy::AMS_UQ_END)
+    return true;
+  return false;
+}
+
+static std::string UQPolicyToStr(ams::AMSUQPolicy policy)
+{
+  if (policy == ams::AMSUQPolicy::AMS_RANDOM)
+    return "random";
+  else if (policy == ams::AMSUQPolicy::AMS_DELTAUQ_MEAN)
+    return "deltaUQ (mean)";
+  else if (policy == ams::AMSUQPolicy::AMS_DELTAUQ_MAX)
+    return "deltaUQ (max)";
+  return "Unknown";
+}
+
+static ams::AMSUQPolicy UQPolicyFromStr(std::string& policy)
+{
+  if (policy.compare("random") == 0)
+    return ams::AMSUQPolicy::AMS_RANDOM;
+
+  else if (policy.compare("deltaUQ (mean)") == 0)
+    return ams::AMSUQPolicy::AMS_DELTAUQ_MEAN;
+  else if (policy.compare("deltaUQ (max)") == 0)
+    return ams::AMSUQPolicy::AMS_DELTAUQ_MAX;
+  return ams::AMSUQPolicy::AMS_UQ_END;
+}
+};  // namespace UQ
+
 //! ----------------------------------------------------------------------------
 //! An implementation for a surrogate model
 //! ----------------------------------------------------------------------------
@@ -84,16 +134,16 @@ public:
 
   std::tuple<torch::Tensor, torch::Tensor> _computeDetlaUQ(
       c10::IValue& deltaUQTuple,
-      AMSUQPolicy policy,
+      ams::AMSUQPolicy policy,
       float threshold);
 
   std::tuple<torch::Tensor, torch::Tensor> _evaluate(torch::Tensor& inputs,
-                                                     AMSUQPolicy policy,
+                                                     ams::AMSUQPolicy policy,
                                                      const float threshold);
 
   std::tuple<torch::Tensor, torch::Tensor> evaluate(
       ams::MutableArrayRef<at::Tensor> Inputs,
-      AMSUQPolicy policy,
+      ams::AMSUQPolicy policy,
       const float threshold);
 
 
