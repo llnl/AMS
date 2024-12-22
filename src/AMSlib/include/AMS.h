@@ -4,117 +4,59 @@
  *
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
-
-#ifndef __AMS__
-#define __AMS__
+#pragma once
 
 #include <cstdint>
 
-#include "AMS-config.h"
+//#include "AMS-config.h"
 #include "AMSTensor.hpp"
+#include "AMSTypes.hpp"
 
-#ifdef __AMS_ENABLE_CALIPER__
-#include <caliper/cali-manager.h>
-#include <caliper/cali.h>
-#define CALIPER(stmt) stmt
-#else
-#define CALIPER(stmt)
-#endif
+namespace ams
+{
 
-#ifdef __AMS_ENABLE_MPI__
-#include <mpi.h>
-#define MPI_CALL(stmt)                                                         \
-  if (stmt != MPI_SUCCESS) {                                                   \
-    fprintf(stderr, "Error in MPI-Call (File: %s, %d)\n", __FILE__, __LINE__); \
-  }
-#else
-typedef void *MPI_Comm;
-#define MPI_CALL(stm)
-#endif
-
-#ifdef __AMS_ENABLE_PERFFLOWASPECT__
-#define PERFFASPECT() __attribute__((annotate("@critical_path()")))
-#else
-#define PERFFASPECT()
-#endif
-
-using EOSLambda = std::function<void(const ams::SmallVector<ams::AMSTensor> &,
-                                     ams::SmallVector<ams::AMSTensor> &,
-                                     ams::SmallVector<ams::AMSTensor> &)>;
+using EOSLambda =
+    std::function<void(const ams::SmallVector<ams::AMSTensor> & /*inputs */,
+                       ams::SmallVector<ams::AMSTensor> & /*input - outputs */,
+                       ams::SmallVector<ams::AMSTensor> & /* outputs */)>;
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+using EOSCFn = void (*)(void *,
+                        const ams::SmallVector<ams::AMSTensor> &,
+                        ams::SmallVector<ams::AMSTensor> &,
+                        ams::SmallVector<ams::AMSTensor> &);
 
-typedef void (*AMSPhysicFn)(void *, long, const void *const *, void *const *);
-
-typedef int64_t AMSExecutor;
-typedef int AMSCAbstrModel;
-
-typedef enum { AMS_UBALANCED = 0, AMS_BALANCED } AMSExecPolicy;
-
-typedef enum { AMS_NONE = 0, AMS_CSV, AMS_REDIS, AMS_HDF5, AMS_RMQ } AMSDBType;
-
-enum struct AMSUQPolicy {
-  AMS_UQ_BEGIN = 0,
-  AMS_FAISS_MEAN,
-  AMS_FAISS_MAX,
-  AMS_DELTAUQ_MEAN,
-  AMS_DELTAUQ_MAX,
-  AMS_RANDOM,
-  AMS_UQ_END
-};
+using AMSExecutor = int64_t;
+using AMSCAbstrModel = int;
 
 void AMSInit();
 void AMSFinalize();
 
-typedef struct {
-  uint8_t *dPtr;
-  size_t *shape;
-  size_t *strides;
-  int dims;
-  ams::AMSDType dType;            // AMS_SINGLE/AMS_DOUBLE
-  ams::AMSResourceType location;  // CPU/GPU/Pinned
-} AMSCTensor;
-
->>>>>>> c52415d (Concat test case 1, works)
 
 AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
-                              ams::AMSDType data_type,
-                              ams::AMSResourceType resource_type,
-                              AMSPhysicFn call_back,
                               int process_id,
                               int world_size);
-
-#ifdef __AMS_ENABLE_MPI__
-AMSExecutor AMSCreateDistributedExecutor(AMSCAbstrModel model,
-                                         ams::AMSDType data_type,
-                                         AMSResourceType resource_type,
-                                         AMSPhysicFn call_back,
-                                         MPI_Comm comm,
-                                         int process_id,
-                                         int world_size);
-#endif
-
 
 AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         AMSUQPolicy uq_policy,
                                         double threshold,
                                         const char *surrogate_path,
-                                        const char *uq_path,
-                                        const char *db_label,
-                                        int num_clusters);
+                                        const char *db_label);
 
 AMSCAbstrModel AMSQueryModel(const char *domain_model);
 
 void AMSExecute(AMSExecutor executor,
-                void *probDescr,
-                const int numElements,
-                const void **input_data,
-                void **output_data,
-                int inputDim,
-                int outputDim);
+                EOSLambda &OrigComputation,
+                const ams::SmallVector<ams::AMSTensor> &ins,
+                ams::SmallVector<ams::AMSTensor> &inouts,
+                ams::SmallVector<ams::AMSTensor> &outs);
+
+void AMSCExecute(AMSExecutor executor,
+                 EOSCFn OrigComputation,
+                 void *args,
+                 const ams::SmallVector<ams::AMSTensor> &ins,
+                 ams::SmallVector<ams::AMSTensor> &inouts,
+                 ams::SmallVector<ams::AMSTensor> &outs);
 
 void AMSDestroyExecutor(AMSExecutor executor);
 
@@ -122,8 +64,4 @@ void AMSSetAllocator(ams::AMSResourceType resource, const char *alloc_name);
 const char *AMSGetAllocatorName(ams::AMSResourceType device);
 void AMSConfigureFSDatabase(AMSDBType db_type, const char *db_path);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+};  // namespace ams

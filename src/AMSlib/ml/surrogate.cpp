@@ -45,7 +45,6 @@ SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
   std::error_code ec;
 
   if (!std::experimental::filesystem::exists(Path, ec)) {
-    std::abort();
     FATAL(Surrogate,
           "Path to Surrogate Model (%s) Does not exist",
           model_path.c_str())
@@ -248,6 +247,7 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
   }
 
   auto ITensor = torch::cat(ConvertedInputs, CAxis);
+  std::cout << "Input concatenated tensor is " << ITensor.sizes() << "\n";
 
   auto [OTensor, Predicate] = _evaluate(ITensor, policy, threshold);
   if (InputDevice != torch_device) {

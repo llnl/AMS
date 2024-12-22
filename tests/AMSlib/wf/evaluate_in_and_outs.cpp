@@ -6,9 +6,13 @@
 #include <torch/torch.h>
 #include <torch/types.h>
 
+#include <cstdint>
 #include <vector>
 
+#include "AMS.h"
 #include "wf/workflow.hpp"
+
+using namespace ams;
 
 #define SIZE 32
 
@@ -148,6 +152,7 @@ void compute(ams::AMSWorkflow& wf,
     std::vector<torch::Tensor> in;
     for (auto& V : pruned_ins) {
       c10::IntArrayRef shape(V.shape().begin(), V.shape().size());
+      std::cout << "Pointer of in " << V.data<float>() << "\n";
       in.push_back(torch::from_blob((void*)V.data<uint8_t>(),
                                     shape,
                                     torch::TensorOptions().dtype(DType).device(
@@ -156,6 +161,7 @@ void compute(ams::AMSWorkflow& wf,
 
     std::vector<torch::Tensor> inout;
     for (auto& V : pruned_inouts) {
+      std::cout << "Pointer of inout " << V.data<float>() << "\n";
       c10::IntArrayRef shape(V.shape().begin(), V.shape().size());
       inout.push_back(torch::from_blob(
           (void*)V.data<uint8_t>(),
@@ -166,6 +172,7 @@ void compute(ams::AMSWorkflow& wf,
     std::vector<torch::Tensor> out;
     for (auto& V : pruned_outs) {
       c10::IntArrayRef shape(V.shape().begin(), V.shape().size());
+      std::cout << "Pointer of out " << V.data<uint8_t>() << "\n";
       out.push_back(torch::from_blob((void*)V.data<uint8_t>(),
                                      shape,
                                      torch::TensorOptions().dtype(DType).device(

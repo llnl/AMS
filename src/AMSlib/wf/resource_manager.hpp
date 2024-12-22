@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "AMS.h"
+#include "macro.h"
 #include "wf/debug.h"
 
 

@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "AMSTypes.hpp"
 #include "wf/basedb.hpp"
 
 int main(int argc, char* argv[])
@@ -14,7 +15,7 @@ int main(int argc, char* argv[])
   }
   std::string db_path(argv[1]);
   auto& db_instance = ams::db::DBManager::getInstance();
-  db_instance.instantiate_fs_db(AMSDBType::AMS_HDF5, db_path);
+  db_instance.instantiate_fs_db(ams::AMSDBType::AMS_HDF5, db_path);
   for (auto dn : {std::string("domain_1"),
                   std::string("domain_2"),
                   std::string("domain_1"),
