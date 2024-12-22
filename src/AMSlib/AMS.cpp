@@ -5,9 +5,8 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
-#include "AMS.h"
-
 #include <limits.h>
+
 #ifdef __ENABLE_MPI__
 #include <mpi.h>
 #endif
@@ -22,14 +21,17 @@
 #include <utility>
 #include <vector>
 
-#include "include/AMS.h"
-#include "ml/uq.hpp"
+#include "AMS.h"
 #include "wf/basedb.hpp"
 #include "wf/debug.h"
 #include "wf/logger.hpp"
 #include "wf/resource_manager.hpp"
 #include "wf/workflow.hpp"
 
+using namespace ams;
+
+namespace
+{
 static int get_rank_id()
 {
   if (const char *flux_id = std::getenv("FLUX_TASK_RANK")) {
@@ -53,19 +55,15 @@ struct AMSAbstractModel {
 
 public:
   std::string SPath;
-  std::string UQPath;
   std::string DBLabel;
   bool DebugDB;
   double threshold;
   AMSUQPolicy uqPolicy;
-  int nClusters;
 
   static AMSUQPolicy getUQType(std::string type)
   {
     if (type.compare("deltaUQ") == 0) {
       return AMSUQPolicy::AMS_DELTAUQ_MEAN;
-    } else if (type.compare("faiss") == 0) {
-      return AMSUQPolicy::AMS_FAISS_MEAN;
     } else if (type.compare("random") == 0) {
       return AMSUQPolicy::AMS_RANDOM;
     } else {
@@ -102,33 +100,17 @@ public:
   }
 
 
-  void parseUQPaths(AMSUQPolicy policy, nlohmann::json &jRoot)
+  std::string parseSurrogatePaths(nlohmann::json &jRoot)
   {
 
-    /* 
-     * Empty models can exist in cases were the user annotates
-     * the code without having data to train a model. In such a case,
-     * the user deploys without specifying the model and lib AMS will
-     * collect everything
-     */
-    if (!jRoot.contains("model_path")) {
-      SPath = "";
-    } else {
-      SPath = jRoot["model_path"].get<std::string>();
+    std::string path = "";
+    if (jRoot.contains("model_path")) {
+      path = jRoot["model_path"].get<std::string>();
+      CFATAL(AMS,
+             (!path.empty() && !fs::exists(path)),
+             "Path to model does not exist\n");
     }
-
-    DBG(AMS, "Model Is Random or DeltaUQ %s %u", SPath.c_str(), policy);
-    if (BaseUQ::isRandomUQ(policy) || BaseUQ::isDeltaUQ(policy)) {
-      UQPath = "";
-      return;
-    }
-
-    if (!jRoot.contains("faiss_path")) {
-      THROW(std::runtime_error,
-            "Model is of UQ type 'faiss' and thus expecting a path to FAISS");
-    }
-
-    UQPath = jRoot["faiss_path"].get<std::string>();
+    return path;
   }
 
 
@@ -150,7 +132,7 @@ public:
       THROW(std::runtime_error, "Model must specify the UQ type");
     }
 
-    if (!BaseUQ::isUQPolicy(policy)) {
+    if (!UQ::isUQPolicy(policy)) {
       THROW(std::runtime_error, "UQ Policy is not supported");
     }
 
@@ -162,26 +144,18 @@ public:
     }
 
 
-    if ((BaseUQ::isDeltaUQ(policy) || BaseUQ::isFaissUQ(policy)) &&
-        uqAggregate == UQAggrType::Unknown) {
+    if (UQ::isDeltaUQ(policy) && uqAggregate == UQAggrType::Unknown) {
       THROW(std::runtime_error,
             "UQ Type should be defined or set to undefined value");
     }
 
-    if (uqAggregate == Max) {
-      if (BaseUQ::isDeltaUQ(policy)) {
+    if (UQ::isDeltaUQ(policy)) {
+      if (uqAggregate == Max)
         policy = AMSUQPolicy::AMS_DELTAUQ_MAX;
-      } else if (BaseUQ::isFaissUQ(policy)) {
-        policy = AMSUQPolicy::AMS_FAISS_MAX;
-      }
-    } else if (uqAggregate == Mean) {
-      if (BaseUQ::isDeltaUQ(policy)) {
+      else if (uqAggregate == Mean)
         policy = AMSUQPolicy::AMS_DELTAUQ_MEAN;
-      } else if (BaseUQ::isFaissUQ(policy)) {
-        policy = AMSUQPolicy::AMS_FAISS_MEAN;
-      }
     }
-    DBG(AMS, "UQ Policy is %s", BaseUQ::UQPolicyToStr(policy).c_str())
+    DBG(AMS, "UQ Policy is %s", UQ::UQPolicyToStr(policy).c_str())
     return policy;
   }
 
@@ -192,10 +166,6 @@ public:
 
     uqPolicy = parseUQPolicy(value);
 
-    if (BaseUQ::isFaissUQ(uqPolicy)) {
-      nClusters = parseClusters(value);
-    }
-
     if (!value.contains("threshold")) {
       THROW(std::runtime_error,
             "Model must define threshold value (threshold < 0 always "
@@ -203,7 +173,7 @@ public:
             "model)");
     }
     threshold = value["threshold"].get<float>();
-    parseUQPaths(uqPolicy, value);
+    SPath = parseSurrogatePaths(value);
     DBLabel = parseDBLabel(value);
     DebugDB = parseDebugDB(value);
 
@@ -216,10 +186,8 @@ public:
 
   AMSAbstractModel(AMSUQPolicy uq_policy,
                    const char *surrogate_path,
-                   const char *uq_path,
                    const char *db_label,
-                   double threshold,
-                   int num_clusters)
+                   double threshold)
   {
     DebugDB = false;
     if (db_label == nullptr)
@@ -227,7 +195,7 @@ public:
 
     DBLabel = std::string(db_label);
 
-    if (!BaseUQ::isUQPolicy(uq_policy)) {
+    if (!UQ::isUQPolicy(uq_policy)) {
       FATAL(AMS, "Invalid UQ policy %d", uq_policy)
     }
 
@@ -235,13 +203,10 @@ public:
 
     if (surrogate_path != nullptr) SPath = std::string(surrogate_path);
 
-    if (uq_path != nullptr) UQPath = std::string(uq_path);
-
     this->threshold = threshold;
-    nClusters = num_clusters;
     DBG(AMS,
         "Registered Model %s %g",
-        BaseUQ::UQPolicyToStr(uqPolicy).c_str(),
+        UQ::UQPolicyToStr(uqPolicy).c_str(),
         threshold);
   }
 
@@ -249,13 +214,11 @@ public:
   void dump()
   {
     if (!SPath.empty()) DBG(AMS, "Surrogate Model Path: %s", SPath.c_str());
-    if (!UQPath.empty()) DBG(AMS, "UQ-Model: %s", UQPath.c_str());
     DBG(AMS,
-        "db-Label: %s threshold %f UQ-Policy: %u nClusters: %d",
+        "db-Label: %s threshold %f UQ-Policy: %u",
         DBLabel.c_str(),
         threshold,
-        uqPolicy,
-        nClusters);
+        uqPolicy);
   }
 };
 
@@ -269,7 +232,7 @@ class AMSWrap
   using json = nlohmann::json;
 
 public:
-  std::vector<std::pair<AMSDType, void *>> executors;
+  std::vector<void *> executors;
   std::vector<std::pair<std::string, AMSAbstractModel>> registered_models;
   std::unordered_map<std::string, int> ams_candidate_models;
   AMSDBType dbType = AMSDBType::AMS_NONE;
@@ -393,13 +356,16 @@ private:
       rmq_cert = getEntry<std::string>(rmq_entry, "rabbitmq-cert");
 
     CFATAL(AMS,
-      (exchange == "" || routing_key == "") && update_surrogate,
-      "Found empty RMQ exchange / routing-key, model update is not possible. "
-      "Please provide a RMQ exchange or deactivate surrogate model "
-      "update.")
+           (exchange == "" || routing_key == "") && update_surrogate,
+           "Found empty RMQ exchange / routing-key, model update is not "
+           "possible. "
+           "Please provide a RMQ exchange or deactivate surrogate model "
+           "update.")
 
-    if(exchange == "" || routing_key == "") {
-      WARNING(AMS, "Found empty RMQ exchange or routing-key, deactivating model update")
+    if (exchange == "" || routing_key == "") {
+      WARNING(AMS,
+              "Found empty RMQ exchange or routing-key, deactivating model "
+              "update")
       update_surrogate = false;
     }
 
@@ -431,15 +397,14 @@ private:
     switch (dbType) {
       case AMSDBType::AMS_NONE:
         return;
-      case AMSDBType::AMS_CSV:
       case AMSDBType::AMS_HDF5:
         setupFSDB(entry, dbStrType);
         break;
       case AMSDBType::AMS_RMQ:
         setupRMQ(entry, dbStrType);
         break;
-      case AMSDBType::AMS_REDIS:
-        FATAL(AMS, "Cannot connect to REDIS database, missing implementation");
+      default:
+        FATAL(AMS, "Unknown db-type");
     }
     return;
   }
@@ -542,9 +507,7 @@ public:
                      AMSUQPolicy uq_policy,
                      double threshold,
                      const char *surrogate_path,
-                     const char *uq_path,
-                     const char *db_label,
-                     int num_clusters)
+                     const char *db_label)
   {
     auto model = ams_candidate_models.find(domain_name);
     if (model != ams_candidate_models.end()) {
@@ -554,13 +517,9 @@ public:
             domain_name,
             registered_models[model->second].second.SPath.c_str());
     }
-    registered_models.push_back(std::make_pair(std::string(domain_name),
-                                               AMSAbstractModel(uq_policy,
-                                                                surrogate_path,
-                                                                uq_path,
-                                                                db_label,
-                                                                threshold,
-                                                                num_clusters)));
+    registered_models.push_back(std::make_pair(
+        std::string(domain_name),
+        AMSAbstractModel(uq_policy, surrogate_path, db_label, threshold)));
     ams_candidate_models.emplace(std::string(domain_name),
                                  registered_models.size() - 1);
     return registered_models.size() - 1;
@@ -586,13 +545,7 @@ public:
   ~AMSWrap()
   {
     for (auto E : executors) {
-      if (E.second != nullptr) {
-        if (E.first == AMSDType::AMS_DOUBLE) {
-          delete reinterpret_cast<ams::AMSWorkflow<double> *>(E.second);
-        } else {
-          delete reinterpret_cast<ams::AMSWorkflow<float> *>(E.second);
-        }
-      }
+      delete reinterpret_cast<ams::AMSWorkflow *>(E);
     }
     ams::util::close();
   }
@@ -602,165 +555,100 @@ static std::once_flag _amsInitFlag;
 static std::once_flag _amsFinalizeFlag;
 static std::unique_ptr<AMSWrap> _amsWrap;
 
-void AMSInit() {
+void AMSInit()
+{
   std::call_once(_amsInitFlag, [&]() {
     DBG(AMS, "Initialization of AMS")
     _amsWrap = std::make_unique<AMSWrap>();
   });
 }
 
-void AMSFinalize() {
+void AMSFinalize()
+{
   std::call_once(_amsFinalizeFlag, [&]() {
     DBG(AMS, "Finalization of AMS")
     _amsWrap.reset();
   });
 }
 
-void _AMSExecute(AMSExecutor executor,
-                 void *probDescr,
-                 const int numElements,
-                 const void **input_data,
-                 void **output_data,
-                 int inputDim,
-                 int outputDim)
+
+ams::AMSWorkflow *_AMSCreateExecutor(AMSCAbstrModel model,
+                                     int process_id,
+                                     int world_size)
 {
   CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  auto &model_descr = _amsWrap->get_model(model);
+
+  ams::AMSWorkflow *WF = new ams::AMSWorkflow(model_descr.second.SPath,
+                                              model_descr.first,
+                                              model_descr.second.DBLabel,
+                                              model_descr.second.threshold,
+                                              model_descr.second.uqPolicy,
+                                              process_id,
+                                              world_size);
+  return WF;
+}
+
+AMSExecutor _AMSRegisterExecutor(ams::AMSWorkflow *workflow)
+{
+  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  _amsWrap->executors.push_back(static_cast<void *>(workflow));
+  return static_cast<AMSExecutor>(_amsWrap->executors.size()) - 1L;
+}
+}  // namespace
+
+namespace ams
+{
+
+AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
+                              int process_id,
+                              int world_size)
+{
+  auto *dWF = _AMSCreateExecutor(model, process_id, world_size);
+  return _AMSRegisterExecutor(dWF);
+}
+
+
+void AMSExecute(AMSExecutor executor,
+                EOSLambda &OrigComputation,
+                const ams::SmallVector<ams::AMSTensor> &ins,
+                ams::SmallVector<ams::AMSTensor> &inouts,
+                ams::SmallVector<ams::AMSTensor> &outs)
+{
   int64_t index = static_cast<int64_t>(executor);
   if (index >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
   auto currExec = _amsWrap->executors[index];
 
-  if (currExec.first == AMSDType::AMS_DOUBLE) {
-    ams::AMSWorkflow<double> *dWF =
-        reinterpret_cast<ams::AMSWorkflow<double> *>(currExec.second);
-    dWF->evaluate(probDescr,
-                  numElements,
-                  reinterpret_cast<const double **>(input_data),
-                  reinterpret_cast<double **>(output_data),
-                  inputDim,
-                  outputDim);
-  } else if (currExec.first == AMSDType::AMS_SINGLE) {
-    ams::AMSWorkflow<float> *sWF =
-        reinterpret_cast<ams::AMSWorkflow<float> *>(currExec.second);
-    sWF->evaluate(probDescr,
-                  numElements,
-                  reinterpret_cast<const float **>(input_data),
-                  reinterpret_cast<float **>(output_data),
-                  inputDim,
-                  outputDim);
-  } else {
-    throw std::invalid_argument("Data type is not supported by AMSLib!");
-    return;
-  }
+  ams::AMSWorkflow *workflow = reinterpret_cast<ams::AMSWorkflow *>(currExec);
+  DBG(AMS,
+      "Calling AMS with in:%ld, inout:%ld, out:%ld",
+      ins.size(),
+      inouts.size(),
+      outs.size());
+
+  callAMS(workflow, OrigComputation, ins, inouts, outs);
 }
 
-template <typename FPTypeValue>
-ams::AMSWorkflow<FPTypeValue> *_AMSCreateExecutor(AMSCAbstrModel model,
-                                                  AMSDType data_type,
-                                                  AMSResourceType resource_type,
-                                                  AMSPhysicFn call_back,
-                                                  int process_id,
-                                                  int world_size)
+void AMSCExecute(AMSExecutor executor,
+                 EOSCFn OrigCComputation,
+                 void *args,
+                 const ams::SmallVector<ams::AMSTensor> &ins,
+                 ams::SmallVector<ams::AMSTensor> &inouts,
+                 ams::SmallVector<ams::AMSTensor> &outs)
 {
-  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
-  auto &model_descr = _amsWrap->get_model(model);
 
-  ams::AMSWorkflow<FPTypeValue> *WF =
-      new ams::AMSWorkflow<FPTypeValue>(call_back,
-                                        model_descr.second.UQPath,
-                                        model_descr.second.SPath,
-                                        model_descr.first,
-                                        model_descr.second.DBLabel,
-                                        model_descr.second.DebugDB,
-                                        resource_type,
-                                        model_descr.second.threshold,
-                                        model_descr.second.uqPolicy,
-                                        model_descr.second.nClusters,
-                                        process_id,
-                                        world_size);
-  return WF;
+  // Define the lambda and let the compiler deduce the type conversion to std::function
+  EOSLambda OrigComputation =
+      [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
+          ams::SmallVector<ams::AMSTensor> &ams_inouts,
+          ams::SmallVector<ams::AMSTensor> &ams_outs) {
+        OrigCComputation(args, ams_ins, ams_inouts, ams_outs);
+      };
+
+  AMSExecute(executor, OrigComputation, ins, inouts, outs);
 }
 
-template <typename FPTypeValue>
-AMSExecutor _AMSRegisterExecutor(AMSDType data_type,
-                                 ams::AMSWorkflow<FPTypeValue> *workflow)
-{
-  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
-  _amsWrap->executors.push_back(
-      std::make_pair(data_type, static_cast<void *>(workflow)));
-  return static_cast<AMSExecutor>(_amsWrap->executors.size()) - 1L;
-}
-
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
-                              AMSDType data_type,
-                              AMSResourceType resource_type,
-                              AMSPhysicFn call_back,
-                              int process_id,
-                              int world_size)
-{
-  if (data_type == AMSDType::AMS_DOUBLE) {
-    auto *dWF = _AMSCreateExecutor<double>(
-        model, data_type, resource_type, call_back, process_id, world_size);
-    return _AMSRegisterExecutor(data_type, dWF);
-
-  } else if (data_type == AMSDType::AMS_SINGLE) {
-    auto *sWF = _AMSCreateExecutor<float>(
-        model, data_type, resource_type, call_back, process_id, world_size);
-    return _AMSRegisterExecutor(data_type, sWF);
-  } else {
-    throw std::invalid_argument("Data type is not supported by AMSLib!");
-    return static_cast<AMSExecutor>(-1);
-  }
-}
-
-#ifdef __ENABLE_MPI__
-AMSExecutor AMSCreateDistributedExecutor(AMSCAbstrModel model,
-                                         AMSDType data_type,
-                                         AMSResourceType resource_type,
-                                         AMSPhysicFn call_back,
-                                         MPI_Comm Comm,
-                                         int process_id,
-                                         int world_size)
-{
-  if (data_type == AMSDType::AMS_DOUBLE) {
-    auto *dWF = _AMSCreateExecutor<double>(
-        model, data_type, resource_type, call_back, process_id, world_size);
-    dWF->set_communicator(Comm);
-    return _AMSRegisterExecutor(data_type, dWF);
-
-  } else if (data_type == AMSDType::AMS_SINGLE) {
-    auto *sWF = _AMSCreateExecutor<float>(
-        model, data_type, resource_type, call_back, process_id, world_size);
-    sWF->set_communicator(Comm);
-    return _AMSRegisterExecutor(data_type, sWF);
-  } else {
-    throw std::invalid_argument("Data type is not supported by AMSLib!");
-    return static_cast<AMSExecutor>(-1);
-  }
-}
-#endif
-
-void AMSExecute(AMSExecutor executor,
-                void *probDescr,
-                const int numElements,
-                const void **input_data,
-                void **output_data,
-                int inputDim,
-                int outputDim)
-{
-  _AMSExecute(executor,
-              probDescr,
-              numElements,
-              input_data,
-              output_data,
-              inputDim,
-              outputDim);
-}
 
 void AMSDestroyExecutor(AMSExecutor executor)
 {
@@ -770,14 +658,7 @@ void AMSDestroyExecutor(AMSExecutor executor)
     throw std::runtime_error("AMS Executor identifier does not exist\n");
   auto currExec = _amsWrap->executors[index];
 
-  if (currExec.first == AMSDType::AMS_DOUBLE) {
-    delete reinterpret_cast<ams::AMSWorkflow<double> *>(currExec.second);
-  } else if (currExec.first == AMSDType::AMS_SINGLE) {
-    delete reinterpret_cast<ams::AMSWorkflow<float> *>(currExec.second);
-  } else {
-    throw std::invalid_argument("Data type is not supported by AMSLib!");
-    return;
-  }
+  delete reinterpret_cast<ams::AMSWorkflow *>(currExec);
 }
 
 
@@ -798,21 +679,14 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         AMSUQPolicy uq_policy,
                                         double threshold,
                                         const char *surrogate_path,
-                                        const char *uq_path,
-                                        const char *db_label,
-                                        int num_clusters)
+                                        const char *db_label)
 {
   CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   std::cout << "_amsWrap = " << _amsWrap.get() << std::endl;
   auto id = _amsWrap->get_model_index(domain_name);
   if (id == -1) {
-    id = _amsWrap->register_model(domain_name,
-                                 uq_policy,
-                                 threshold,
-                                 surrogate_path,
-                                 uq_path,
-                                 db_label,
-                                 num_clusters);
+    id = _amsWrap->register_model(
+        domain_name, uq_policy, threshold, surrogate_path, db_label);
   }
 
   return id;
@@ -831,6 +705,17 @@ void AMSConfigureFSDatabase(AMSDBType db_type, const char *db_path)
   db_instance.instantiate_fs_db(db_type, std::string(db_path));
 }
 
-#ifdef __cplusplus
+
+#ifdef __ENABLE_MPI__
+AMSExecutor AMSCreateDistributedExecutor(AMSCAbstrModel model,
+                                         MPI_Comm Comm,
+                                         int process_id,
+                                         int world_size)
+
+{
+  auto *dWF = _AMSCreateExecutor(model, process_id, world_size);
+  dWF->set_communicator(Comm);
+  return _AMSRegisterExecutor(dWF);
 }
 #endif
+}  // namespace ams

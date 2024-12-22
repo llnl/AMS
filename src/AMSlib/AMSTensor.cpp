@@ -1,7 +1,10 @@
+#include <stdexcept>
+
 #include "AMS.h"
 #include "AMSTensor.hpp"
 #include "ArrayRef.hpp"
 #include "SmallVector.hpp"
+#include "include/AMSTensor.hpp"
 #include "wf/resource_manager.hpp"
 #include "wf/utils.hpp"
 
@@ -30,13 +33,13 @@ bool AMSTensor::isContiguous(AMSTensor::IntDimType expected_stride) const
   return true;
 }
 
-
-AMSTensor::AMSTensor(ams::ArrayRef<AMSTensor::IntDimType> shapes,
+AMSTensor::AMSTensor(uint8_t* data,
+                     ams::ArrayRef<AMSTensor::IntDimType> shapes,
                      ams::ArrayRef<AMSTensor::IntDimType> strides,
                      AMSDType dType,
                      AMSResourceType location,
                      bool view)
-    : _elements(computeNumElements(shapes)),
+    : _data(data),
       _element_size(dtype_to_size(dType)),
       _shape(shapes),
       _strides(strides),
@@ -44,46 +47,75 @@ AMSTensor::AMSTensor(ams::ArrayRef<AMSTensor::IntDimType> shapes,
       _location(location),
       _owned(!view)
 {
-  _contiguous = isContiguous(_element_size);
+  _bytes = _elements * _element_size;
+  _elements = computeNumElements(shapes);
+  if (!_data) {
+    throw std::runtime_error("Generating tensor with Null Pointer AMSTensor.");
+  }
+  std::cout << "Pointer is " << _data << "\n";
+}
+
+template <typename FPType,
+          typename = std::enable_if_t<std::is_floating_point_v<FPType>>>
+AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
+                            ams::ArrayRef<AMSTensor::IntDimType> strides,
+                            AMSResourceType location)
+{
+  auto numElements = computeNumElements(shapes);
   auto& rm = ams::ResourceManager::getInstance();
-  if (!view) {
-    _data = rm.allocate<uint8_t>(_elements * _element_size,
-                                 _location,
-                                 _element_size);
-    _bytes = _elements * _element_size;
-    if (!_data) {
-      throw std::runtime_error("Failed to allocate memory for AMSTensor.");
-    }
+  if constexpr (std::is_same_v<FPType, float>) {
+    float* _data = rm.allocate<float>(numElements, location, sizeof(float));
+    return AMSTensor((uint8_t*)_data, shapes, strides, AMS_SINGLE, location);
+  } else if constexpr (std::is_same_v<FPType, double>) {
+    double* _data = rm.allocate<double>(numElements, location, sizeof(double));
+    return AMSTensor((uint8_t*)_data, shapes, strides, AMS_DOUBLE, location);
+  } else {
+    // This should never happen due to the type restriction
+    static_assert(std::is_same_v<FPType, float> ||
+                      std::is_same_v<FPType, double>,
+                  "AMSTensor only supports float or double tensor creation");
   }
 }
 
 
-AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
-                            ams::ArrayRef<AMSTensor::IntDimType> strides,
-                            AMSDType dType,
-                            AMSResourceType location)
-{
-  return AMSTensor(shapes, strides, dType, location);
-}
-
-AMSTensor AMSTensor::view(uint8_t* data,
+template <typename FPType,
+          typename = std::enable_if_t<std::is_floating_point_v<FPType>>>
+AMSTensor AMSTensor::view(FPType* data,
                           ams::ArrayRef<AMSTensor::IntDimType> shapes,
                           ams::ArrayRef<AMSTensor::IntDimType> strides,
-                          AMSDType dType,
                           AMSResourceType location)
 {
-  auto tensor = AMSTensor(shapes, strides, dType, location, true);
-  tensor._data = data;
-  return tensor;
+  if constexpr (std::is_same_v<FPType, float>) {
+    std::cout << "Generating float view from pointer " << data << "\n";
+    return AMSTensor(
+        (uint8_t*)data, shapes, strides, AMS_SINGLE, location, true);
+  } else if constexpr (std::is_same_v<FPType, double>) {
+    std::cout << "Generating a double view from pointer " << data << "\n";
+    return AMSTensor(
+        (uint8_t*)data, shapes, strides, AMS_DOUBLE, location, true);
+  } else {
+    static_assert(std::is_same_v<FPType, float> ||
+                      std::is_same_v<FPType, double>,
+                  "AMSTensor only supports float or double tensor view");
+  }
+  throw std::runtime_error("Should never get here\n");
 }
 
 AMSTensor AMSTensor::view(AMSTensor& tensor)
 {
-  return AMSTensor::view(tensor._data,
-                         tensor._shape,
-                         tensor._strides,
-                         tensor._dType,
-                         tensor._location);
+  std::cout << "Creating a view here from AMS Tensor\n";
+  if (tensor._dType == AMS_DOUBLE)
+    return AMSTensor::view((double*)tensor._data,
+                           tensor._shape,
+                           tensor._strides,
+                           tensor._location);
+  else if (tensor._dType == AMS_SINGLE)
+    return AMSTensor::view((float*)tensor._data,
+                           tensor._shape,
+                           tensor._strides,
+                           tensor._location);
+  throw std::runtime_error(
+      "Creating view through copying constructor has incorrect dtype");
 }
 
 AMSTensor::~AMSTensor()
@@ -149,8 +181,17 @@ AMSTensor AMSTensor::transpose(AMSTensor::IntDimType axis1,
   std::swap(newStrides[axis1], newStrides[axis2]);
 
   // Create a new tensor with the same data, new shape, and strides
-  AMSTensor transposedTensor =
-      view(_data, newShape, newStrides, _dType, _location);
+  if (dType() == AMSDType::AMS_DOUBLE)
+    return view((double*)_data, newShape, newStrides, _location);
+  else if (dType() == AMSDType::AMS_SINGLE)
+    return view((double*)_data, newShape, newStrides, _location);
 
-  return transposedTensor;
+  throw std::runtime_error("Unknow data type in transpose\n");
 }
+
+template AMSTensor AMSTensor::create<float>(ams::ArrayRef<IntDimType>,
+                                            ams::ArrayRef<IntDimType>,
+                                            AMSResourceType);
+template AMSTensor AMSTensor::create<double>(ams::ArrayRef<IntDimType>,
+                                             ams::ArrayRef<IntDimType>,
+                                             AMSResourceType);

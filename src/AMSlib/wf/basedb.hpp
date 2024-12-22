@@ -26,6 +26,7 @@
 #include "AMS.h"
 #include "ArrayRef.hpp"
 #include "debug.h"
+#include "macro.h"
 #include "wf/debug.h"
 #include "wf/resource_manager.hpp"
 #include "wf/utils.hpp"
