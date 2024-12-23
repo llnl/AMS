@@ -45,7 +45,6 @@ SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
   std::error_code ec;
 
   if (!std::experimental::filesystem::exists(Path, ec)) {
-    std::abort();
     FATAL(Surrogate,
           "Path to Surrogate Model (%s) Does not exist",
           model_path.c_str())

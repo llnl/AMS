@@ -30,6 +30,8 @@
 
 using namespace ams;
 
+namespace
+{
 static int get_rank_id()
 {
   if (const char *flux_id = std::getenv("FLUX_TASK_RANK")) {
@@ -57,7 +59,6 @@ public:
   bool DebugDB;
   double threshold;
   AMSUQPolicy uqPolicy;
-  int nClusters;
 
   static AMSUQPolicy getUQType(std::string type)
   {
@@ -105,8 +106,9 @@ public:
     std::string path = "";
     if (jRoot.contains("model_path")) {
       path = jRoot["model_path"].get<std::string>();
-      // Verify that path exists if it is different than ""
-#warning fix comment
+      CFATAL(AMS,
+             (!path.empty() && !fs::exists(path)),
+             "Path to model does not exist\n");
     }
     return path;
   }
@@ -184,10 +186,8 @@ public:
 
   AMSAbstractModel(AMSUQPolicy uq_policy,
                    const char *surrogate_path,
-                   const char *uq_path,
                    const char *db_label,
-                   double threshold,
-                   int num_clusters)
+                   double threshold)
   {
     DebugDB = false;
     if (db_label == nullptr)
@@ -204,7 +204,6 @@ public:
     if (surrogate_path != nullptr) SPath = std::string(surrogate_path);
 
     this->threshold = threshold;
-    nClusters = num_clusters;
     DBG(AMS,
         "Registered Model %s %g",
         UQ::UQPolicyToStr(uqPolicy).c_str(),
@@ -216,11 +215,10 @@ public:
   {
     if (!SPath.empty()) DBG(AMS, "Surrogate Model Path: %s", SPath.c_str());
     DBG(AMS,
-        "db-Label: %s threshold %f UQ-Policy: %u nClusters: %d",
+        "db-Label: %s threshold %f UQ-Policy: %u",
         DBLabel.c_str(),
         threshold,
-        uqPolicy,
-        nClusters);
+        uqPolicy);
   }
 };
 
@@ -405,8 +403,8 @@ private:
       case AMSDBType::AMS_RMQ:
         setupRMQ(entry, dbStrType);
         break;
-      case AMSDBType::AMS_REDIS:
-        FATAL(AMS, "Cannot connect to REDIS database, missing implementation");
+      default:
+        FATAL(AMS, "Unknown db-type");
     }
     return;
   }
@@ -509,9 +507,7 @@ public:
                      AMSUQPolicy uq_policy,
                      double threshold,
                      const char *surrogate_path,
-                     const char *uq_path,
-                     const char *db_label,
-                     int num_clusters)
+                     const char *db_label)
   {
     auto model = ams_candidate_models.find(domain_name);
     if (model != ams_candidate_models.end()) {
@@ -521,13 +517,9 @@ public:
             domain_name,
             registered_models[model->second].second.SPath.c_str());
     }
-    registered_models.push_back(std::make_pair(std::string(domain_name),
-                                               AMSAbstractModel(uq_policy,
-                                                                surrogate_path,
-                                                                uq_path,
-                                                                db_label,
-                                                                threshold,
-                                                                num_clusters)));
+    registered_models.push_back(std::make_pair(
+        std::string(domain_name),
+        AMSAbstractModel(uq_policy, surrogate_path, db_label, threshold)));
     ams_candidate_models.emplace(std::string(domain_name),
                                  registered_models.size() - 1);
     return registered_models.size() - 1;
@@ -603,7 +595,10 @@ AMSExecutor _AMSRegisterExecutor(ams::AMSWorkflow *workflow)
   _amsWrap->executors.push_back(static_cast<void *>(workflow));
   return static_cast<AMSExecutor>(_amsWrap->executors.size()) - 1L;
 }
+}  // namespace
 
+namespace ams
+{
 
 AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
                               int process_id,
@@ -613,8 +608,7 @@ AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
   return _AMSRegisterExecutor(dWF);
 }
 
-namespace ams
-{
+
 void AMSExecute(AMSExecutor executor,
                 EOSLambda &OrigComputation,
                 const ams::SmallVector<ams::AMSTensor> &ins,
@@ -680,21 +674,14 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         AMSUQPolicy uq_policy,
                                         double threshold,
                                         const char *surrogate_path,
-                                        const char *uq_path,
-                                        const char *db_label,
-                                        int num_clusters)
+                                        const char *db_label)
 {
   CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   std::cout << "_amsWrap = " << _amsWrap.get() << std::endl;
   auto id = _amsWrap->get_model_index(domain_name);
   if (id == -1) {
-    id = _amsWrap->register_model(domain_name,
-                                  uq_policy,
-                                  threshold,
-                                  surrogate_path,
-                                  uq_path,
-                                  db_label,
-                                  num_clusters);
+    id = _amsWrap->register_model(
+        domain_name, uq_policy, threshold, surrogate_path, db_label);
   }
 
   return id;

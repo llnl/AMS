@@ -47,3 +47,4 @@ void device_random_uq(int seed,
 }  // namespace ams
 
 #endif
+#endif

@@ -13,26 +13,16 @@
 #include <memory>
 #include <stdexcept>
 
-#include "debug.h"
-#ifdef __AMS_ENABLE_CALIPER__
-#include <caliper/cali_macros.h>
-#endif
-
 #include <ATen/core/TensorBody.h>
 
 #include "AMS.h"
+#include "macro.h"
 #include "ArrayRef.hpp"
 #include "SmallVector.hpp"
 #include "interface.hpp"
 #include "ml/surrogate.hpp"
 #include "resource_manager.hpp"
 #include "wf/basedb.hpp"
-
-#ifdef __ENABLE_MPI__
-#include <mpi.h>
-
-#include "wf/redist_load.hpp"
-#endif
 
 #include "wf/debug.h"
 
