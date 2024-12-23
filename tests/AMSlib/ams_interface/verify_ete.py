@@ -131,10 +131,8 @@ def verify(
 
         # Check data type.
         if db_type == "hdf5":
-            if "data_type" == "double":
-                assert inputs.dtype == np.float64, "Data types do not match"
-            elif "data_type" == "float":
-                assert inputs.dtype == np.float32, "Data types do not match"
+            assert inputs.dtype == np.float32, "Output Data types do not match"
+            assert outputs.dtype == np.float32, "Input Data types do not match"
 
         # When debug db is set, we store always all elements
         if debug_db:

@@ -22,3 +22,12 @@ python ${root_dir}/generate.py double $device ${directory} duq_max
 python ${root_dir}/generate.py double $device ${directory} random 
 
 
+python ${root_dir}/generate_linear_model.py single $device ${directory} duq_mean 8 9
+python ${root_dir}/generate_linear_model.py single $device ${directory} duq_max 8 9
+python ${root_dir}/generate_linear_model.py single $device ${directory} random  8 9
+
+python ${root_dir}/generate_linear_model.py double $device ${directory} duq_mean 8 9
+python ${root_dir}/generate_linear_model.py double $device ${directory} duq_max 8 9
+python ${root_dir}/generate_linear_model.py double $device ${directory} random  8 9
+
+

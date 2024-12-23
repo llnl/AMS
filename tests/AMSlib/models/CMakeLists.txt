@@ -9,13 +9,29 @@ set(GENERATED_CPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/single_cpu_duq_max.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/single_cpu_duq_mean.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/single_cpu_random.pt
+
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_cpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_cpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_cpu_random.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_cpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_cpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_cpu_random.pt
+
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_cpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_cpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_cpu_random.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_cpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_cpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_cpu_random.pt
+
+
 )
 
 # Custom command to generate models
 add_custom_command(
   OUTPUT ${GENERATED_CPU_MODELS}
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/generate.sh ${CMAKE_CURRENT_BINARY_DIR}/ "cpu"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh;${CMAKE_CURRENT_SOURCE_DIR}/generate.py" 
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh;${CMAKE_CURRENT_SOURCE_DIR}/generate.py;${CMAKE_CURRENT_SOURCE_DIR}/generate_linear_model.py" 
     COMMENT "Generating PyTorch models..."
 )
 
@@ -33,6 +49,20 @@ set(GENERATED_GPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/single_gpu_duq_max.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/single_gpu_duq_mean.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/single_gpu_random.pt
+
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_gpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_gpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_gpu_random.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_gpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_gpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_gpu_random.pt
+
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_gpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_gpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_gpu_random.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_gpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_gpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_gpu_random.pt
 )
 
 # Custom command to generate models

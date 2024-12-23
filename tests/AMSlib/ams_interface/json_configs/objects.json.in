@@ -1,0 +1,26 @@
+{
+  "db" : {
+    "dbType" : "@DBTYPE@",
+    "fs_path" : "@FS_PATH@"
+  },
+  "ml_models" : {
+    "model_1": {
+      "uq_type": "@UQ_TYPE@",
+      "model_path": "model_1",
+      "uq_aggregate": "mean",
+      "threshold": 0.5,
+      "db_label" : "tatb_eos"
+    }, 
+    "model_2": {
+      "uq_type": "@UQ_TYPE@",
+      "model_path": "model_2",
+      "uq_aggregate": "max",
+      "threshold": 0.5,
+      "db_label" : "tatb_eos"
+    }
+  },
+  "domain_models" : {
+    "test_1": "model_1",
+    "test_2" : "model_2"
+  }
+}

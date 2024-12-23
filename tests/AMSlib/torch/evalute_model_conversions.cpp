@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "AMS.h"
 #include "ml/surrogate.hpp"
 
 void printTensorShape(const torch::Tensor& tensor)
@@ -132,7 +133,7 @@ bool verify(torch::Tensor& input,
 void test(SurrogateModel& model,
           std::vector<int64_t>& iDims,
           std::vector<int64_t>& oDims,
-          AMSUQPolicy policy)
+          ams::AMSUQPolicy policy)
 {
   auto model_type = model.getModelDataType();
   auto model_device = model.getModelResourceType();
@@ -217,11 +218,11 @@ int main(int argc, char* argv[])
   if (uq.compare("random") == 0) isDeltaUQ = false;
   auto model = SurrogateModel::getInstance(model_path, isDeltaUQ);
   if (std::string(argv[4]).compare("duq_mean") == 0) {
-    test(*model, iShape, oShape, AMSUQPolicy::AMS_DELTAUQ_MEAN);
+    test(*model, iShape, oShape, ams::AMSUQPolicy::AMS_DELTAUQ_MEAN);
   } else if (std::string(argv[4]).compare("duq_max") == 0) {
-    test(*model, iShape, oShape, AMSUQPolicy::AMS_DELTAUQ_MAX);
+    test(*model, iShape, oShape, ams::AMSUQPolicy::AMS_DELTAUQ_MAX);
   } else if (std::string(argv[4]).compare("random") == 0) {
-    test(*model, iShape, oShape, AMSUQPolicy::AMS_RANDOM);
+    test(*model, iShape, oShape, ams::AMSUQPolicy::AMS_RANDOM);
   } else {
     std::cout << "Unknown dUQ \n";
     return 1;
