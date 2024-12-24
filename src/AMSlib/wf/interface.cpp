@@ -94,7 +94,7 @@ static ams::SmallVector<ams::AMSTensor> torchToAMSTensors(
 }
 
 static ams::SmallVector<torch::Tensor> amsToTorchTensors(
-    ams::MutableArrayRef<ams::AMSTensor> &amsTensorVector)
+    const ams::SmallVector<ams::AMSTensor> &amsTensorVector)
 {
   ams::SmallVector<torch::Tensor> ams_tensors;
   for (auto &tensor : amsTensorVector) {
@@ -113,7 +113,7 @@ static ams::SmallVector<torch::Tensor> amsToTorchTensors(
         strides,
         torch::TensorOptions().dtype(dType).device(deviceType)));
   }
-  return ams_tensors;
+  return std::move(ams_tensors);
 }
 
 void callApplication(ams::EOSLambda CallBack,
@@ -134,9 +134,18 @@ void callAMS(ams::AMSWorkflow *executor,
              ams::SmallVector<ams::AMSTensor> &inouts,
              ams::SmallVector<ams::AMSTensor> &outs)
 {
-  ams::MutableArrayRef<torch::Tensor> tins;
-  ams::MutableArrayRef<torch::Tensor> tinouts;
-  ams::MutableArrayRef<torch::Tensor> touts;
-#warning transform ams::AMSTensor to torch tensors.
+  ams::SmallVector<torch::Tensor> tins = amsToTorchTensors(ins);
+  ams::SmallVector<torch::Tensor> tinouts = amsToTorchTensors(inouts);
+  ams::SmallVector<torch::Tensor> touts = amsToTorchTensors(outs);
+
+  for (auto &TI : tins)
+    std::cout << "ITensor Shape is " << TI.sizes() << "\n";
+  for (auto &TIO : tinouts)
+    std::cout << "IOTensor Shape is " << TIO.sizes() << "\n";
+
+  for (auto &TO : touts)
+    std::cout << "OTensor Shape is " << TO.sizes() << "\n";
+
+
   executor->evaluate(Physics, tins, tinouts, touts);
 }

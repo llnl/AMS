@@ -621,6 +621,11 @@ void AMSExecute(AMSExecutor executor,
   auto currExec = _amsWrap->executors[index];
 
   ams::AMSWorkflow *workflow = reinterpret_cast<ams::AMSWorkflow *>(currExec);
+  DBG(AMS,
+      "Calling AMS with in:%ld, inout:%ld, out:%ld",
+      ins.size(),
+      inouts.size(),
+      outs.size());
 
   callAMS(workflow, OrigComputation, ins, inouts, outs);
 }

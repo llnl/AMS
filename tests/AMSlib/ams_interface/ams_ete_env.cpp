@@ -120,7 +120,7 @@ struct Problem {
                     "Expected tensors to have the same shape");
             }
             for (int i = 0; i < num_outputs; i++) {
-              outs[i] = ams_ins[i].data<DType>();
+              outs[i] = ams_outs[i].data<DType>();
               if (ams_outs[i].shape()[0] != num_elements)
                 throw std::runtime_error(
                     "Expected tensors to have the same shape");
