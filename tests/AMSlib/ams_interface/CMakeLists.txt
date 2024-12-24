@@ -153,7 +153,12 @@ function (INTEGRATION_TEST)
   # Random model with inout arguments that represent 2D data.
   ADD_API_UNIT_TEST(API_DIRECT_QUERY AMS::API::ModelDefine::Inout2D::Random::Double::DB::OnlyPhysics::HDF5::HOST "${CMAKE_CURRENT_BINARY_DIR}/ams_inout_2d 0 8 8 ${TORCH_MODEL_DIR}/linear_scripted_single_cpu_random.pt \"double\" \"random\" 0.0 1 128 \"hdf5\" \"./\"; python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 ${CMAKE_CURRENT_SOURCE_DIR}/linear_scripted_cpu.pt \"double\" \"random\" 0.0 1 128 \"hdf5\" \"./\"")
   ADD_API_UNIT_TEST(API_DIRECT_QUERY AMS::API::ModelDefine::Inout2D::Random::Double::DB::OnlyModel::HDF5::HOST "${CMAKE_CURRENT_BINARY_DIR}/ams_inout_2d 0 8 8 ${TORCH_MODEL_DIR}/linear_scripted_single_cpu_random.pt \"double\" \"random\" 1.0 1 128 \"hdf5\" \"./\"; python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 ${CMAKE_CURRENT_SOURCE_DIR}/linear_scripted_cpu.pt \"double\" \"random\" 1.0 1 128 \"hdf5\" \"./\"")
-  ADD_API_UNIT_TEST(API_DIRECT_QUERY AMS::API::ModelDefine::Inout2D::Random::Double::DB::HALF::HDF5::HOST "${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end 0 8 8 ${TORCH_MODEL_DIR}/linear_scripted_single_cpu_random.pt \"double\" \"random\" 0.5 1 128 \"hdf5\" \"./\"; python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 ${CMAKE_CURRENT_SOURCE_DIR}/linear_scripted_cpu.pt \"double\" \"random\" 0.5 1 128 \"hdf5\" \"./\"")
+  ADD_API_UNIT_TEST(API_DIRECT_QUERY AMS::API::ModelDefine::Inout2D::Random::Double::DB::HALF::HDF5::HOST "${CMAKE_CURRENT_BINARY_DIR}/ams_inout_2d 0 8 8 ${TORCH_MODEL_DIR}/linear_scripted_single_cpu_random.pt \"double\" \"random\" 0.5 1 128 \"hdf5\" \"./\"; python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 ${CMAKE_CURRENT_SOURCE_DIR}/linear_scripted_cpu.pt \"double\" \"random\" 0.5 1 128 \"hdf5\" \"./\"")
+
+# Random model with inout arguments that represent 2D data.
+  ADD_API_UNIT_TEST(API_DIRECT_QUERY AMS::API::ModelDefine::Broadcast::Random::Double::DB::OnlyPhysics::HDF5::HOST "${CMAKE_CURRENT_BINARY_DIR}/ams_ete_broadcast 0 8 8 ${TORCH_MODEL_DIR}/linear_scripted_single_cpu_random.pt \"double\" \"random\" 0.0 1 128 \"hdf5\" \"./\"; python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 ${CMAKE_CURRENT_SOURCE_DIR}/linear_scripted_cpu.pt \"double\" \"random\" 0.0 1 128 \"hdf5\" \"./\"")
+  ADD_API_UNIT_TEST(API_DIRECT_QUERY AMS::API::ModelDefine::Broadcast::Random::Double::DB::OnlyModel::HDF5::HOST "${CMAKE_CURRENT_BINARY_DIR}/ams_ete_broadcast 0 8 8 ${TORCH_MODEL_DIR}/linear_scripted_single_cpu_random.pt \"double\" \"random\" 1.0 1 128 \"hdf5\" \"./\"; python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 ${CMAKE_CURRENT_SOURCE_DIR}/linear_scripted_cpu.pt \"double\" \"random\" 1.0 1 128 \"hdf5\" \"./\"")
+  ADD_API_UNIT_TEST(API_DIRECT_QUERY AMS::API::ModelDefine::Broadcast::Random::Double::DB::HALF::HDF5::HOST "${CMAKE_CURRENT_BINARY_DIR}/ams_ete_broadcast 0 8 8 ${TORCH_MODEL_DIR}/linear_scripted_single_cpu_random.pt \"double\" \"random\" 0.5 1 128 \"hdf5\" \"./\"; python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 ${CMAKE_CURRENT_SOURCE_DIR}/linear_scripted_cpu.pt \"double\" \"random\" 0.5 1 128 \"hdf5\" \"./\"")
 
 endfunction()
 
@@ -178,6 +183,7 @@ endfunction()
 
 BUILD_TEST(ams_end_to_end ams_ete.cpp)
 BUILD_TEST(ams_inout_2d ams_ete_2d.cpp)
+BUILD_TEST(ams_ete_broadcast ams_ete_broadcast.cpp)
 INTEGRATION_TEST()
 BUILD_TEST(ams_end_to_end_env ams_ete_env.cpp)
 INTEGRATION_TEST_ENV()
