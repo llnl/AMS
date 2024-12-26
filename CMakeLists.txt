@@ -36,7 +36,6 @@ option(WITH_CUDA           "Option to enable CUDA" OFF)
 option(WITH_EXAMPLES       "Build examples" OFF)
 option(WITH_MPI            "Option to enable MPI" OFF)
 option(WITH_CALIPER        "Use Caliper for Profiling" OFF)
-option(WITH_FAISS          "Use C/C++ FAISS interface for HD Cache" OFF)
 option(WITH_TORCH          "Use C/C++ Torch interface for Surrogate Model Inference" OFF)
 option(WITH_TORCH_DEBUG    "Compute RMSE of Surrogate Model and Physics Module" OFF)
 option(WITH_TESTS          "Compile tests" OFF)
@@ -215,36 +214,6 @@ if (WITH_TORCH)
 endif()
 
 # ------------------------------------------------------------------------------
-if (WITH_FAISS)
-  ## TODO: still need to create FindFaiss.cmake
-  #find_package(FAISS REQUIRED HINTS ${FAISS_DIR})
-  #include(${PROJECT_SOURCE_DIR}/cmake/FindFAISS.cmake)
-
-  if (FAISS_DIR)
-    message(STATUS "FAISS_DIR = ${FAISS_DIR}")
-    set(FAISS_INCLUDE_DIRS "${FAISS_DIR}/include")
-    set(FAISS_LIB_DIR "${FAISS_DIR}/lib")
-    set(FAISS_LIB64_DIR "${FAISS_DIR}/lib64")
-    set(FAISS_LIBRARIES "faiss")
-  else()
-    message(FATAL_ERROR "Cannot find FAISS. FAISS_DIR is not defined.")
-  endif()
-
-  ## TODO: we need to make a FindFaiss.cmake
-  list(APPEND AMS_APP_INCLUDES "${FAISS_INCLUDE_DIRS}")
-  list(APPEND AMS_APP_LIB_DIRS "${FAISS_LIB_DIR}" "${FAISS_LIB64_DIR}")
-  list(APPEND AMS_APP_LIBRARIES "${FAISS_LIBRARIES}")
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_FAISS__")
-
-
-  find_package(OpenMP)
-  if (OPENMP_FOUND)
-     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-  endif()
-endif()
-
 if (WITH_RZ)
   find_package(MPI REQUIRED)
   add_subdirectory(rz)
@@ -312,10 +281,6 @@ if (WITH_EXAMPLES)
     list(APPEND AMS_EXAMPLE_INCLUDES ${caliper_INCLUDE_DIR})
     list(APPEND AMS_EXAMPLE_LIBRARIES caliper)
     list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_CALIPER__")
-  endif()
-
-  if (WITH_FAISS)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_FAISS__")
   endif()
 
   if (WITH_TORCH)
