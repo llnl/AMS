@@ -36,18 +36,15 @@ option(WITH_CUDA           "Option to enable CUDA" OFF)
 option(WITH_EXAMPLES       "Build examples" OFF)
 option(WITH_MPI            "Option to enable MPI" OFF)
 option(WITH_CALIPER        "Use Caliper for Profiling" OFF)
-option(WITH_FAISS          "Use C/C++ FAISS interface for HD Cache" OFF)
 option(WITH_TORCH          "Use C/C++ Torch interface for Surrogate Model Inference" OFF)
 option(WITH_TORCH_DEBUG    "Compute RMSE of Surrogate Model and Physics Module" OFF)
 option(WITH_TESTS          "Compile tests" OFF)
-option(WITH_REDIS          "Use REDIS as a database back end" OFF)
 option(WITH_HDF5           "Use HDF5 as a database back end" OFF)
 option(WITH_RMQ            "Use RabbitMQ as a database back end (require a reachable and running RabbitMQ server service)" OFF)
 option(WITH_AMS_DEBUG      "Enable verbose messages" OFF)
 option(WITH_PERFFLOWASPECT "Use PerfFlowAspect for Profiling" OFF)
 option(WITH_WORKFLOW       "Install python drivers used by the outer workflow" OFF)
 option(WITH_AMS_LIB        "Install C++ library to support scientific applications" ON)
-option(WITH_ADIAK          "Use Adiak for recording metadata" OFF)
 option(BUILD_SHARED_LIBS   "Build using shared libraries" ON)
 
 if (WITH_MPI)
@@ -99,39 +96,6 @@ endif()
 
 # ------------------------------------------------------------------------------
 list(APPEND AMS_APP_DEFINES "-D__ENABLE_DB__")
-
-if (WITH_REDIS)
-  # Temprorary fix for:= the following error which happens when using Cuda 11.6 and Redis backend
-  # error: #error The version of CUB in your include path is not compatible with this release of Thrust.
-  if (WITH_CUDA)
-    add_compile_definitions(THRUST_IGNORE_CUB_VERSION_CHECK)
-  endif()
-  if (HIREDIS_DIR)
-    find_path(HIREDIS_HEADER NAMES hiredis HINTS ${HIREDIS_DIR} PATH_SUFFIXES include)
-    find_library(HIREDIS_LIB NAMES hiredis HINTS ${HIREDIS_DIR} PATH_SUFFIXES lib)
-  else()
-    find_package(hiredis REQUIRED)
-    find_path(HIREDIS_HEADER hiredis)
-    find_library(HIREDIS_LIB hiredis)
-  endif()
-  message(STATUS "Hiredis library is ${HIREDIS_LIB}")
-  message(STATUS "Hiredis headers are ${HIREDIS_HEADER}")
-  list(APPEND AMS_APP_INCLUDES ${HIREDIS_HEADER})
-  list(APPEND AMS_APP_LIBRARIES ${HIREDIS_LIB})
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_REDIS__")
-
-  if (REDIS_PLUS_PLUS_DIR)
-    find_path(REDIS_PLUS_PLUS_HEADER NAMES sw PATHS ${REDIS_PLUS_PLUS_DIR} PATH_SUFFIXES include)
-    find_library(REDIS_PLUS_PLUS_LIB NAMES redis++ PATHS ${REDIS_PLUS_PLUS_DIR} PATH_SUFFIXES lib)
-  else()
-    find_path(REDIS_PLUS_PLUS_HEADER sw)
-    find_library(REDIS_PLUS_PLUS_LIB redis++)
-  endif()
-  message(STATUS "Redis++ library is ${REDIS_PLUS_PLUS_LIB}")
-  list(APPEND AMS_APP_INCLUDES ${REDIS_PLUS_PLUS_HEADER})
-  list(APPEND AMS_APP_LIBRARIES ${REDIS_PLUS_PLUS_LIB})
-endif() # WITH_REDIS
-
 
 if (WITH_HDF5)
   if (HDF5_USE_STATIC_LIBRARIES)
@@ -215,36 +179,6 @@ if (WITH_TORCH)
 endif()
 
 # ------------------------------------------------------------------------------
-if (WITH_FAISS)
-  ## TODO: still need to create FindFaiss.cmake
-  #find_package(FAISS REQUIRED HINTS ${FAISS_DIR})
-  #include(${PROJECT_SOURCE_DIR}/cmake/FindFAISS.cmake)
-
-  if (FAISS_DIR)
-    message(STATUS "FAISS_DIR = ${FAISS_DIR}")
-    set(FAISS_INCLUDE_DIRS "${FAISS_DIR}/include")
-    set(FAISS_LIB_DIR "${FAISS_DIR}/lib")
-    set(FAISS_LIB64_DIR "${FAISS_DIR}/lib64")
-    set(FAISS_LIBRARIES "faiss")
-  else()
-    message(FATAL_ERROR "Cannot find FAISS. FAISS_DIR is not defined.")
-  endif()
-
-  ## TODO: we need to make a FindFaiss.cmake
-  list(APPEND AMS_APP_INCLUDES "${FAISS_INCLUDE_DIRS}")
-  list(APPEND AMS_APP_LIB_DIRS "${FAISS_LIB_DIR}" "${FAISS_LIB64_DIR}")
-  list(APPEND AMS_APP_LIBRARIES "${FAISS_LIBRARIES}")
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_FAISS__")
-
-
-  find_package(OpenMP)
-  if (OPENMP_FOUND)
-     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-  endif()
-endif()
-
 if (WITH_RZ)
   find_package(MPI REQUIRED)
   add_subdirectory(rz)
@@ -288,10 +222,6 @@ if (WITH_EXAMPLES)
   list(APPEND AMS_EXAMPLE_LIBRARIES "${MFEM_LIBRARIES}")
   list(APPEND AMS_EXAMPLE_LIB_DIRS "${MFEM_LIB_DIR}")
 
-  if (WITH_REDIS)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_REDIS__")
-  endif()
-
   if (WITH_RMQ)
     list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_RMQ__")
     list(APPEND AMS_EXAMPLE_INCLUDES ${amqpcpp_INCLUDE_DIR})
@@ -314,23 +244,12 @@ if (WITH_EXAMPLES)
     list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_CALIPER__")
   endif()
 
-  if (WITH_FAISS)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_FAISS__")
-  endif()
-
   if (WITH_TORCH)
     list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_TORCH__")
   endif()
 
   if (WITH_PERFFLOWASPECT)
     list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_PERFFLOWASPECT__")
-  endif()
-
-  if (WITH_ADIAK)
-    find_package(adiak REQUIRED)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_ADIAK__")
-    list(APPEND AMS_EXAMPLE_INCLUDES ${adiak_INCLUDE_DIR})
-    list(APPEND AMS_EXAMPLE_LIBRARIES adiak::adiak)
   endif()
 
   add_subdirectory(examples)
