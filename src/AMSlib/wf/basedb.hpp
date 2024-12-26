@@ -1786,7 +1786,6 @@ public:
                                    uint64_t rId = 0)
   {
 
-#ifdef __ENABLE_DB__
     DBG(DBManager, "Instantiating data base");
 
     if ((dbType == AMSDBType::AMS_CSV || dbType == AMSDBType::AMS_HDF5) &&
@@ -1815,7 +1814,6 @@ public:
       default:
         return nullptr;
     }
-#endif
     return nullptr;
   }
 
