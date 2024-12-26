@@ -8,23 +8,12 @@
 #include <cstring>
 #include <limits>
 #include <ml/uq.hpp>
-#include <umpire/Umpire.hpp>
-#include <umpire/strategy/QuickPool.hpp>
 #include <wf/basedb.hpp>
 #include <wf/resource_manager.hpp>
 
+#include "../utils.hpp"
 #include "AMS.h"
 #include "wf/debug.h"
-
-#include "../utils.hpp"
-
-void createUmpirePool(std::string parent_name, std::string pool_name)
-{
-  auto &rm = umpire::ResourceManager::getInstance();
-  auto alloc_resource = rm.makeAllocator<umpire::strategy::QuickPool, true>(
-      pool_name, rm.getAllocator(parent_name));
-}
-
 
 AMSDType getDataType(char *d_type)
 {
@@ -73,8 +62,6 @@ struct Problem {
                int iterations,
                int num_elements)
   {
-    auto &rm = umpire::ResourceManager::getInstance();
-
     for (int i = 0; i < iterations; i++) {
       int elements = num_elements;  // * ((DType)(rand()) / RAND_MAX) + 1;
       std::vector<const DType *> inputs;
@@ -156,8 +143,6 @@ int main(int argc, char **argv)
   AMSResourceType resource = AMSResourceType::AMS_HOST;
   srand(time(NULL));
 
-  createUmpirePool("HOST", "TEST_HOST");
-  AMSSetAllocator(AMSResourceType::AMS_HOST, "TEST_HOST");
 
   AMSCAbstrModel ams_model = AMSRegisterAbstractModel("rmq_db_no_model",
                                                       AMSUQPolicy::AMS_RANDOM,

@@ -8,8 +8,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
-#include <umpire/Umpire.hpp>
-#include <umpire/strategy/QuickPool.hpp>
 #include <wf/basedb.hpp>
 #include <wf/resource_manager.hpp>
 
@@ -18,14 +16,6 @@
 #include "wf/debug.h"
 
 using namespace ams;
-
-void createUmpirePool(std::string parent_name, std::string pool_name)
-{
-  auto &rm = umpire::ResourceManager::getInstance();
-  auto alloc_resource = rm.makeAllocator<umpire::strategy::QuickPool, true>(
-      pool_name, rm.getAllocator(parent_name));
-}
-
 
 AMSDType getDataType(char *d_type)
 {
@@ -75,8 +65,6 @@ struct Problem {
                int iterations,
                int num_elements)
   {
-    auto &rm = umpire::ResourceManager::getInstance();
-
     for (int i = 0; i < iterations; i++) {
       int elements = num_elements;  // * ((DType)(rand()) / RAND_MAX) + 1;
       SmallVector<AMSTensor> input_tensors;
@@ -183,9 +171,6 @@ int main(int argc, char **argv)
           uq_policy == AMSUQPolicy::AMS_DELTAUQ_MEAN ||
           uq_policy == AMSUQPolicy::AMS_RANDOM) &&
          "Test only supports duq models");
-
-  createUmpirePool("HOST", "TEST_HOST");
-  AMSSetAllocator(AMSResourceType::AMS_HOST, "TEST_HOST");
 
   AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
       "test", uq_policy, threshold, model_path, "test");
