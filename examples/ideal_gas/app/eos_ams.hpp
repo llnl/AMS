@@ -11,49 +11,31 @@
 #include <stdexcept>
 
 #include "AMS.h"
-#include "eos.hpp"
+#include "eos_idealgas.hpp"
 
 template <typename FPType>
-class AMSEOS : public EOS<FPType>
+class AMSEOS : public IdealGas<FPType>
 {
-  AMSExecutor wf_;
-  EOS<FPType> *model_ = nullptr;
+  ams::AMSExecutor wf_;
+  ams::AMSResourceType res_;
 
 public:
-  AMSEOS(EOS<FPType> *model,
-         const AMSDBType db_type,
-         const AMSDType dtype,
-         const AMSExecPolicy exec_policy,
-         const AMSResourceType res_type,
-         const AMSUQPolicy uq_policy,
-         const int k_nearest,
+  AMSEOS(const ams::AMSDBType db_type,
+         const ams::AMSResourceType resource,
+         const ams::AMSExecPolicy exec_policy,
+         const ams::AMSUQPolicy uq_policy,
          const int mpi_task,
          const int mpi_nproc,
          const double threshold,
-         const char *surrogate_path,
-         const char *uq_path);
+         const char *surrogate_path);
 
-  virtual ~AMSEOS() { delete model_; }
-
-  void Eval(const int length,
-            const FPType *density,
-            const FPType *energy,
-            FPType *pressure,
-            FPType *soundspeed2,
-            FPType *bulkmod,
-            FPType *temperature) const override;
-
-  void Eval_with_filter(const int length,
-                        const FPType *density,
-                        const FPType *energy,
-                        const bool *filter,
-                        FPType *pressure,
-                        FPType *soundspeed2,
-                        FPType *bulkmod,
-                        FPType *temperature) const override
-  {
-    throw std::runtime_error("AMSEOS: Eval_with_filter is not implemented");
-  }
+  virtual void Eval(const int length,
+                    const FPType *density,
+                    const FPType *energy,
+                    FPType *pressure,
+                    FPType *soundspeed2,
+                    FPType *bulkmod,
+                    FPType *temperature) const override;
 };
 
 #endif  // _AMS_EOS_HPP_
