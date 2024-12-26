@@ -41,7 +41,7 @@ add_custom_target(generate_cpu_models ALL
     COMMENT "Generate cpu models before ctests..."
 )
 
-if (ENABLE_CUDA)
+if (WITH_CUDA)
 set(GENERATED_GPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/double_gpu_duq_max.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/double_gpu_duq_mean.pt  

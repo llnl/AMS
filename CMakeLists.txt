@@ -37,7 +37,6 @@ option(WITH_EXAMPLES       "Build examples" OFF)
 option(WITH_MPI            "Option to enable MPI" OFF)
 option(WITH_CALIPER        "Use Caliper for Profiling" OFF)
 option(WITH_TORCH          "Use C/C++ Torch interface for Surrogate Model Inference" OFF)
-option(WITH_TORCH_DEBUG    "Compute RMSE of Surrogate Model and Physics Module" OFF)
 option(WITH_TESTS          "Compile tests" OFF)
 option(WITH_HDF5           "Use HDF5 as a database back end" OFF)
 option(WITH_RMQ            "Use RabbitMQ as a database back end (require a reachable and running RabbitMQ server service)" OFF)
@@ -47,71 +46,51 @@ option(WITH_WORKFLOW       "Install python drivers used by the outer workflow" O
 option(WITH_AMS_LIB        "Install C++ library to support scientific applications" ON)
 option(BUILD_SHARED_LIBS   "Build using shared libraries" ON)
 
-if (WITH_MPI)
-  #  SET(CMAKE_CXX_COMPILER "${MPI_CXX_COMPILER}" CACHE FILEPATH "CXX compiler overridden with MPI C++ wrapper")
-  #SET(CMAKE_C_COMPILER "${MPI_C_COMPILER}" CACHE FILEPATH "CXX compiler overridden with MPI C++ wrapper")
+# ------------------------------------------------------------------------------
+find_package(nlohmann_json REQUIRED)
+list(APPEND AMS_APP_LIBRARIES nlohmann_json::nlohmann_json)
 
+# ------------------------------------------------------------------------------
+find_package(Threads REQUIRED)
+
+# ------------------------------------------------------------------------------
+
+if (WITH_MPI)
   find_package(MPI REQUIRED)
   message(STATUS "MPICC:  ${MPI_C_COMPILER}")
   message(STATUS "MPICXX: ${MPI_CXX_COMPILER}")
-  list(APPEND AMS_APP_LIBRARIES MPI::MPI_CXX)
   message(STATUS "MPI Library used: " MPI::MPI_CXX)
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_MPI__")
 endif()
 
 # ------------------------------------------------------------------------------
 if (WITH_CUDA)
-  if (NOT DEFINED AMS_CUDA_ARCH)
-    message(WARNING "CUDA ARCH IS NOT DEFINED, USING 70")
-    set(AMS_CUDA_ARCH 70)
-  endif()
-
-  if (BUILD_SHARED_LIBS)
-    set(CUDA_RUNTIME_LIBRARY "Shared")
-  else()
-    set(CUDA_RUNTIME_LIBRARY "Static")
-  endif()
-
-  # we need to enable nvcc
-  enable_language(CUDA)
-  # set(CMAKE_CUDA_STANDARD 14)
-  # Turn off message of mfem
-  set(ENABLE_CUDA True)
-  list(APPEND AMS_APP_LIBRARIES ${CUDA_LIBRARIES} cuda)
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_CUDA__")
-  set(THRUST_IGNORE_CUB_VERSION_CHECK True)
+  find_package(CUDAToolkit)
 endif()
+
 
 # ------------------------------------------------------------------------------
 if (WITH_CALIPER)
   find_package(caliper REQUIRED)
-  list(APPEND AMS_APP_INCLUDES ${caliper_INCLUDE_DIR})
-  list(APPEND AMS_APP_LIBRARIES caliper)
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_CALIPER__")
 endif()
 
 if (WITH_AMS_DEBUG)
   list(APPEND AMS_APP_DEFINES "-DLIBAMS_VERBOSE")
 endif()
 
-# ------------------------------------------------------------------------------
-list(APPEND AMS_APP_DEFINES "-D__ENABLE_DB__")
-
 if (WITH_HDF5)
+  message(WARNING "WARNING")
+  set(HDF5_ROOT ${AMS_HDF5_DIR})
   if (HDF5_USE_STATIC_LIBRARIES)
-  find_package(HDF5 NAMES hdf5 COMPONENTS C static NO_DEFAULT_PATH PATHS ${AMS_HDF5_DIR} ${AMS_HDF5_DIR}/share/cmake)
-  list(APPEND AMS_APP_LIBRARIES ${HDF5_C_STATIC_LIBRARY})
-  message(STATUS "HDF5 Static Library : ${HDF5_C_STATIC_LIBRARY}")
-  set(AMS_HDF5_LIB_TYPE "static")
+  find_package(HDF5 COMPONENTS C static NO_DEFAULT_PATH PATHS ${AMS_HDF5_DIR} ${AMS_HDF5_DIR}/share/cmake)
+  set(AMS_HDF5_TARGET hdf5-static)
+  message(STATUS "HDF5 uses Static Library : ${AMS_HDF5_TARGET}")
 else()
-  find_package(HDF5 NAMES hdf5 COMPONENTS C shared NO_DEFAULT_PATH PATHS ${AMS_HDF5_DIR} ${AMS_HDF5_DIR}/share/cmake)
-  list(APPEND AMS_APP_LIBRARIES ${HDF5_C_SHARED_LIBRARY})
-  message(STATUS "HDF5 Shared Library : ${HDF5_C_SHARED_LIBRARY}")
-  set(AMS_HDF5_LIB_TYPE "shared")
+  find_package(HDF5 COMPONENTS C shared NO_DEFAULT_PATH PATHS ${AMS_HDF5_DIR} ${AMS_HDF5_DIR}/share/cmake)
+  set(AMS_HDF5_TARGET hdf5-shared)
+  message(STATUS "HDF5 uses Shared Library : ${AMS_HDF5_TARGET}")
 endif()
-  list(APPEND AMS_APP_INCLUDES ${HDF5_INCLUDE_DIR})
   list(APPEND AMS_APP_DEFINES "-D__ENABLE_HDF5__")
-  message(STATUS "HDF5 Include directories: ${HDF5_INCLUDE_DIR}")
+
 endif() # WITH_HDF5
 
 if (WITH_RMQ)
@@ -144,23 +123,6 @@ if (WITH_RMQ)
   list(APPEND AMS_APP_LIBRARIES amqpcpp event_pthreads event)
 endif() # WITH_RMQ
 
-if(NOT DEFINED UMPIRE_DIR)
-  message(FATAL_ERROR "Missing required 'UMPIRE_DIR' variable pointing to an installed Umpire ${UMPIRE_DIR}")
-endif()
-
-find_package(UMPIRE REQUIRED
-             NO_DEFAULT_PATH
-             PATHS ${UMPIRE_DIR}/share/umpire/cmake ${UMPIRE_DIR}/lib/cmake/umpire)
-list(APPEND AMS_APP_LIBRARIES umpire)
-list(APPEND AMS_APP_INCLUDES ${UMPIRE_INCLUDE_DIR})
-
-# ------------------------------------------------------------------------------
-find_package(nlohmann_json REQUIRED)
-list(APPEND AMS_APP_LIBRARIES nlohmann_json::nlohmann_json)
-
-# ------------------------------------------------------------------------------
-find_package(Threads REQUIRED)
-
 # ------------------------------------------------------------------------------
 if (WITH_TORCH)
   find_package(Torch REQUIRED)
@@ -169,13 +131,6 @@ if (WITH_TORCH)
   set(CMAKE_CUDA_FLAGS "")
   set(CMAKE_CUDA_ARCHITECTURES ON)
 
-  list(APPEND AMS_APP_INCLUDES "${TORCH_INCLUDE_DIRS}")
-  list(APPEND AMS_APP_LIBRARIES "${TORCH_LIBRARIES}")
-
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_TORCH__")
-  set(BLA_VENDER OpenBLAS)
-  find_package(BLAS REQUIRED)
-  list(APPEND AMS_APP_LIBRARIES "${BLAS_LIBRARIES}")
 endif()
 
 # ------------------------------------------------------------------------------
@@ -199,6 +154,12 @@ endif()
 
 
 add_subdirectory(src)
+
+if (WITH_TESTS)
+  include(CTest)
+  add_subdirectory(tests)
+endif()
+
 
 # ------------------------------------------------------------------------------
 if (WITH_AMS_LIB)
@@ -244,21 +205,12 @@ if (WITH_EXAMPLES)
     list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_CALIPER__")
   endif()
 
-  if (WITH_TORCH)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_TORCH__")
-  endif()
-
   if (WITH_PERFFLOWASPECT)
     list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_PERFFLOWASPECT__")
   endif()
 
   add_subdirectory(examples)
 endif()
-endif()
-
-if (WITH_TESTS)
-  include(CTest)
-  add_subdirectory(tests)
 endif()
 
 # ------------------------------------------------------------------------------
