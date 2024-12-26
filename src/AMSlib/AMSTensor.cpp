@@ -47,7 +47,6 @@ AMSTensor::AMSTensor(uint8_t* data,
       _location(location),
       _owned(!view)
 {
-#warning add a check to verify that user provided data are contiguous
   _bytes = _elements * _element_size;
   _elements = computeNumElements(shapes);
   if (!_data) {

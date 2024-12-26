@@ -708,28 +708,14 @@ void AMSConfigureFSDatabase(AMSDBType db_type, const char *db_path)
 
 #ifdef __ENABLE_MPI__
 AMSExecutor AMSCreateDistributedExecutor(AMSCAbstrModel model,
-                                         AMSDType data_type,
-                                         AMSResourceType resource_type,
-                                         AMSPhysicFn call_back,
                                          MPI_Comm Comm,
                                          int process_id,
                                          int world_size)
-{
-  if (data_type == AMSDType::AMS_DOUBLE) {
-    auto *dWF = _AMSCreateExecutor<double>(
-        model, data_type, resource_type, call_back, process_id, world_size);
-    dWF->set_communicator(Comm);
-    return _AMSRegisterExecutor(data_type, dWF);
 
-  } else if (data_type == AMSDType::AMS_SINGLE) {
-    auto *sWF = _AMSCreateExecutor<float>(
-        model, data_type, resource_type, call_back, process_id, world_size);
-    sWF->set_communicator(Comm);
-    return _AMSRegisterExecutor(data_type, sWF);
-  } else {
-    throw std::invalid_argument("Data type is not supported by AMSLib!");
-    return static_cast<AMSExecutor>(-1);
-  }
+{
+  auto *dWF = _AMSCreateExecutor(model, process_id, world_size);
+  dWF->set_communicator(Comm);
+  return _AMSRegisterExecutor(dWF);
 }
 #endif
 }  // namespace ams
