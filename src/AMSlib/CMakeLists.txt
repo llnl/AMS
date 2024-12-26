@@ -55,13 +55,25 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMSTensor.hpp" "${PROJECT_B
 # ------------------------------------------------------------------------------
 # installation paths
 
-#install(TARGETS AMS
-#        EXPORT AMSTargets
-#        DESTINATION lib)
+include(GNUInstallDirs)
+
+# Install the library
+install(TARGETS AMS
+    EXPORT AMSTargets
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+)
+
+
+install(EXPORT AMSTargets
+    NAMESPACE AMS::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/AMS"
+)
+
 #
-#install(EXPORT AMSTargets
-#  FILE AMS.cmake
-#  DESTINATION lib/cmake/AMS)
-#
-#install(FILES ${PROJECT_BINARY_DIR}/include/AMS.h DESTINATION include)
+install(FILES ${PROJECT_BINARY_DIR}/include/AMS.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES ${PROJECT_BINARY_DIR}/include/AMSTensor.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES ${PROJECT_BINARY_DIR}/include/AMSTypes.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES ${PROJECT_BINARY_DIR}/include/ArrayRef.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES ${PROJECT_BINARY_DIR}/include/SmallVector.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 #install(FILES ${PROJECT_BINARY_DIR}/include/AMS-config.h DESTINATION include)

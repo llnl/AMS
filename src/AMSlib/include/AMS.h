@@ -8,7 +8,6 @@
 
 #include <cstdint>
 
-//#include "AMS-config.h"
 #include "AMSTensor.hpp"
 #include "AMSTypes.hpp"
 

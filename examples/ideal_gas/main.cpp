@@ -5,9 +5,6 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
-#ifdef __AMS_ENABLE_ADIAK__
-#include <adiak.hpp>
-#endif
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -31,7 +28,8 @@
 // this macro completely bypasses all AMS functionality
 // this allows us to check how easy is it to test ams
 
-#include "AMS.h"
+#include <AMSTypes.hpp>
+using namespace ams;
 
 void printMemory(std::unordered_set<std::string> &allocators)
 {
@@ -56,68 +54,21 @@ void createUmpirePool(std::string parent_name, std::string pool_name)
       pool_name, rm.getAllocator(parent_name));
 }
 
-std::unordered_set<std::string> createMemoryAllocators(
-    std::string pool,
-    std::string &physics_host_alloc,
-    std::string &physics_device_alloc,
-    std::string &physics_pinned_alloc,
-    std::string &ams_host_alloc,
-    std::string &ams_device_alloc,
-    std::string &ams_pinned_alloc)
+void createMemoryAllocators(std::string &physics_host_alloc,
+                            std::string &physics_device_alloc,
+                            std::string &physics_pinned_alloc)
 {
   std::unordered_set<std::string> allocator_names;
   if (pool == "default") {
-    physics_host_alloc = ams_host_alloc = "HOST";
-    allocator_names.insert(ams_host_alloc);
+    physics_host_alloc = "HOST";
 #ifdef __ENABLE_CUDA__
-    physics_device_alloc = ams_device_alloc = "DEVICE";
-    allocator_names.insert(ams_device_alloc);
-    physics_pinned_alloc = ams_pinned_alloc = "PINNED";
-    allocator_names.insert(ams_pinned_alloc);
-#endif
-  } else if (pool == "split") {
-    physics_host_alloc = "phys-host";
-    createUmpirePool("HOST", "phys-host");
-    allocator_names.insert(physics_host_alloc);
-
-    ams_host_alloc = "ams-host";
-    createUmpirePool("HOST", ams_host_alloc);
-    allocator_names.insert(ams_host_alloc);
-
-#ifdef __ENABLE_CUDA__
-    physics_device_alloc = "phys-device";
-    createUmpirePool("DEVICE", physics_device_alloc);
-    allocator_names.insert(physics_device_alloc);
-
-    physics_pinned_alloc = "phys-pinned";
-    createUmpirePool("PINNED", physics_pinned_alloc);
-    allocator_names.insert(physics_pinned_alloc);
-
-    ams_device_alloc = "ams-device";
-    createUmpirePool("DEVICE", ams_device_alloc);
-    allocator_names.insert(ams_device_alloc);
-
-    ams_pinned_alloc = "ams-pinned";
-    createUmpirePool("PINNED", ams_pinned_alloc);
-    allocator_names.insert(ams_pinned_alloc);
-#endif
-  } else if (pool == "same") {
-    physics_host_alloc = ams_host_alloc = "common-host";
-    createUmpirePool("HOST", "common-host");
-    allocator_names.insert(physics_host_alloc);
-#ifdef __ENABLE_CUDA__
-    physics_device_alloc = ams_device_alloc = "common-device";
-    createUmpirePool("DEVICE", "common-device");
-    allocator_names.insert(ams_device_alloc);
-    physics_pinned_alloc = ams_pinned_alloc = "common-pinned";
-    createUmpirePool("PINNED", "common-pinned");
-    allocator_names.insert(ams_pinned_alloc);
+    physics_device_alloc = "DEVICE";
+    physics_pinned_alloc = "PINNED";
 #endif
   } else {
     std::cout << "Stategy is " << pool << "\n";
     throw std::runtime_error("Pool strategy does not exist\n");
   }
-  return std::move(allocator_names);
 }
 
 int computeNumElements(int globalNumElements, int id, int numRanks)
@@ -148,7 +99,6 @@ template <typename TypeValue>
 int run(const char *device_name,
         const char *db_type,
         const char *uq_policy_opt,
-        AMSDType precision,
         int seed,
         int rId,
         int imbalance,
@@ -156,7 +106,6 @@ int run(const char *device_name,
         double avg,
         double stdDev,
         double threshold,
-        const char *pool,
         int num_mats,
         int num_elems,
         int num_qpts,
@@ -165,11 +114,8 @@ int run(const char *device_name,
         const char *eos_name,
         int stop_cycle,
         bool pack_sparse_mats,
-        const char *hdcache_path,
         const char *model_path,
-        const char *db_config,
-        bool lbalance,
-        int k_nearest)
+        const char *db_config)
 {
   // -------------------------------------------------------------------------
   // setup
@@ -180,9 +126,7 @@ int run(const char *device_name,
 
   const bool use_device = std::strcmp(device_name, "cpu") != 0;
   AMSDBType dbType = AMSDBType::AMS_NONE;
-  if (std::strcmp(db_type, "csv") == 0) {
-    dbType = AMSDBType::AMS_CSV;
-  } else if (std::strcmp(db_type, "hdf5") == 0) {
+  if (std::strcmp(db_type, "hdf5") == 0) {
     dbType = AMSDBType::AMS_HDF5;
   } else if (std::strcmp(db_type, "rmq") == 0) {
     dbType = AMSDBType::AMS_RMQ;
@@ -196,12 +140,7 @@ int run(const char *device_name,
   }
 
   AMSUQPolicy uq_policy;
-
-  if (strcmp(uq_policy_opt, "faiss-max") == 0)
-    uq_policy = AMSUQPolicy::AMS_FAISS_MAX;
-  else if (strcmp(uq_policy_opt, "faiss-mean") == 0)
-    uq_policy = AMSUQPolicy::AMS_FAISS_MEAN;
-  else if (strcmp(uq_policy_opt, "deltauq-max") == 0)
+  if (strcmp(uq_policy_opt, "deltauq-max") == 0)
     uq_policy = AMSUQPolicy::AMS_DELTAUQ_MAX;
   else if (strcmp(uq_policy_opt, "deltauq-mean") == 0)
     uq_policy = AMSUQPolicy::AMS_DELTAUQ_MEAN;
@@ -246,17 +185,9 @@ int run(const char *device_name,
   std::string physics_device_alloc;
   std::string physics_pinned_alloc;
 
-  std::string ams_host_alloc;
-  std::string ams_device_alloc;
-  std::string ams_pinned_alloc;
-
-  auto allocator_names = createMemoryAllocators(std::string(pool),
-                                                physics_host_alloc,
-                                                physics_device_alloc,
-                                                physics_pinned_alloc,
-                                                ams_host_alloc,
-                                                ams_device_alloc,
-                                                ams_pinned_alloc);
+  createMemoryAllocators(physics_host_alloc,
+                         physics_device_alloc,
+                         physics_pinned_alloc);
 
 
   mfem::MemoryManager::SetUmpireHostAllocatorName(physics_host_alloc.c_str());
@@ -265,17 +196,6 @@ int run(const char *device_name,
         physics_device_alloc.c_str());
   }
 
-
-  // When we are not allocating from parent/root umpire allocator
-  // we need to inform AMS about the pool allocators.
-  if (strcmp(pool, "default") != 0) {
-    AMSSetAllocator(AMSResourceType::AMS_HOST, ams_host_alloc.c_str());
-
-    if (use_device) {
-      AMSSetAllocator(AMSResourceType::AMS_DEVICE, ams_device_alloc.c_str());
-      AMSSetAllocator(AMSResourceType::AMS_PINNED, ams_pinned_alloc.c_str());
-    }
-  }
 
   mfem::Device::SetMemoryTypes(mfem::MemoryType::HOST_UMPIRE,
                                mfem::MemoryType::DEVICE_UMPIRE);
@@ -325,29 +245,17 @@ int run(const char *device_name,
   // ---------------------------------------------------------------------
   // setup AMS options
   // ---------------------------------------------------------------------
-#ifdef USE_AMS
-  constexpr bool use_ams = true;
-  const char *uq_path = nullptr;
+  constexpr bool use_ams = false;
   const char *surrogate_path = nullptr;
   const char *db_path = nullptr;
 
-#ifdef __ENABLE_FAISS__
-  uq_path = (strlen(hdcache_path) > 0) ? hdcache_path : nullptr;
-#endif
-
   std::cout << "surrogate Path is : " << model_path << "\n";
-#ifdef __ENABLE_TORCH__
   surrogate_path = (strlen(model_path) > 0) ? model_path : nullptr;
-#endif
 
   db_path = (strlen(db_config) > 0) ? db_config : nullptr;
 
-  AMSResourceType ams_device = AMSResourceType::AMS_HOST;
-  if (use_device) ams_device = AMSResourceType::AMS_DEVICE;
-  AMSExecPolicy ams_loadBalance = AMSExecPolicy::AMS_UBALANCED;
-  if (lbalance) ams_loadBalance = AMSExecPolicy::AMS_BALANCED;
-#else
-  constexpr bool use_ams = false;
+#ifdef USE_AMS
+  constexpr bool use_ams = true;
 #endif
 
   // ---------------------------------------------------------------------
@@ -358,26 +266,23 @@ int run(const char *device_name,
     EOS<TypeValue> *base;
     if (eos_name == std::string("ideal_gas")) {
       base = new IdealGas<TypeValue>(1.6, 1.4);
-    } else if (eos_name == std::string("constant_host")) {
-      base = new ConstantEOSOnHost<TypeValue>(physics_host_alloc.c_str(), 1.0);
     } else {
       std::cerr << "unknown eos `" << eos_name << "'" << std::endl;
       return 1;
     }
 #ifdef USE_AMS
     if (use_ams) {
-      eoses[mat_idx] = new AMSEOS<TypeValue>(base,
-                                             dbType,
-                                             precision,
-                                             ams_loadBalance,
-                                             ams_device,
-                                             uq_policy,
-                                             k_nearest,
-                                             rId,
-                                             wS,
-                                             threshold,
-                                             surrogate_path,
-                                             uq_path);
+      eoses[mat_idx] =
+          new AMSEOS<TypeValue>(dbType,
+                                use_device == true
+                                    ? ams::AMSResourceType::AMS_DEVICE
+                                    : ams::AMSResourceType::AMS_HOST,
+                                ams_loadBalance,
+                                uq_policy,
+                                rId,
+                                wS,
+                                threshold,
+                                surrogate_path);
 
     } else
 #endif
@@ -578,7 +483,6 @@ int run(const char *device_name,
     }
     CALIPER(CALI_MARK_END("Cycle");)
     MPI_CALL(MPI_Barrier(MPI_COMM_WORLD));
-    printMemory(allocator_names);
   }
 
   // TODO: Add smart-pointers
@@ -592,7 +496,6 @@ int run(const char *device_name,
   return 0;
 }
 
-PERFFASPECT()
 int main(int argc, char **argv)
 {
   // -------------------------------------------------------------------------
@@ -605,9 +508,9 @@ int main(int argc, char **argv)
   int rId = 0;
   // Level of Threading provided by MPI
   int provided = 0;
-  MPI_CALL(MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided));
-  MPI_CALL(MPI_Comm_size(MPI_COMM_WORLD, &wS));
-  MPI_CALL(MPI_Comm_rank(MPI_COMM_WORLD, &rId));
+  MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided);
+  MPI_Comm_size(MPI_COMM_WORLD, &wS);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rId);
   // FIXME: Create a logger class to write
   // depending on rank id and severity.
   if (rId != 0) {
@@ -617,15 +520,12 @@ int main(int argc, char **argv)
   const char *device_name = "cpu";
   const char *eos_name = "ideal_gas";
   const char *model_path = "";
-  const char *hdcache_path = "";
   const char *db_config = "";
   const char *db_type = "";
 
   const char *precision_opt = "double";
-  AMSDType precision = AMSDType::AMS_DOUBLE;
 
   const char *uq_policy_opt = "";
-  int k_nearest = 5;
 
   int seed = 0;
   double empty_element_ratio = -1;
@@ -651,30 +551,6 @@ int main(int argc, char **argv)
 
   bool verbose = false;
 
-#ifdef __AMS_ENABLE_ADIAK__
-  // add adiak init here
-  adiak::init(NULL);
-
-  // replace with adiak::collect_all(); once adiak v0.4.0
-  adiak::uid();
-  adiak::launchdate();
-  adiak::launchday();
-  adiak::executable();
-  adiak::executablepath();
-  adiak::workdir();
-  adiak::libraries();
-  adiak::cmdline();
-  adiak::hostname();
-  adiak::clustername();
-  adiak::walltime();
-  adiak::systime();
-  adiak::cputime();
-  adiak::jobsize();
-  adiak::hostlist();
-  adiak::numhosts();
-  adiak::value("compiler", std::string("@RAJAPERF_COMPILER@"));
-#endif
-
   // -------------------------------------------------------------------------
   // setup command line parser
   // -------------------------------------------------------------------------
@@ -689,7 +565,6 @@ int main(int argc, char **argv)
 
   // surrogate model
   args.AddOption(&model_path, "-S", "--surrogate", "Path to surrogate model");
-  args.AddOption(&hdcache_path, "-H", "--hdcache", "Path to hdcache index");
 
   // eos model and length of simulation
   args.AddOption(&eos_name, "-z", "--eos", "EOS model type");
@@ -735,13 +610,6 @@ int main(int argc, char **argv)
                  "--stdev",
                  "Standard deviation of random number generator of imbalance ");
 
-  args.AddOption(&lbalance,
-                 "-lb",
-                 "--with-load-balance",
-                 "-nlb",
-                 "--without-load-balance",
-                 "Enable Load balance module in AMS");
-
   args.AddOption(&threshold,
                  "-t",
                  "--threshold",
@@ -759,39 +627,19 @@ int main(int argc, char **argv)
                  "-dt",
                  "--dbtype",
                  "Configuration option of the different DB types:\n"
-                 "\t 'csv' Use csv as back end\n"
                  "\t 'hdf5': use hdf5 as a back end\n"
                  "\t 'rmq': use RabbitMQ as a back end\n");
-
-  args.AddOption(&k_nearest,
-                 "-knn",
-                 "--k-nearest-neighbors",
-                 "Number of closest neightbors we should look at");
 
   args.AddOption(&uq_policy_opt,
                  "-uq",
                  "--uqtype",
                  "Types of UQ to select from: \n"
-                 "\t 'faiss-mean' Uncertainty is computed in comparison "
-                 "against the "
-                 "mean distance of k-nearest neighbors\n"
-                 "\t 'faiss-max': Uncertainty is computed in comparison with "
-                 "the "
-                 "k'st cluster \n"
                  "\t 'deltauq-mean': Uncertainty through DUQ using mean\n"
                  "\t 'deltauq-max': Uncertainty through DUQ using max\n"
                  "\t 'random': Uncertainty throug a random model\n");
 
   args.AddOption(
       &verbose, "-v", "--verbose", "-qu", "--quiet", "Print extra stuff");
-
-  args.AddOption(&pool,
-                 "-ptype",
-                 "--pool-type",
-                 "How to assign memory pools to AMSlib:\n"
-                 "\t 'default' Use the default Umpire pool\n"
-                 "\t 'split' provide a separate pool to AMSlib\n"
-                 "\t 'same': assign the same with physics to AMS\n");
 
   // -------------------------------------------------------------------------
   // parse arguments
@@ -842,21 +690,11 @@ int main(int argc, char **argv)
   std::cout << "Total computed elements across all ranks: " << wS * num_elems
             << "(Weak Scaling)\n";
 
-  if (strcmp(precision_opt, "single") == 0)
-    precision = AMSDType::AMS_SINGLE;
-  else if (strcmp(precision_opt, "double") == 0)
-    precision = AMSDType::AMS_DOUBLE;
-  else {
-    std::cerr << "Invalid precision " << precision_opt << "\n";
-    return -1;
-  }
-
   int ret = 0;
-  if (precision == AMSDType::AMS_SINGLE)
+  if (strcmp(precision_opt, "single") == 0)
     ret = run<float>(device_name,
                      db_type,
                      uq_policy_opt,
-                     precision,
                      seed,
                      rId,
                      imbalance,
@@ -864,7 +702,6 @@ int main(int argc, char **argv)
                      avg,
                      stdDev,
                      threshold,
-                     pool,
                      num_mats,
                      num_elems,
                      num_qpts,
@@ -873,16 +710,12 @@ int main(int argc, char **argv)
                      eos_name,
                      stop_cycle,
                      pack_sparse_mats,
-                     hdcache_path,
                      model_path,
-                     db_config,
-                     lbalance,
-                     k_nearest);
-  else if (precision == AMSDType::AMS_DOUBLE)
+                     db_config);
+  else if (strcmp(precision_opt, "double") == 0)
     ret = run<double>(device_name,
                       db_type,
                       uq_policy_opt,
-                      precision,
                       seed,
                       rId,
                       imbalance,
@@ -890,7 +723,6 @@ int main(int argc, char **argv)
                       avg,
                       stdDev,
                       threshold,
-                      pool,
                       num_mats,
                       num_elems,
                       num_qpts,
@@ -899,21 +731,12 @@ int main(int argc, char **argv)
                       eos_name,
                       stop_cycle,
                       pack_sparse_mats,
-                      hdcache_path,
                       model_path,
-                      db_config,
-                      lbalance,
-                      k_nearest);
+                      db_config);
   else {
     std::cerr << "Invalid precision " << precision_opt << "\n";
     return -1;
   }
-
-  // ---------------------------------------------------------------------------
-#ifdef __AMS_ENABLE_ADIAK__
-  // adiak finalize
-  adiak::fini();
-#endif
 
   MPI_CALL(MPI_Finalize());
   AMSFinalize();
