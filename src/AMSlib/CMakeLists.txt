@@ -26,29 +26,22 @@ add_library(AMS ${AMS_LIB_SRC})
 # setup the lib first
 message(STATUS "ALL INCLUDES ARE ${AMS_APP_INCLUDES}")
 target_compile_definitions(AMS PRIVATE ${AMS_APP_DEFINES})
-target_include_directories(AMS PRIVATE ${AMS_APP_INCLUDES})
 target_include_directories(AMS PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_directories(AMS PUBLIC ${AMS_APP_LIB_DIRS})
-target_link_libraries(AMS PRIVATE ${AMS_APP_LIBRARIES} stdc++fs)
 
-#-------------------------------------------------------------------------------
-# create the configuration header file with the respective information
-#-------------------------------------------------------------------------------
-set(CALIPER_DEFINES "// #define __AMS_ENABLE_CALIPER__")
-set(MPI_DEFINES "// #define __AMS_ENABLE_MPI__")
-set(PERFF_DEFINES "// #define __AMS_ENABLE_PERFFLOWASPECT__")
-
-if (${WITH_CALIPER})
-  set(CALIPER_DEFINES "#define __AMS_ENABLE_CALIPER__")
+if (WITH_CUDA)
+  target_link_libraries(AMS PRIVATE CUDA::cudart)
 endif()
 
-if (${WITH_MPI})
-  set(MPI_DEFINES "#define __AMS_ENABLE_MPI__")
+if (WITH_HDF5)
+  target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
 endif()
 
-if (${WITH_PERFFLOWASPECT})
-  set(PERFF_DEFINES "#define __AMS_ENABLE_PERFFLOWASPECT__")
+if (WITH_MPI)
+  target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
 endif()
+
+target_link_libraries(AMS PRIVATE stdc++fs torch)
+
 
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS-config.h.in" "${PROJECT_BINARY_DIR}/include/AMS-config.h")
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS.h" "${PROJECT_BINARY_DIR}/include/AMS.h" COPYONLY)

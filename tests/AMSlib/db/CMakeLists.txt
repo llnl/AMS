@@ -4,14 +4,18 @@ function(BUILD_UNIT_TEST exe source)
   target_include_directories(${exe} PRIVATE ${caliper_INCLUDE_DIR} ${MPI_INCLUDE_PATH})
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)
   target_include_directories(${exe} PRIVATE ${CMAKE_BINARY_DIR}/include/)
-  target_link_directories(${exe} PRIVATE ${AMS_APP_LIB_DIRS})
-  target_link_libraries(${exe} PRIVATE ${AMS_APP_LIBRARIES} stdc++fs AMS)
+  target_link_libraries(${exe} PRIVATE stdc++fs AMS torch)
+
+  if (WITH_HDF5)
+    target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
+  endif()
 
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
 endfunction()
 
 function(ADD_HDF5_UNIT_TEST name exec)
   add_test(NAME ${name} COMMAND ${exec} ${ARGN})
+
   set_tests_properties(${name} PROPERTIES LABELS HDF5_UNIT_TEST)
 endfunction()
 
