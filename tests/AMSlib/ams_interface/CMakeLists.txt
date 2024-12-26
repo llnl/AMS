@@ -166,16 +166,6 @@ function(BUILD_TEST exe source)
   target_include_directories(${exe} PRIVATE "${PROJECT_SOURCE_DIR}/src/AMSlib/" "${PROJECT_SOURCE_DIR}/src/AMSlib/include" ${caliper_INCLUDE_DIR} ${MPI_INCLUDE_PATH})
   target_link_directories(${exe} PRIVATE ${AMS_APP_LIB_DIRS})
   target_link_libraries(${exe} PRIVATE AMS ${AMS_APP_LIBRARIES})
-  # This is "wrong" as we should not have a device code anymore. I keep it cause of
-  # weird umpire behavior
-  if(WITH_CUDA)
-    set_target_properties(${exe} PROPERTIES CUDA_ARCHITECTURES "${AMS_CUDA_ARCH}")
-    set_property(TARGET ${exe} PROPERTY CUDA_SEPARABLE_COMPILATION ON)
-    set_source_files_properties(${source} PROPERTIES LANGUAGE CUDA)
-
-    target_compile_definitions(${exe} PRIVATE "-D__ENABLE_CUDA__ -DLIBAMS_VERBOSE")
-  endif()
-
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
 endfunction()
 

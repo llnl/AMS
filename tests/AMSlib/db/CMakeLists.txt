@@ -8,14 +8,6 @@ function(BUILD_UNIT_TEST exe source)
   target_link_libraries(${exe} PRIVATE ${AMS_APP_LIBRARIES} stdc++fs AMS)
 
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
-
-  if(WITH_CUDA)
-    set_target_properties(${exe} PROPERTIES CUDA_ARCHITECTURES "${AMS_CUDA_ARCH}")
-    set_property(TARGET ${exe} PROPERTY CUDA_SEPARABLE_COMPILATION ON)
-    set_source_files_properties(${source} PROPERTIES LANGUAGE CUDA)
-
-    target_compile_definitions(${exe} PRIVATE "-D__ENABLE_CUDA__ -DLIBAMS_VERBOSE")
-  endif()
 endfunction()
 
 function(ADD_HDF5_UNIT_TEST name exec)
