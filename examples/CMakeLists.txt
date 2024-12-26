@@ -3,8 +3,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-add_subdirectory(ideal_gas)
-if (WITH_CUDA)
-add_subdirectory(bnm_opt)
-endif()
+#add_subdirectory(ideal_gas)
+#if (WITH_CUDA)
+#add_subdirectory(bnm_opt)
+#endif()
 
