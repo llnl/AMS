@@ -39,7 +39,6 @@ option(WITH_CALIPER        "Use Caliper for Profiling" OFF)
 option(WITH_TORCH          "Use C/C++ Torch interface for Surrogate Model Inference" OFF)
 option(WITH_TORCH_DEBUG    "Compute RMSE of Surrogate Model and Physics Module" OFF)
 option(WITH_TESTS          "Compile tests" OFF)
-option(WITH_REDIS          "Use REDIS as a database back end" OFF)
 option(WITH_HDF5           "Use HDF5 as a database back end" OFF)
 option(WITH_RMQ            "Use RabbitMQ as a database back end (require a reachable and running RabbitMQ server service)" OFF)
 option(WITH_AMS_DEBUG      "Enable verbose messages" OFF)
@@ -98,39 +97,6 @@ endif()
 
 # ------------------------------------------------------------------------------
 list(APPEND AMS_APP_DEFINES "-D__ENABLE_DB__")
-
-if (WITH_REDIS)
-  # Temprorary fix for:= the following error which happens when using Cuda 11.6 and Redis backend
-  # error: #error The version of CUB in your include path is not compatible with this release of Thrust.
-  if (WITH_CUDA)
-    add_compile_definitions(THRUST_IGNORE_CUB_VERSION_CHECK)
-  endif()
-  if (HIREDIS_DIR)
-    find_path(HIREDIS_HEADER NAMES hiredis HINTS ${HIREDIS_DIR} PATH_SUFFIXES include)
-    find_library(HIREDIS_LIB NAMES hiredis HINTS ${HIREDIS_DIR} PATH_SUFFIXES lib)
-  else()
-    find_package(hiredis REQUIRED)
-    find_path(HIREDIS_HEADER hiredis)
-    find_library(HIREDIS_LIB hiredis)
-  endif()
-  message(STATUS "Hiredis library is ${HIREDIS_LIB}")
-  message(STATUS "Hiredis headers are ${HIREDIS_HEADER}")
-  list(APPEND AMS_APP_INCLUDES ${HIREDIS_HEADER})
-  list(APPEND AMS_APP_LIBRARIES ${HIREDIS_LIB})
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_REDIS__")
-
-  if (REDIS_PLUS_PLUS_DIR)
-    find_path(REDIS_PLUS_PLUS_HEADER NAMES sw PATHS ${REDIS_PLUS_PLUS_DIR} PATH_SUFFIXES include)
-    find_library(REDIS_PLUS_PLUS_LIB NAMES redis++ PATHS ${REDIS_PLUS_PLUS_DIR} PATH_SUFFIXES lib)
-  else()
-    find_path(REDIS_PLUS_PLUS_HEADER sw)
-    find_library(REDIS_PLUS_PLUS_LIB redis++)
-  endif()
-  message(STATUS "Redis++ library is ${REDIS_PLUS_PLUS_LIB}")
-  list(APPEND AMS_APP_INCLUDES ${REDIS_PLUS_PLUS_HEADER})
-  list(APPEND AMS_APP_LIBRARIES ${REDIS_PLUS_PLUS_LIB})
-endif() # WITH_REDIS
-
 
 if (WITH_HDF5)
   if (HDF5_USE_STATIC_LIBRARIES)
@@ -256,10 +222,6 @@ if (WITH_EXAMPLES)
   list(APPEND AMS_EXAMPLE_INCLUDES "${MFEM_INCLUDE_DIRS}")
   list(APPEND AMS_EXAMPLE_LIBRARIES "${MFEM_LIBRARIES}")
   list(APPEND AMS_EXAMPLE_LIB_DIRS "${MFEM_LIB_DIR}")
-
-  if (WITH_REDIS)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_REDIS__")
-  endif()
 
   if (WITH_RMQ)
     list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_RMQ__")
