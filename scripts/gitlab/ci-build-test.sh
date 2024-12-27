@@ -1,4 +1,5 @@
 #!/bin/bash
+echo ${CI_PROJECT_DIR}
 
 source scripts/gitlab/setup-env.sh
 
@@ -16,17 +17,15 @@ cleanup() {
 }
 
 build_and_test() {
-  WITH_TORCH=${1}
-  WITH_FAISS=${2}
-  WITH_HDF5=${3}
-  WITH_MPI=${4}
+  WITH_HDF5=${1}
+  WITH_MPI=${2}
+  WITH_WORKFLOW=${3}
 
   echo "*******************************************************************************************"
   echo "Build configuration" \
-    "WITH_TORCH ${WITH_TORCH}" \
-    "WITH_FAISS ${WITH_FAISS}" \
     "WITH_HDF5 ${WITH_HDF5}" \
     "WITH_MPI ${WITH_MPI}" \
+    "WITH_MPI ${WITH_WORKFLOW}" \
     "WITH_CUDA ${WITH_CUDA}"
   echo "*******************************************************************************************"
 
@@ -45,7 +44,7 @@ build_and_test() {
     -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
     -DWITH_CALIPER=On \
     -DWITH_HDF5=${WITH_HDF5} \
-    -DWITH_EXAMPLES=On \
+    -DWITH_EXAMPLES=Off \
     -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
     -DCMAKE_INSTALL_PREFIX=./install \
     -DCMAKE_BUILD_TYPE=Release \
@@ -55,13 +54,10 @@ build_and_test() {
     -DMFEM_DIR=$AMS_MFEM_PATH \
     -DWITH_FAISS=${WITH_FAISS} \
     -DWITH_MPI=${WITH_MPI} \
-    -DWITH_TORCH=${WITH_TORCH} \
     -DWITH_TESTS=On \
     -DTorch_DIR=$AMS_TORCH_PATH \
-    -DFAISS_DIR=$AMS_FAISS_PATH \
     -DWITH_AMS_DEBUG=On \
-    -DWITH_WORKFLOW=On \
-    -DWITH_ADIAK=On \
+    -DWITH_WORKFLOW=${WITH_WORKFLOW} \
     ${CI_PROJECT_DIR} || { echo "CMake failed"; exit 1; }
 
   make -j || { echo "Building failed"; exit 1; }
@@ -74,10 +70,10 @@ build_and_test() {
   rm -rf /tmp/ams
 }
 
-# build_and_test WITH_TORCH WITH_FAISS WITH_HDF5 WITH_MPI
-build_and_test "On" "On" "On" "On"
-build_and_test "On" "On" "On" "Off"
-build_and_test "Off" "On" "On" "On"
-build_and_test "Off" "Off" "On" "On"
-build_and_test "Off" "Off" "Off" "On"
+# build_and_test WITH_HDF5 WITH_MPI
+build_and_test "On" "On" "Off"
+build_and_test "On" "Off" "Off"
+build_and_test "Off" "On" "Off"
+build_and_test "Off" "Off" "Off"
+build_and_test "Off" "Off" "On"
 

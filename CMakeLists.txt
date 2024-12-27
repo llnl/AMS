@@ -36,7 +36,6 @@ option(WITH_CUDA           "Option to enable CUDA" OFF)
 option(WITH_EXAMPLES       "Build examples" OFF)
 option(WITH_MPI            "Option to enable MPI" OFF)
 option(WITH_CALIPER        "Use Caliper for Profiling" OFF)
-option(WITH_TORCH          "Use C/C++ Torch interface for Surrogate Model Inference" OFF)
 option(WITH_TESTS          "Compile tests" OFF)
 option(WITH_HDF5           "Use HDF5 as a database back end" OFF)
 option(WITH_RMQ            "Use RabbitMQ as a database back end (require a reachable and running RabbitMQ server service)" OFF)
@@ -90,7 +89,6 @@ else()
   message(STATUS "HDF5 uses Shared Library : ${AMS_HDF5_TARGET}")
 endif()
   list(APPEND AMS_APP_DEFINES "-D__ENABLE_HDF5__")
-
 endif() # WITH_HDF5
 
 if (WITH_RMQ)
@@ -124,14 +122,12 @@ if (WITH_RMQ)
 endif() # WITH_RMQ
 
 # ------------------------------------------------------------------------------
-if (WITH_TORCH)
-  find_package(Torch REQUIRED)
-  # This is annoying, torch populates all my cuda flags
-  # and resets them
-  set(CMAKE_CUDA_FLAGS "")
-  set(CMAKE_CUDA_ARCHITECTURES ON)
+find_package(Torch REQUIRED)
+# This is annoying, torch populates all my cuda flags
+# and resets them
+set(CMAKE_CUDA_FLAGS "")
+set(CMAKE_CUDA_ARCHITECTURES ON)
 
-endif()
 
 # ------------------------------------------------------------------------------
 if (WITH_RZ)

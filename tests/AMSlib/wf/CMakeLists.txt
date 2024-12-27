@@ -22,15 +22,12 @@ function(BUILD_UNIT_TEST exe source)
   endif()
 endfunction()
 
-function(ADD_HDF5_UNIT_TEST name exec)
-  add_test(NAME ${name} COMMAND ${exec} ${ARGN})
-  set_tests_properties(${name} PROPERTIES LABELS WORKFLOW_UNIT_TEST)
-endfunction()
-
 BUILD_UNIT_TEST(domain_to_application domain_to_application.cpp)
 BUILD_UNIT_TEST(subselect_tensors subselect_tensors.cpp)
 BUILD_UNIT_TEST(scatter_physics scatter_physics.cpp)
+if (WITH_HDF5)
 BUILD_UNIT_TEST(evaluate_in_and_outs evaluate_in_and_outs.cpp)
+endif()
 
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::DomainToApplication::FLOAT::FLOAT domain_to_application float float cpu)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::DomainToApplication::DOUBLE::FLOAT domain_to_application double float cpu)
@@ -43,6 +40,7 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::SubSelect::Float subselect_tensors float 
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::ScatterPhysics::Double scatter_physics double cpu)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::HOST::ScatterPhysics::Float scatter_physics float cpu)
 
+if (WITH_HDF5)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLHost::Evaluate::InAndOuts::PhFloat::MLFloat::AllPhysics evaluate_in_and_outs float cpu ${TORCH_MODEL_DIR}/single_cpu_duq_max.pt "duq_max" 0.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "0")
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLHost::Evaluate::InInoutsAndOuts::PhFloat::MLFloat::AllPhysics evaluate_in_and_outs float cpu ${TORCH_MODEL_DIR}/single_cpu_duq_max.pt "duq_max" 0.0 "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "1")
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLHost::Evaluate::Inouts::PhFloat::MLFloat::AllPhysics evaluate_in_and_outs float cpu ${TORCH_MODEL_DIR}/single_cpu_duq_max.pt "duq_max" 0.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "8")
@@ -81,6 +79,7 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLHost::Evaluate::Inouts::PhDouble::MLD
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLHost::Evaluate::InAndOuts::PhDouble::MLFloat::AllModel evaluate_in_and_outs double cpu ${TORCH_MODEL_DIR}/single_cpu_duq_max.pt "duq_max" 1.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "0")
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLHost::Evaluate::InInoutsAndOuts::PhDouble::MLFloat::AllModel evaluate_in_and_outs double cpu ${TORCH_MODEL_DIR}/single_cpu_duq_max.pt "duq_max" 1.0 "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "1")
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLHost::Evaluate::Inouts::PhDouble::MLFloat::AllModel evaluate_in_and_outs double cpu ${TORCH_MODEL_DIR}/single_cpu_duq_max.pt "duq_max" 1.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "8")
+endif()
 
 if (WITH_CUDA)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::FLOAT::FLOAT domain_to_application float float cuda)
@@ -94,7 +93,7 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::SubSelect::Float subselect_tensors floa
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::ScatterPhysics::Double scatter_physics double cuda)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::ScatterPhysics::Float scatter_physics float cuda)
 
-
+if (WITH_HDF5)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLDevice::Evaluate::InAndOuts::PhFloat::MLFloat::AllPhysics evaluate_in_and_outs float cpu ${TORCH_MODEL_DIR}/single_gpu_duq_max.pt "duq_max" 0.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "0")
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLDevice::Evaluate::InInoutsAndOuts::PhFloat::MLFloat::AllPhysics evaluate_in_and_outs float cpu ${TORCH_MODEL_DIR}/single_gpu_duq_max.pt "duq_max" 0.0 "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "1")
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLDevice::Evaluate::Inouts::PhFloat::MLFloat::AllPhysics evaluate_in_and_outs float cpu ${TORCH_MODEL_DIR}/single_gpu_duq_max.pt "duq_max" 0.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "8")
@@ -169,6 +168,7 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhDevice::MLDevice::Evaluate::Inouts::PhDouble:
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhDevice::MLDevice::Evaluate::InAndOuts::PhDouble::MLFloat::AllModel evaluate_in_and_outs double gpu ${TORCH_MODEL_DIR}/single_gpu_duq_max.pt "duq_max" 1.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "0")
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhDevice::MLDevice::Evaluate::InInoutsAndOuts::PhDouble::MLFloat::AllModel evaluate_in_and_outs double gpu ${TORCH_MODEL_DIR}/single_gpu_duq_max.pt "duq_max" 1.0 "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "1")
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhDevice::MLDevice::Evaluate::Inouts::PhDouble::MLFloat::AllModel evaluate_in_and_outs double gpu ${TORCH_MODEL_DIR}/single_gpu_duq_max.pt "duq_max" 1.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "8")
+endif()
 
 endif()
 
