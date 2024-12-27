@@ -6,15 +6,11 @@
 # handle sources and headers
 #set global library path to link with tests if necessary
 set(LIBRARY_OUTPUT_PATH ${AMS_LIB_OUT_PATH})
-set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/surrogate.cpp wf/hdf5db.cpp wf/basedb.cpp AMSTensor.cpp wf/interface.cpp wf/resource_manager.cpp AMS.cpp)
+set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/surrogate.cpp wf/basedb.cpp AMSTensor.cpp wf/interface.cpp wf/resource_manager.cpp AMS.cpp)
 
-#if (WITH_CUDA)
-#  list(APPEND AMS_LIB_SRC wf/cuda/utilities.cpp)
-#endif()
-
-#if (WITH_HDF5)
-#  list(APPEND AMS_LIB_SRC wf/hdf5db.cpp)
-#endif()
+if (WITH_HDF5)
+  list(APPEND AMS_LIB_SRC wf/hdf5db.cpp)
+endif()
 #
 #if (WITH_RMQ)
 #  list(APPEND AMS_LIB_SRC wf/rmqdb.cpp)

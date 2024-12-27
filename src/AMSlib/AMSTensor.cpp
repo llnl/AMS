@@ -184,7 +184,7 @@ AMSTensor AMSTensor::transpose(AMSTensor::IntDimType axis1,
   if (dType() == AMSDType::AMS_DOUBLE)
     return view((double*)_data, newShape, newStrides, _location);
   else if (dType() == AMSDType::AMS_SINGLE)
-    return view((double*)_data, newShape, newStrides, _location);
+    return view((float*)_data, newShape, newStrides, _location);
 
   throw std::runtime_error("Unknow data type in transpose\n");
 }
@@ -195,3 +195,12 @@ template AMSTensor AMSTensor::create<float>(ams::ArrayRef<IntDimType>,
 template AMSTensor AMSTensor::create<double>(ams::ArrayRef<IntDimType>,
                                              ams::ArrayRef<IntDimType>,
                                              AMSResourceType);
+
+template AMSTensor AMSTensor::view<float>(float*,
+                                          ams::ArrayRef<IntDimType>,
+                                          ams::ArrayRef<IntDimType>,
+                                          AMSResourceType);
+template AMSTensor AMSTensor::view<double>(double*,
+                                           ams::ArrayRef<IntDimType>,
+                                           ams::ArrayRef<IntDimType>,
+                                           AMSResourceType);
