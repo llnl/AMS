@@ -1,4 +1,4 @@
-# Copyright 2021-2023 Lawrence Livermore National Security, LLC and other
+# Copyright 2021-2023 Lawrence Livermore National Security, LLC and otherMS
 # AMSLib Project Developers
 #
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
@@ -41,14 +41,14 @@ if (WITH_MPI)
   find_package(MPI REQUIRED)
 endif()
 
+find_package(AMS REQUIRED)
 
 function(ADDExec binary_name use_ams)
   target_link_libraries(${binary_name} PRIVATE ${MFEM_LIBRARIES})
   target_include_directories(${binary_name} PRIVATE ${MFEM_INCLUDE_DIRS})
   # we always use ams to avoid if def conflicts.
   # but we only enable it for the use_ams case
-  find_package(AMS REQUIRED)
-  target_link_libraries(${binary_name} PUBLIC AMS::AMS)
+  target_link_libraries(${binary_name} PRIVATE AMS::AMS)
   if (${use_ams})
     target_compile_definitions(${binary_name} PRIVATE USE_AMS)
   endif()

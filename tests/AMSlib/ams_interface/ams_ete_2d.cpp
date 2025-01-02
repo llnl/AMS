@@ -97,28 +97,28 @@ struct Problem {
       // Allocate Input memory
       for (int j = 0; j < num_inputs; j++) {
         DType *data = new DType[elements];
-        input_tensors.push_back(
-            AMSTensor::view(initialize_inputs(data, elements),
-                            {num_elements, 1},
-                            {1, 1},
-                            resource));
+        input_tensors.push_back(AMSTensor::view(
+            initialize_inputs(data, elements),
+            SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
+            SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
+            resource));
       }
 
       DType *inout_data = new DType[elements * num_inouts];
-      inout_tensors.push_back(
-          AMSTensor::view(initialize_inout(inout_data, elements, num_inouts),
-                          {num_elements, num_inouts},
-                          {num_inouts, 1},
-                          resource));
+      inout_tensors.push_back(AMSTensor::view(
+          initialize_inout(inout_data, elements, num_inouts),
+          SmallVector<ams::AMSTensor::IntDimType>({num_elements, num_inouts}),
+          SmallVector<ams::AMSTensor::IntDimType>({num_inouts, 1}),
+          resource));
 
       // Allocate Output memory
       for (int j = 0; j < num_outputs; j++) {
         auto tmp = new DType[elements];
-        output_tensors.push_back(
-            AMSTensor::view(initialize_inputs(tmp, elements),
-                            {num_elements, 1},
-                            {1, 1},
-                            resource));
+        output_tensors.push_back(AMSTensor::view(
+            initialize_inputs(tmp, elements),
+            SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
+            SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
+            resource));
       }
 
       EOSLambda OrigComputation = [&](const ams::SmallVector<ams::AMSTensor>
