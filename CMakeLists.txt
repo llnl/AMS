@@ -70,10 +70,11 @@ endif()
 # ------------------------------------------------------------------------------
 if (WITH_CALIPER)
   find_package(caliper REQUIRED)
+  list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_CALIPER__")
 endif()
 
 if (WITH_AMS_DEBUG)
-  list(APPEND AMS_APP_DEFINES "-DLIBAMS_VERBOSE")
+  list(APPEND AMS_APP_DEFINES "LIBAMS_VERBOSE")
 endif()
 
 if (WITH_HDF5)
@@ -88,14 +89,14 @@ else()
   set(AMS_HDF5_TARGET hdf5-shared)
   message(STATUS "HDF5 uses Shared Library : ${AMS_HDF5_TARGET}")
 endif()
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_HDF5__")
+  list(APPEND AMS_APP_DEFINES "__ENABLE_HDF5__")
 endif() # WITH_HDF5
 
 if (WITH_RMQ)
   if (WITH_CUDA)
     add_compile_definitions(THRUST_IGNORE_CUB_VERSION_CHECK)
   endif()
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_RMQ__")
+  list(APPEND AMS_APP_DEFINES "__ENABLE_RMQ__")
 
   find_package(amqpcpp REQUIRED)
   get_target_property(amqpcpp_INCLUDE_DIR amqpcpp INTERFACE_INCLUDE_DIRECTORIES)
@@ -142,7 +143,7 @@ endif()
 if (WITH_PERFFLOWASPECT)
   find_package(perfflowaspect CONFIG REQUIRED)
 
-  list(APPEND AMS_APP_DEFINES "-D__ENABLE_PERFFLOWASPECT__")
+  list(APPEND AMS_APP_DEFINES "__ENABLE_PERFFLOWASPECT__")
   list(APPEND AMS_APP_LIB_DIRS "${PERFFLOWASPECT_LIB_DIR}")
 
   list(APPEND AMS_APP_LIBRARIES "perfflow_runtime")
@@ -164,7 +165,7 @@ if (WITH_EXAMPLES)
   #examples we use do.
   if (WITH_MPI)
     list(APPEND AMS_EXAMPLE_LIBRARIES MPI::MPI_CXX)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_MPI__")
+    list(APPEND AMS_EXAMPLE_DEFINES "__ENABLE_MPI__")
   endif()
 
   list(APPEND AMS_EXAMPLE_LIBRARIES umpire)
@@ -180,7 +181,7 @@ if (WITH_EXAMPLES)
   list(APPEND AMS_EXAMPLE_LIB_DIRS "${MFEM_LIB_DIR}")
 
   if (WITH_RMQ)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_RMQ__")
+    list(APPEND AMS_EXAMPLE_DEFINES "__ENABLE_RMQ__")
     list(APPEND AMS_EXAMPLE_INCLUDES ${amqpcpp_INCLUDE_DIR})
     list(APPEND AMS_EXAMPLE_INCLUDES ${OPENSSL_INCLUDE_DIR})
     list(APPEND AMS_EXAMPLE_INCLUDES ${LIBEVENT_INCLUDE_DIR})
@@ -192,13 +193,13 @@ if (WITH_EXAMPLES)
 
   if (WITH_CUDA)
     list(APPEND AMS_EXAMPLE_LIBRARIES ${CUDA_LIBRARIES} cuda)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_CUDA__")
+    list(APPEND AMS_EXAMPLE_DEFINES "__ENABLE_CUDA__")
   endif()
 
   if (WITH_CALIPER)
     list(APPEND AMS_EXAMPLE_INCLUDES ${caliper_INCLUDE_DIR})
     list(APPEND AMS_EXAMPLE_LIBRARIES caliper)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_CALIPER__")
+    list(APPEND AMS_EXAMPLE_DEFINES "__ENABLE_CALIPER__")
   endif()
 
   if (WITH_PERFFLOWASPECT)

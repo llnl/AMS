@@ -32,6 +32,11 @@ if (WITH_HDF5)
   target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
 endif()
 
+
+if (WITH_CALIPER)
+  target_link_libraries(AMS PRIVATE caliper)
+endif()
+
 if (WITH_MPI)
   target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
 endif()
