@@ -10,12 +10,12 @@ set(GENERATED_CPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/single_cpu_duq_mean.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/single_cpu_random.pt
 
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_cpu_duq_max.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_cpu_duq_mean.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_cpu_random.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_cpu_duq_max.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_cpu_duq_mean.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_cpu_random.pt
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_double_cpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_double_cpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_double_cpu_random.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_single_cpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_single_cpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_single_cpu_random.pt
 
   ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_cpu_duq_max.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_cpu_duq_mean.pt  
@@ -50,12 +50,12 @@ set(GENERATED_GPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/single_gpu_duq_mean.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/single_gpu_random.pt
 
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_gpu_duq_max.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_gpu_duq_mean.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_double_gpu_random.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_gpu_duq_max.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_gpu_duq_mean.pt  
-  ${CMAKE_CURRENT_BINARY_DIR}linear_traced_single_gpu_random.pt
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_double_gpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_double_gpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_double_gpu_random.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_single_gpu_duq_max.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_single_gpu_duq_mean.pt  
+  ${CMAKE_CURRENT_BINARY_DIR}/linear_traced_single_gpu_random.pt
 
   ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_gpu_duq_max.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_double_gpu_duq_mean.pt  
