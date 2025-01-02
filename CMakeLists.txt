@@ -33,7 +33,6 @@ set(AMS_EXAMPLE_INCLUDES "")
 
 # ------------------------------------------------------------------------------
 option(WITH_CUDA           "Option to enable CUDA" OFF)
-option(WITH_EXAMPLES       "Build examples" OFF)
 option(WITH_MPI            "Option to enable MPI" OFF)
 option(WITH_CALIPER        "Use Caliper for Profiling" OFF)
 option(WITH_TESTS          "Compile tests" OFF)
@@ -51,7 +50,6 @@ list(APPEND AMS_APP_LIBRARIES nlohmann_json::nlohmann_json)
 
 # ------------------------------------------------------------------------------
 find_package(Threads REQUIRED)
-
 # ------------------------------------------------------------------------------
 
 if (WITH_MPI)
@@ -78,7 +76,6 @@ if (WITH_AMS_DEBUG)
 endif()
 
 if (WITH_HDF5)
-  message(WARNING "WARNING")
   set(HDF5_ROOT ${AMS_HDF5_DIR})
   if (HDF5_USE_STATIC_LIBRARIES)
   find_package(HDF5 COMPONENTS C static NO_DEFAULT_PATH PATHS ${AMS_HDF5_DIR} ${AMS_HDF5_DIR}/share/cmake)
@@ -157,57 +154,3 @@ if (WITH_TESTS)
   add_subdirectory(tests)
 endif()
 
-
-# ------------------------------------------------------------------------------
-if (WITH_AMS_LIB)
-if (WITH_EXAMPLES)
-  #The AMS Runtime does not depend on MFEM. The
-  #examples we use do.
-  if (WITH_MPI)
-    list(APPEND AMS_EXAMPLE_LIBRARIES MPI::MPI_CXX)
-    list(APPEND AMS_EXAMPLE_DEFINES "__ENABLE_MPI__")
-  endif()
-
-  list(APPEND AMS_EXAMPLE_LIBRARIES umpire)
-  list(APPEND AMS_EXAMPLE_INCLUDES ${UMPIRE_INCLUDE_DIR})
-
-  if (MFEM_DIR)
-    include(${PROJECT_SOURCE_DIR}/cmake/FindMFEM.cmake)
-  else()
-    find_package(MFEM REQUIRED)
-  endif()
-  list(APPEND AMS_EXAMPLE_INCLUDES "${MFEM_INCLUDE_DIRS}")
-  list(APPEND AMS_EXAMPLE_LIBRARIES "${MFEM_LIBRARIES}")
-  list(APPEND AMS_EXAMPLE_LIB_DIRS "${MFEM_LIB_DIR}")
-
-  if (WITH_RMQ)
-    list(APPEND AMS_EXAMPLE_DEFINES "__ENABLE_RMQ__")
-    list(APPEND AMS_EXAMPLE_INCLUDES ${amqpcpp_INCLUDE_DIR})
-    list(APPEND AMS_EXAMPLE_INCLUDES ${OPENSSL_INCLUDE_DIR})
-    list(APPEND AMS_EXAMPLE_INCLUDES ${LIBEVENT_INCLUDE_DIR})
-    list(APPEND AMS_EXAMPLE_LIBRARIES OpenSSL::SSL amqpcpp pthread event_pthreads event)
-    if (WITH_MPI)
-      list(APPEND AMS_EXAMPLE_LIBRARIES MPI::MPI_CXX)
-    endif()
-  endif()
-
-  if (WITH_CUDA)
-    list(APPEND AMS_EXAMPLE_LIBRARIES ${CUDA_LIBRARIES} cuda)
-    list(APPEND AMS_EXAMPLE_DEFINES "__ENABLE_CUDA__")
-  endif()
-
-  if (WITH_CALIPER)
-    list(APPEND AMS_EXAMPLE_INCLUDES ${caliper_INCLUDE_DIR})
-    list(APPEND AMS_EXAMPLE_LIBRARIES caliper)
-    list(APPEND AMS_EXAMPLE_DEFINES "__ENABLE_CALIPER__")
-  endif()
-
-  if (WITH_PERFFLOWASPECT)
-    list(APPEND AMS_EXAMPLE_DEFINES "-D__ENABLE_PERFFLOWASPECT__")
-  endif()
-
-  add_subdirectory(examples)
-endif()
-endif()
-
-# ------------------------------------------------------------------------------
