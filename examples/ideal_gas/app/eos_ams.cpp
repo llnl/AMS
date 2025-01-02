@@ -23,7 +23,7 @@ AMSEOS<FPType>::AMSEOS(const AMSDBType db_type,
                        const char *surrogate_path)
     : res_(resource), IdealGas<FPType>(1.6, 1.4)
 {
-  AMSCAbstrModel model_descr = ams::AMSRegisterAbstractModel(
+  AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
       "ideal_gas", uq_policy, threshold, surrogate_path, "ideal_gas");
   wf_ = AMSCreateExecutor(model_descr, mpi_task, mpi_nproc);
 }
@@ -40,32 +40,37 @@ void AMSEOS<FPType>::Eval(const int length,
                           FPType *bulkmod,
                           FPType *temperature) const
 {
-  ams::SmallVector<ams::AMSTensor> inputs = {
-      ams::AMSTensor::view(density, {length, 1}, {1, 1}, res_),
-      ams::AMSTensor::view(density, {length, 1}, {1, 1}, res_),
-  };
+  SmallVector<AMSTensor> inputs;
+  inputs.push_back(
+      std::move(AMSTensor::view(density, {length, 1}, {1, 1}, res_)));
+  inputs.push_back(
+      std::move(AMSTensor::view(density, {length, 1}, {1, 1}, res_)));
 
-  ams::SmallVector<ams::AMSTensor> inout;
-  ams::SmallVector<ams::AMSTensor> outputs = {
-      ams::AMSTensor::view(pressure, {length, 1}, {1, 1}, res_),
-      ams::AMSTensor::view(soundspeed2, {length, 1}, {1, 1}, res_),
-      ams::AMSTensor::view(bulkmod, {length, 1}, {1, 1}, res_),
-      ams::AMSTensor::view(temperature, {length, 1}, {1, 1}, res_),
-  };
+  SmallVector<AMSTensor> inout;
+  SmallVector<AMSTensor> outputs;
+  outputs.push_back(
+      std::move(AMSTensor::view(pressure, {length, 1}, {1, 1}, res_)));
+  outputs.push_back(
+      std::move(AMSTensor::view(soundspeed2, {length, 1}, {1, 1}, res_)));
+  outputs.push_back(
+      std::move(AMSTensor::view(bulkmod, {length, 1}, {1, 1}, res_)));
+  outputs.push_back(
+      std::move(AMSTensor::view(temperature, {length, 1}, {1, 1}, res_)));
 
-  EOSLambda OrigComputation =
-      [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
-          ams::SmallVector<ams::AMSTensor> &ams_inouts,
-          ams::SmallVector<ams::AMSTensor> &ams_outs) {
-        IdealGas<FPType>::Eval(
-            ams_ins[0].shape()[1],
-            static_cast<const FPType *>(ams_ins[0].data<FPType>()),
-            static_cast<const FPType *>(inputs[1].data<FPType>()),
-            static_cast<FPType *>(ams_outs[0].data<FPType>()),
-            static_cast<FPType *>(ams_outs[1].data<FPType>()),
-            static_cast<FPType *>(ams_outs[2].data<FPType>()),
-            static_cast<FPType *>(ams_outs[3].data<FPType>()));
-      };
+  EOSLambda OrigComputation = [&, this](const SmallVector<AMSTensor> &ams_ins,
+                                        SmallVector<AMSTensor> &ams_inouts,
+                                        SmallVector<AMSTensor> &ams_outs) {
+    std::cout << "Shape is " << ams_ins[0].shape()[0] << ", "
+              << ams_ins[1].shape()[1] << "\n";
+    IdealGas<FPType>::Eval(
+        ams_ins[0].shape()[0],
+        static_cast<const FPType *>(ams_ins[0].data<FPType>()),
+        static_cast<const FPType *>(ams_ins[1].data<FPType>()),
+        static_cast<FPType *>(ams_outs[0].data<FPType>()),
+        static_cast<FPType *>(ams_outs[1].data<FPType>()),
+        static_cast<FPType *>(ams_outs[2].data<FPType>()),
+        static_cast<FPType *>(ams_outs[3].data<FPType>()));
+  };
 
 
   AMSExecute(wf_, OrigComputation, inputs, inout, outputs);

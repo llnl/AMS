@@ -405,10 +405,14 @@ protected:
 
   /// Move the range [I, E) into the uninitialized memory starting with "Dest",
   /// constructing elements as needed.
+  /// We expose a C++14 API, so we cannot directly call uninitialized_move that was intorduced
+  /// on C++17. This is equivalent.
   template <typename It1, typename It2>
   static void uninitialized_move(It1 I, It1 E, It2 Dest)
   {
-    std::uninitialized_move(I, E, Dest);
+    std::uninitialized_copy(std::make_move_iterator(I),
+                            std::make_move_iterator(E),
+                            Dest);
   }
 
   /// Copy the range [I, E) onto the uninitialized memory starting with "Dest",

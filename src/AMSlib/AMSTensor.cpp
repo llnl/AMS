@@ -52,21 +52,22 @@ AMSTensor::AMSTensor(uint8_t* data,
   if (!_data) {
     throw std::runtime_error("Generating tensor with Null Pointer AMSTensor.");
   }
-  std::cout << "Pointer is " << _data << "\n";
 }
 
 template <typename FPType,
-          typename = std::enable_if_t<std::is_floating_point_v<FPType>>>
+          typename = std::enable_if_t<std::is_floating_point<FPType>::value>>
 AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
                             ams::ArrayRef<AMSTensor::IntDimType> strides,
                             AMSResourceType location)
 {
   auto numElements = computeNumElements(shapes);
   auto& rm = ams::ResourceManager::getInstance();
-  if constexpr (std::is_same_v<FPType, float>) {
+  if constexpr ((std::is_same_v<FPType, float>) ||
+                (std::is_same_v<FPType, const float>)) {
     float* _data = rm.allocate<float>(numElements, location, sizeof(float));
     return AMSTensor((uint8_t*)_data, shapes, strides, AMS_SINGLE, location);
-  } else if constexpr (std::is_same_v<FPType, double>) {
+  } else if constexpr ((std::is_same_v<FPType, double>) ||
+                       (std::is_same_v<FPType, const double>)) {
     double* _data = rm.allocate<double>(numElements, location, sizeof(double));
     return AMSTensor((uint8_t*)_data, shapes, strides, AMS_DOUBLE, location);
   } else {
@@ -79,22 +80,24 @@ AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
 
 
 template <typename FPType,
-          typename = std::enable_if_t<std::is_floating_point_v<FPType>>>
+          typename = std::enable_if_t<std::is_floating_point<FPType>::value>>
 AMSTensor AMSTensor::view(FPType* data,
                           ams::ArrayRef<AMSTensor::IntDimType> shapes,
                           ams::ArrayRef<AMSTensor::IntDimType> strides,
                           AMSResourceType location)
 {
-  if constexpr (std::is_same_v<FPType, float>) {
-    std::cout << "Generating float view from pointer " << data << "\n";
+  if constexpr ((std::is_same_v<FPType, float>) ||
+                (std::is_same_v<FPType, const float>)) {
     return AMSTensor(
         (uint8_t*)data, shapes, strides, AMS_SINGLE, location, true);
-  } else if constexpr (std::is_same_v<FPType, double>) {
-    std::cout << "Generating a double view from pointer " << data << "\n";
+  } else if constexpr ((std::is_same_v<FPType, double>) ||
+                       (std::is_same_v<FPType, const double>)) {
     return AMSTensor(
         (uint8_t*)data, shapes, strides, AMS_DOUBLE, location, true);
   } else {
     static_assert(std::is_same_v<FPType, float> ||
+                      std::is_same_v<FPType, const float> ||
+                      std::is_same_v<FPType, const double> ||
                       std::is_same_v<FPType, double>,
                   "AMSTensor only supports float or double tensor view");
   }
@@ -103,7 +106,6 @@ AMSTensor AMSTensor::view(FPType* data,
 
 AMSTensor AMSTensor::view(AMSTensor& tensor)
 {
-  std::cout << "Creating a view here from AMS Tensor\n";
   if (tensor._dType == AMS_DOUBLE)
     return AMSTensor::view((double*)tensor._data,
                            tensor._shape,
@@ -204,3 +206,12 @@ template AMSTensor AMSTensor::view<double>(double*,
                                            ams::ArrayRef<IntDimType>,
                                            ams::ArrayRef<IntDimType>,
                                            AMSResourceType);
+
+template AMSTensor AMSTensor::view<const float>(const float*,
+                                                ams::ArrayRef<IntDimType>,
+                                                ams::ArrayRef<IntDimType>,
+                                                AMSResourceType);
+template AMSTensor AMSTensor::view<const double>(const double*,
+                                                 ams::ArrayRef<IntDimType>,
+                                                 ams::ArrayRef<IntDimType>,
+                                                 AMSResourceType);
