@@ -34,6 +34,7 @@ endif()
 
 
 if (WITH_CALIPER)
+
   target_link_libraries(AMS PRIVATE caliper)
 endif()
 
@@ -57,24 +58,52 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMSTensor.hpp" "${PROJECT_B
 # installation paths
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
-# Install the library
+# Install the AMS library
 install(TARGETS AMS
     EXPORT AMSTargets
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"      # For shared libraries
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"      # For static libraries
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"      # For executables (Windows-specific)
+    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" # Install headers directory
+)
+
+# Export the AMS targets for use by external projects
+install(EXPORT AMSTargets
+    NAMESPACE AMS::                              # Prefix target names with AMS::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/AMS" # Install location for CMake config
+)
+
+# Install the public headers
+install(FILES
+    ${PROJECT_BINARY_DIR}/include/AMS.h
+    ${PROJECT_BINARY_DIR}/include/AMSTensor.hpp
+    ${PROJECT_BINARY_DIR}/include/AMSTypes.hpp
+    ${PROJECT_BINARY_DIR}/include/ArrayRef.hpp
+    ${PROJECT_BINARY_DIR}/include/SmallVector.hpp
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/"    # Headers installed into AMS subdir
 )
 
 
-install(EXPORT AMSTargets
-    NAMESPACE AMS::
+# Generate a version file for the package
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/AMSConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+# Configure the package configuration file
+configure_package_config_file(
+    "${CMAKE_SOURCE_DIR}/cmake/AMSConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/AMSConfig.cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/AMS"
+)
+
+# Install the generated config and version files
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/AMSConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/AMSConfigVersion.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/AMS"
 )
 
-#
-install(FILES ${PROJECT_BINARY_DIR}/include/AMS.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES ${PROJECT_BINARY_DIR}/include/AMSTensor.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES ${PROJECT_BINARY_DIR}/include/AMSTypes.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES ${PROJECT_BINARY_DIR}/include/ArrayRef.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES ${PROJECT_BINARY_DIR}/include/SmallVector.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-#install(FILES ${PROJECT_BINARY_DIR}/include/AMS-config.h DESTINATION include)

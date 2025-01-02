@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 #include "AMSTypes.hpp"
 #include "ArrayRef.hpp"
@@ -66,7 +67,7 @@ public:
    * @return A new AMSTensor with allocated memory.
    */
   template <typename FPType,
-            typename = std::enable_if_t<std::is_floating_point_v<FPType>>>
+            typename = std::enable_if_t<std::is_floating_point<FPType>::value>>
   static AMSTensor create(ams::ArrayRef<IntDimType> shapes,
                           ams::ArrayRef<IntDimType> strides,
                           AMSResourceType location);
@@ -81,7 +82,7 @@ public:
    * @return A new AMSTensor that acts as a view of the existing data.
    */
   template <typename FPType,
-            typename = std::enable_if_t<std::is_floating_point_v<FPType>>>
+            typename = std::enable_if_t<std::is_floating_point<FPType>::value>>
   static AMSTensor view(FPType* data,
                         ams::ArrayRef<IntDimType> shapes,
                         ams::ArrayRef<IntDimType> strides,

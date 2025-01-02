@@ -31,6 +31,18 @@
 #include <AMSTypes.hpp>
 using namespace ams;
 
+#define CALIPER(stmt)
+
+#ifdef __ENABLE_MPI__
+#include <mpi.h>
+#define MPI_CALL(stmt)                                                         \
+  if (stmt != MPI_SUCCESS) {                                                   \
+    fprintf(stderr, "Error in MPI-Call (File: %s, %d)\n", __FILE__, __LINE__); \
+  }
+#else
+#define MPI_CALL(stm)
+#endif
+
 void printMemory(std::unordered_set<std::string> &allocators)
 {
   auto &rm = umpire::ResourceManager::getInstance();
@@ -59,16 +71,11 @@ void createMemoryAllocators(std::string &physics_host_alloc,
                             std::string &physics_pinned_alloc)
 {
   std::unordered_set<std::string> allocator_names;
-  if (pool == "default") {
-    physics_host_alloc = "HOST";
+  physics_host_alloc = "HOST";
 #ifdef __ENABLE_CUDA__
-    physics_device_alloc = "DEVICE";
-    physics_pinned_alloc = "PINNED";
+  physics_device_alloc = "DEVICE";
+  physics_pinned_alloc = "PINNED";
 #endif
-  } else {
-    std::cout << "Stategy is " << pool << "\n";
-    throw std::runtime_error("Pool strategy does not exist\n");
-  }
 }
 
 int computeNumElements(int globalNumElements, int id, int numRanks)
@@ -115,7 +122,8 @@ int run(const char *device_name,
         int stop_cycle,
         bool pack_sparse_mats,
         const char *model_path,
-        const char *db_config)
+        const char *db_config,
+        ams::AMSExecPolicy ams_loadBalance)
 {
   // -------------------------------------------------------------------------
   // setup
@@ -245,7 +253,6 @@ int run(const char *device_name,
   // ---------------------------------------------------------------------
   // setup AMS options
   // ---------------------------------------------------------------------
-  constexpr bool use_ams = false;
   const char *surrogate_path = nullptr;
   const char *db_path = nullptr;
 
@@ -256,6 +263,8 @@ int run(const char *device_name,
 
 #ifdef USE_AMS
   constexpr bool use_ams = true;
+#else
+  constexpr bool use_ams = false;
 #endif
 
   // ---------------------------------------------------------------------
@@ -508,9 +517,9 @@ int main(int argc, char **argv)
   int rId = 0;
   // Level of Threading provided by MPI
   int provided = 0;
-  MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided);
-  MPI_Comm_size(MPI_COMM_WORLD, &wS);
-  MPI_Comm_rank(MPI_COMM_WORLD, &rId);
+  MPI_CALL(MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided));
+  MPI_CALL(MPI_Comm_size(MPI_COMM_WORLD, &wS));
+  MPI_CALL(MPI_Comm_rank(MPI_COMM_WORLD, &rId));
   // FIXME: Create a logger class to write
   // depending on rank id and severity.
   if (rId != 0) {
@@ -655,6 +664,9 @@ int main(int argc, char **argv)
     std::cout << std::endl;
   }
 
+  ams::AMSExecPolicy ams_loadBalance = ams::AMSExecPolicy::AMS_UBALANCED;
+  if (lbalance) ams_loadBalance = ams::AMSExecPolicy::AMS_BALANCED;
+
   // -------------------------------------------------------------------------
   // additional argument validation
   // -------------------------------------------------------------------------
@@ -711,7 +723,8 @@ int main(int argc, char **argv)
                      stop_cycle,
                      pack_sparse_mats,
                      model_path,
-                     db_config);
+                     db_config,
+                     ams_loadBalance);
   else if (strcmp(precision_opt, "double") == 0)
     ret = run<double>(device_name,
                       db_type,
@@ -732,7 +745,8 @@ int main(int argc, char **argv)
                       stop_cycle,
                       pack_sparse_mats,
                       model_path,
-                      db_config);
+                      db_config,
+                      ams_loadBalance);
   else {
     std::cerr << "Invalid precision " << precision_opt << "\n";
     return -1;

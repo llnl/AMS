@@ -39,6 +39,7 @@ public:
   {
     const FPType gamma = gamma_;
     const FPType specific_heat = specific_heat_;
+    std::cout << "Evaluating for " << length << " elements\n";
 
     using mfem::ForallWrap;
     MFEM_FORALL(i, length, {
@@ -47,6 +48,13 @@ public:
       bulkmod[i] = gamma * pressure[i];
       temperature[i] = energy[i] / specific_heat;
     });
+
+    for (int i = 0; i < length; i++) {
+      std::cout << "( " << i << ") Outputs are (" << pressure[i] << ", ";
+      std::cout << soundspeed2[i] << ", ";
+      std::cout << bulkmod[i] << ", ";
+      std::cout << temperature[i] << ")\n";
+    }
   }
 
 #ifdef __ENABLE_PERFFLOWASPECT__
