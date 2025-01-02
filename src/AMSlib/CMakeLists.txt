@@ -4,8 +4,6 @@
 
 # ------------------------------------------------------------------------------
 # handle sources and headers
-#set global library path to link with tests if necessary
-set(LIBRARY_OUTPUT_PATH ${AMS_LIB_OUT_PATH})
 set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/surrogate.cpp wf/basedb.cpp AMSTensor.cpp wf/interface.cpp wf/resource_manager.cpp AMS.cpp)
 
 if (WITH_HDF5)
@@ -18,11 +16,19 @@ endif()
 
 add_library(AMS ${AMS_LIB_SRC})
 
+get_target_property(AMS_TYPE AMS TYPE)
+
 # ------------------------------------------------------------------------------
 # setup the lib first
 message(STATUS "ALL INCLUDES ARE ${AMS_APP_INCLUDES}")
 target_compile_definitions(AMS PRIVATE ${AMS_APP_DEFINES})
-target_include_directories(AMS PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(AMS PRIVATE 
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>)
+target_include_directories(AMS PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
 
 if (WITH_CUDA)
   target_link_libraries(AMS PRIVATE CUDA::cudart)
@@ -34,7 +40,6 @@ endif()
 
 
 if (WITH_CALIPER)
-
   target_link_libraries(AMS PRIVATE caliper)
 endif()
 

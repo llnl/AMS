@@ -26,6 +26,8 @@
 #include <AMS.h>
 #endif
 
+using namespace ams;
+
 
 // Overloaded shortcut functions for different precision modes
 #ifndef DOUBLE_PRECISION
@@ -169,6 +171,7 @@ BinomialOptions::BinomialOptions(unsigned int batchSize,
 
 #ifdef USE_AMS
   const char *model_name = std::getenv("BO_MODEL_NAME");
+  std::cout << "Model name is " << model_name << "\n";
   if (model_name) {
     model = AMSQueryModel(model_name);
   } else {
@@ -176,9 +179,6 @@ BinomialOptions::BinomialOptions(unsigned int batchSize,
   }
 
   wf = AMSCreateExecutor(model,
-                         AMSDType::AMS_DOUBLE,
-                         AMSResourceType::AMS_DEVICE,
-                         (AMSPhysicFn)(BinomialOptions::AMSRun),
                          rank,
                          worldSize);
 #endif
@@ -219,18 +219,38 @@ void BinomialOptions::run(real *callValue,
   cudaMemcpy(d_X, _X, sizeof(real) * optN, cudaMemcpyHostToDevice);
 
 #ifdef USE_AMS
-  std::vector<const real *> inputs({(const real *)d_S,
-                                    (const real *)d_X,
-                                    (const real *)d_R,
-                                    (const real *)d_V,
-                                    (const real *)d_T});
+  
+  SmallVector<AMSTensor> inputs;
+  SmallVector<AMSTensor> inout;
+  SmallVector<AMSTensor> outputs;
+  inputs.push_back(std::move(AMSTensor::view(d_S, {static_cast<long>(optN), 1L}, {1, 1}, AMSResourceType::AMS_DEVICE)));
+  inputs.push_back(std::move(AMSTensor::view(d_X, {static_cast<long>(optN), 1L}, {1, 1}, AMSResourceType::AMS_DEVICE)));
+  inputs.push_back(std::move(AMSTensor::view(d_R, {static_cast<long>(optN), 1L}, {1, 1}, AMSResourceType::AMS_DEVICE)));
+  inputs.push_back(std::move(AMSTensor::view(d_V, {static_cast<long>(optN), 1L}, {1, 1}, AMSResourceType::AMS_DEVICE)));
+  inputs.push_back(std::move(AMSTensor::view(d_T, {static_cast<long>(optN), 1L}, {1, 1}, AMSResourceType::AMS_DEVICE)));
+
+
+  outputs.push_back(std::move(AMSTensor::view(d_CallValue, {static_cast<long>(optN), 1}, {1, 1}, AMSResourceType::AMS_DEVICE)));
+
+  EOSLambda OrigComputation = [&, this](const SmallVector<AMSTensor> &ams_ins,
+                                        SmallVector<AMSTensor> &ams_inouts,
+                                        SmallVector<AMSTensor> &ams_outs) {
+  binomialOptionsGPU(ams_outs[0].data<real>(),
+                     ams_ins[0].data<real>(),
+                     ams_ins[1].data<real>(),
+                     ams_ins[2].data<real>(),
+                     ams_ins[3].data<real>(),
+                     ams_ins[4].data<real>(),
+                     d_vDt,
+                     d_puByDf,
+                     d_pdByDf,
+                     ams_outs[0].shape()[0]);
+  };
+
+
   AMSExecute(wf,
-             (void *)this,
-             optN,
-             reinterpret_cast<const void **>(inputs.data()),
-             reinterpret_cast<void **>(&d_CallValue),
-             inputs.size(),
-             1);
+             OrigComputation,
+             inputs, inout, outputs);
 #else
   binomialOptionsGPU(
       d_CallValue, d_S, d_X, d_R, d_V, d_T, d_puByDf, d_pdByDf, d_vDt, optN);
