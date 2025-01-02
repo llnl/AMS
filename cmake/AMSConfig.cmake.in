@@ -77,3 +77,4 @@ if (AMS_WITH_RMQ)
 endif()
 
 check_required_components("@PROJECT_NAME@")
+
