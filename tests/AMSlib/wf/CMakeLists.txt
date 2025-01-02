@@ -18,7 +18,12 @@ function(BUILD_UNIT_TEST exe source)
 
   if(WITH_CUDA)
     target_link_libraries(${exe} PRIVATE CUDA::cudart)
-    target_compile_definitions(${exe} PRIVATE "-D__ENABLE_CUDA__ -DLIBAMS_VERBOSE")
+    target_compile_definitions(${exe} PRIVATE __ENABLE_CUDA__ LIBAMS_VERBOSE)
+  endif()
+
+  if (WITH_CALIPER)
+  target_compile_definitions(${exe} PRIVATE __AMS_ENABLE_CALIPER__)
+  target_link_libraries(${exe} PRIVATE caliper)
   endif()
 endfunction()
 
