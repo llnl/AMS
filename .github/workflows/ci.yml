@@ -133,7 +133,7 @@ jobs:
           mkdir build
           cd build
           export AMS_INSTALL_PATH=$(pwd)/install
-          echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
+          echo "AMS_INSTALL_PATH=$(AMS_INSTALL_PATH}"
           export AMS_MFEM_PATH=$(spack location -i mfem)
           export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
           export AMS_FAISS_PATH=$(spack location -i faiss)
@@ -218,7 +218,6 @@ jobs:
             make
             make install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
-            echo "AMS_INSTALL_PATH=$(AMS_INSTALL_PATH}"
             ls ${AMS_INSTALL_PATH}
       - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
