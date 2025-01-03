@@ -230,8 +230,7 @@ jobs:
           cd build_idealgas/
           export AMS_MFEM_PATH=$(spack location -i mfem)
           cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
-          make
-
+          make VERBOSE=1
       - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
@@ -306,7 +305,6 @@ jobs:
           export SPACK_ROOT=/spack/
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
-
           # We overwrite the rmq.json created by CMake
           echo """{
             \"db\": {
