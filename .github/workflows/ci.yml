@@ -24,7 +24,6 @@ jobs:
       - name: Build WITH_HDF5=${{ matrix.with_hdf5 }}, WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }} 
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           rm -rf build/
@@ -79,7 +78,6 @@ jobs:
       - name: Build WITH_CUDA=On WITH_HDF5=${{ matrix.with_hdf5 }}, WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }} 
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           rm -rf build/
@@ -126,7 +124,6 @@ jobs:
       - name: Build SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           rm -rf build/
@@ -163,7 +160,6 @@ jobs:
       - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           mkdir build_idealgas/
@@ -186,7 +182,6 @@ jobs:
       - name: Build SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           rm -rf build/
@@ -215,14 +210,14 @@ jobs:
             -DWITH_AMS_DEBUG=On \
             -DWITH_WORKFLOW=Off \
             $GITHUB_WORKSPACE
-            make -j$(nproc)
-            make -j$(nproc) install
-            echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
-            ls ${AMS_INSTALL_PATH}
+            make
+            make install
+            echo "AMS_INSTALL_PATH=$(pwd)/install" >> $GITHUB_ENV
+            echo "AMS_INSTALL_PATH=$(pwd)/install"
+            ls $(pwd)/install
       - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           mkdir build_idealgas/
@@ -233,7 +228,6 @@ jobs:
       - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           mkdir build_bnm_opt/
