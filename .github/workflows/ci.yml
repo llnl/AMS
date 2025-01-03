@@ -169,7 +169,7 @@ jobs:
           mkdir build_idealgas/
           cd build_idealgas/
           export AMS_MFEM_PATH=$(spack location -i mfem)
-          echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
+          echo "AMS_INSTALL_PATH=$(AMS_INSTALL_PATH}"
           cmake -DWITH_CUDA=Off -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
           make -j$(nproc) VERBOSE=1
 
@@ -203,7 +203,7 @@ jobs:
           cmake \
             -DBUILD_SHARED_LIBS=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=${{ matrix.with_shared }} \
-            -DCMAKE_INSTALL_PREFIX=$AMS_INSTALL_PATH \
+            -DCMAKE_PREFIX_PATH=$AMS_INSTALL_PATH \
             -DWITH_CALIPER=On \
             -DWITH_HDF5=On \
             -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
@@ -217,9 +217,9 @@ jobs:
             $GITHUB_WORKSPACE
             make
             make install
-            echo "AMS_INSTALL_PATH=$(pwd)/install" >> $GITHUB_ENV
-            echo "AMS_INSTALL_PATH=$(pwd)/install"
-            ls $(pwd)/install
+            echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
+            echo "AMS_INSTALL_PATH=$(AMS_INSTALL_PATH}"
+            ls ${AMS_INSTALL_PATH}
       - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
