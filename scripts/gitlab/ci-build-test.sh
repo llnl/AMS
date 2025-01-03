@@ -50,7 +50,6 @@ build_and_test() {
     -DCMAKE_BUILD_TYPE=Release \
     -DCUDA_ARCH=$AMS_CUDA_ARCH \
     -DWITH_CUDA=${WITH_CUDA} \
-    -DWITH_FAISS=${WITH_FAISS} \
     -DWITH_MPI=${WITH_MPI} \
     -DWITH_TESTS=On \
     -DTorch_DIR=$AMS_TORCH_PATH \
