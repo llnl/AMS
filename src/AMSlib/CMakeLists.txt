@@ -4,8 +4,6 @@
 
 # ------------------------------------------------------------------------------
 # handle sources and headers
-#set global library path to link with tests if necessary
-set(LIBRARY_OUTPUT_PATH ${AMS_LIB_OUT_PATH})
 set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/surrogate.cpp wf/basedb.cpp AMSTensor.cpp wf/interface.cpp wf/resource_manager.cpp AMS.cpp)
 
 if (WITH_HDF5)
@@ -18,31 +16,59 @@ endif()
 
 add_library(AMS ${AMS_LIB_SRC})
 
+get_target_property(AMS_TYPE AMS TYPE)
+
 # ------------------------------------------------------------------------------
 # setup the lib first
 message(STATUS "ALL INCLUDES ARE ${AMS_APP_INCLUDES}")
 target_compile_definitions(AMS PRIVATE ${AMS_APP_DEFINES})
-target_include_directories(AMS PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(AMS PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(AMS PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
 
-if (WITH_CUDA)
-  target_link_libraries(AMS PRIVATE CUDA::cudart)
+
+if (AMS_TYPE STREQUAL "STATIC_LIBRARY")
+  if (WITH_CUDA)
+    target_link_libraries(AMS PRIVATE CUDA::cudart)
+  endif()
+
+  if (WITH_HDF5)
+    target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
+  endif()
+
+
+  if (WITH_CALIPER)
+    target_link_libraries(AMS PRIVATE caliper)
+  endif()
+
+  if (WITH_MPI)
+    target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
+  endif()
+
+  target_link_libraries(AMS PRIVATE stdc++fs torch)
+else()
+  if (WITH_CUDA)
+    target_link_libraries(AMS PRIVATE CUDA::cudart)
+  endif()
+
+  if (WITH_HDF5)
+    target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
+  endif()
+
+
+  if (WITH_CALIPER)
+    target_link_libraries(AMS PRIVATE caliper)
+  endif()
+
+  if (WITH_MPI)
+    target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
+  endif()
+
+  target_link_libraries(AMS PRIVATE stdc++fs torch)
 endif()
 
-if (WITH_HDF5)
-  target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
-endif()
-
-
-if (WITH_CALIPER)
-
-  target_link_libraries(AMS PRIVATE caliper)
-endif()
-
-if (WITH_MPI)
-  target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
-endif()
-
-target_link_libraries(AMS PRIVATE stdc++fs torch)
 
 
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS-config.h.in" "${PROJECT_BINARY_DIR}/include/AMS-config.h")

@@ -20,6 +20,8 @@ set(CMAKE_CXX_STANDARD 14)      # Enable C++14
 set(CMAKE_CXX_STANDARD_REQUIRED ON) # Require the specified standard
 
 enable_language(CUDA)
+
+find_package(AMS REQUIRED)
 find_package(CUDAToolkit REQUIRED)
 
 if (WITH_CALIPER)
@@ -35,8 +37,7 @@ function(ADDExec binary_name use_ams)
   target_include_directories(${binary_name} PRIVATE ${MFEM_INCLUDE_DIRS})
   # we always use ams to avoid if def conflicts.
   # but we only enable it for the use_ams case
-  find_package(AMS REQUIRED)
-  target_link_libraries(${binary_name} PUBLIC AMS::AMS)
+  target_link_libraries(${binary_name} PRIVATE AMS::AMS)
   if (${use_ams})
     target_compile_definitions(${binary_name} PRIVATE USE_AMS)
   endif()
