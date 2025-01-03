@@ -29,8 +29,9 @@ build_and_test() {
     "WITH_CUDA ${WITH_CUDA}"
   echo "*******************************************************************************************"
 
-  mkdir -p /tmp/ams
-  pushd /tmp/ams
+  build_dir="/tmp/ams/$(uuidgen)"
+  mkdir -p ${build_dir}
+  pushd ${build_dir}
 
   cleanup
 
@@ -44,14 +45,11 @@ build_and_test() {
     -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
     -DWITH_CALIPER=On \
     -DWITH_HDF5=${WITH_HDF5} \
-    -DWITH_EXAMPLES=Off \
     -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
     -DCMAKE_INSTALL_PREFIX=./install \
     -DCMAKE_BUILD_TYPE=Release \
     -DCUDA_ARCH=$AMS_CUDA_ARCH \
     -DWITH_CUDA=${WITH_CUDA} \
-    -DUMPIRE_DIR=$AMS_UMPIRE_PATH \
-    -DMFEM_DIR=$AMS_MFEM_PATH \
     -DWITH_FAISS=${WITH_FAISS} \
     -DWITH_MPI=${WITH_MPI} \
     -DWITH_TESTS=On \
@@ -67,7 +65,7 @@ build_and_test() {
   cleanup
 
   popd
-  rm -rf /tmp/ams
+  rm -rf ${build_dir}
 }
 
 # build_and_test WITH_HDF5 WITH_MPI
