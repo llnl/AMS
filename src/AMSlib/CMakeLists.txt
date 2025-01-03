@@ -30,46 +30,24 @@ target_include_directories(AMS PUBLIC
 )
 
 
-if (AMS_TYPE STREQUAL "STATIC_LIBRARY")
-  if (WITH_CUDA)
-    target_link_libraries(AMS PRIVATE CUDA::cudart)
-  endif()
-
-  if (WITH_HDF5)
-    target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
-  endif()
-
-
-  if (WITH_CALIPER)
-    target_link_libraries(AMS PRIVATE caliper)
-  endif()
-
-  if (WITH_MPI)
-    target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
-  endif()
-
-  target_link_libraries(AMS PRIVATE stdc++fs torch)
-else()
-  if (WITH_CUDA)
-    target_link_libraries(AMS PRIVATE CUDA::cudart)
-  endif()
-
-  if (WITH_HDF5)
-    target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
-  endif()
-
-
-  if (WITH_CALIPER)
-    target_link_libraries(AMS PRIVATE caliper)
-  endif()
-
-  if (WITH_MPI)
-    target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
-  endif()
-
-  target_link_libraries(AMS PRIVATE stdc++fs torch)
+if (WITH_CUDA)
+  target_link_libraries(AMS PRIVATE CUDA::cudart)
 endif()
 
+if (WITH_HDF5)
+  target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
+endif()
+
+
+if (WITH_CALIPER)
+  target_link_libraries(AMS PRIVATE caliper)
+endif()
+
+if (WITH_MPI)
+  target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
+endif()
+
+target_link_libraries(AMS PRIVATE stdc++fs torch)
 
 
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS-config.h.in" "${PROJECT_BINARY_DIR}/include/AMS-config.h")
