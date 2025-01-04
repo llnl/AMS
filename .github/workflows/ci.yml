@@ -203,7 +203,7 @@ jobs:
           cmake \
             -DBUILD_SHARED_LIBS=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=${{ matrix.with_shared }} \
-            -DCMAKE_PREFIX_PATH=$AMS_INSTALL_PATH \
+            -DCMAKE_INSTALL_PREFIX=$AMS_INSTALL_PATH \
             -DWITH_CALIPER=On \
             -DWITH_HDF5=On \
             -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
@@ -215,8 +215,8 @@ jobs:
             -DWITH_AMS_DEBUG=On \
             -DWITH_WORKFLOW=Off \
             $GITHUB_WORKSPACE
-            make
-            make install
+            make -j$(nproc)
+            make -j$(nproc) install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
             ls ${AMS_INSTALL_PATH}
       - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
@@ -229,7 +229,7 @@ jobs:
           cd build_idealgas/
           export AMS_MFEM_PATH=$(spack location -i mfem)
           cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
-          make VERBOSE=1
+          make -j$(nproc) VERBOSE=1
       - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
@@ -260,7 +260,6 @@ jobs:
         RABBITMQ_PASS: ams
         RABBITMQ_HOST: rabbitmq
         RABBITMQ_PORT: 5672
-
     steps:
       - uses: actions/checkout@v4
       - name: Build Torch=On FAISS=On RMQ=On AMS
