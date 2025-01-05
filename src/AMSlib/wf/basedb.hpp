@@ -10,6 +10,7 @@
 
 #include <ATen/core/TensorBody.h>
 #include <H5Ipublic.h>
+#include <torch/torch.h>
 
 #include <cstdint>
 #include <experimental/filesystem>
@@ -121,7 +122,8 @@ public:
    * 'num_elements'  values to be stored
    */
 
-  virtual void store(const at::Tensor& inputs, const at::Tensor& outputs) = 0;
+  virtual void store(ArrayRef<torch::Tensor> Inputs,
+                     ArrayRef<torch::Tensor> Outputs) = 0;
 
 
   uint64_t getId() const { return id; }
@@ -305,7 +307,8 @@ public:
    * @param[in] inputs Tensor containing the inputs to bestored
    * @param[in] outputs Tensor containing the outputs to bestored
    */
-  void store(const at::Tensor& inputs, const at::Tensor& outputs) override;
+  virtual void store(ArrayRef<torch::Tensor> Inputs,
+                     ArrayRef<torch::Tensor> Outputs) override;
 };
 
 #endif

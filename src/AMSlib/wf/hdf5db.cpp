@@ -16,11 +16,11 @@
 #include <stdexcept>
 
 #include "ArrayRef.hpp"
-#include "utils.hpp"
 #include "wf/basedb.hpp"
 
 
 using namespace ams::db;
+using namespace ams;
 
 static std::string SmallVectorToString(ams::MutableArrayRef<hsize_t> shape)
 {
@@ -310,8 +310,30 @@ hdf5DB::~hdf5DB()
   //    HDF5_ERROR(err);
 }
 
-void hdf5DB::store(const at::Tensor& inputs, const at::Tensor& outputs)
+void hdf5DB::store(ArrayRef<torch::Tensor> Inputs,
+                   ArrayRef<torch::Tensor> Outputs)
 {
+
+  auto tOptions = torch::TensorOptions()
+                      .dtype(torch::kFloat32)
+                      .device(c10::DeviceType::CPU);
+
+  c10::SmallVector<torch::Tensor> ConvertedInputs(Inputs.begin(), Inputs.end());
+  c10::SmallVector<torch::Tensor> ConvertedOutputs(Outputs.begin(),
+                                                   Outputs.end());
+  for (auto& T : ConvertedInputs) {
+    std::cout << "CI Shape is " << T.sizes() << "\n";
+  }
+
+  for (auto& T : ConvertedOutputs) {
+    std::cout << "CO Shape is " << T.sizes() << "\n";
+  }
+  auto inputs =
+      torch::cat(ConvertedInputs, Inputs[0].sizes().size() - 1).to(tOptions);
+  auto outputs =
+      torch::cat(ConvertedOutputs, Outputs[0].sizes().size() - 1).to(tOptions);
+
+
   if (inputs.dtype() != outputs.dtype()) {
     throw std::invalid_argument(
         "Storing into HDF5 database requires all tensors to have the same "
