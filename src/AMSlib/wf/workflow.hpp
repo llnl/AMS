@@ -90,50 +90,8 @@ class AMSWorkflow
     DBG(Workflow,
         "Storing data (#elements = %ld) to database",
         StoreInputTensors[0].sizes()[0]);
-    store(StoreInputTensors, StoreOutputTensors);
+    DB->store(StoreInputTensors, StoreOutputTensors);
     CALIPER(CALI_MARK_END("DBSTORE");)
-  }
-
-  /** \brief Store the data in the database and copies
-     * data from the GPU to the CPU and then to the database.
-     * To store GPU resident data we use a 1MB of "pinned"
-     * memory as a buffer
-     * @param[in] num_elements Number of elements of each 1-D vector
-     * @param[in] inputs vector to 1-D vectors storing num_elements
-     * items to be stored in the database
-     * @param[in] outputs vector to 1-D vectors storing num_elements
-     * items to be stored in the database
-     */
-  void store(ArrayRef<torch::Tensor> Inputs, ArrayRef<torch::Tensor> Outputs)
-  {
-    if (!DB) return;
-
-
-    auto tOptions = torch::TensorOptions()
-                        .dtype(torch::kFloat32)
-                        .device(c10::DeviceType::CPU);
-
-    c10::SmallVector<torch::Tensor> ConvertedInputs(Inputs.begin(),
-                                                    Inputs.end());
-    c10::SmallVector<torch::Tensor> ConvertedOutputs(Outputs.begin(),
-                                                     Outputs.end());
-    for (auto &T : ConvertedInputs) {
-      std::cout << "CI Shape is " << T.sizes() << "\n";
-    }
-
-    for (auto &T : ConvertedOutputs) {
-      std::cout << "CO Shape is " << T.sizes() << "\n";
-    }
-    auto Input =
-        torch::cat(ConvertedInputs, Inputs[0].sizes().size() - 1).to(tOptions);
-    std::cout << "Cat Input : " << Input.sizes() << "\n";
-    auto Output = torch::cat(ConvertedOutputs, Outputs[0].sizes().size() - 1)
-                      .to(tOptions);
-    std::cout << "Cat Output: " << Output.sizes() << "\n";
-    // Store to database
-    DB->store(Input, Output);
-
-    return;
   }
 
   /** \brief Check if we can perform a surrogate model update.
