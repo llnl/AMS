@@ -102,21 +102,16 @@ if (WITH_RMQ)
   find_package(OpenSSL REQUIRED)
   set(AMS_OPENSSL_FOUND_ROOT "")
   if (OPENSSL_FOUND)
-    list(APPEND AMS_APP_INCLUDES ${OPENSSL_INCLUDE_DIR})
-    list(APPEND AMS_APP_LIBRARIES "${OPENSSL_LIBRARIES}")
-    list(APPEND AMS_APP_LIBRARIES ssl)
+    message(STATUS "OpenSSL libraries found: ${OPENSSL_LIBRARIES}")
+    message(STATUS "OpenSSL includes found: " ${OPENSSL_INCLUDE_DIR})
     get_filename_component(AMS_OPENSSL_FOUND_ROOT "${OPENSSL_SSL_LIBRARY}" DIRECTORY)
     get_filename_component(AMS_OPENSSL_FOUND_ROOT "${AMS_OPENSSL_FOUND_ROOT}" DIRECTORY)
-    message(STATUS "OpenSSL includes found: " ${OPENSSL_INCLUDE_DIR})
-    message(STATUS "OpenSSL libraries found: " ${OPENSSL_LIBRARIES})
+    message(STATUS "OPENSSL Root dir is ${AMS_OPENSSL_FOUND_ROOT}")
   else()
     message(STATUS "OpenSSL Not Found")
   endif()
 
   find_package(libevent REQUIRED) # event loop library
-  list(APPEND AMS_APP_INCLUDES ${LIBEVENT_INCLUDE_DIR})
-  list(APPEND AMS_APP_LIBRARIES "${LIBEVENT_LIBRARIES}")
-  list(APPEND AMS_APP_LIBRARIES amqpcpp event_pthreads event)
 endif() # WITH_RMQ
 
 # ------------------------------------------------------------------------------

@@ -9,10 +9,10 @@ set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/su
 if (WITH_HDF5)
   list(APPEND AMS_LIB_SRC wf/hdf5db.cpp)
 endif()
-#
-#if (WITH_RMQ)
-#  list(APPEND AMS_LIB_SRC wf/rmqdb.cpp)
-#endif()
+
+if (WITH_RMQ)
+  list(APPEND AMS_LIB_SRC wf/rmqdb.cpp)
+endif()
 
 add_library(AMS ${AMS_LIB_SRC})
 
@@ -45,6 +45,13 @@ endif()
 
 if (WITH_MPI)
   target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
+endif()
+
+if (WITH_RMQ)
+  target_link_libraries(AMS PRIVATE amqpcpp)
+  if (OPENSSL_FOUND)
+    target_link_libraries(AMS PRIVATE OpenSSL::SSL OpenSSL::Crypto) 
+  endif()
 endif()
 
 target_link_libraries(AMS PRIVATE stdc++fs torch)
