@@ -51,11 +51,18 @@ list(APPEND AMS_APP_LIBRARIES nlohmann_json::nlohmann_json)
 find_package(Threads REQUIRED)
 # ------------------------------------------------------------------------------
 
+set(MPI_DIRECTORIES "")
 if (WITH_MPI)
   find_package(MPI REQUIRED)
   message(STATUS "MPICC:  ${MPI_C_COMPILER}")
   message(STATUS "MPICXX: ${MPI_CXX_COMPILER}")
   message(STATUS "MPI Library used: " MPI::MPI_CXX)
+  foreach(LIBRARY ${MPI_CXX_LIBRARIES})
+    get_filename_component(LIB_DIR ${LIBRARY} DIRECTORY)
+    list(APPEND MPI_DIRECTORIES ${LIB_DIR})
+  endforeach()
+  list(REMOVE_DUPLICATES MPI_DIRECTORIES)
+  message(STATUS "MPI Liraries: ${MPI_DIRECTORIES}")
 endif()
 
 # ------------------------------------------------------------------------------
@@ -102,21 +109,17 @@ if (WITH_RMQ)
   find_package(OpenSSL REQUIRED)
   set(AMS_OPENSSL_FOUND_ROOT "")
   if (OPENSSL_FOUND)
-    list(APPEND AMS_APP_INCLUDES ${OPENSSL_INCLUDE_DIR})
-    list(APPEND AMS_APP_LIBRARIES "${OPENSSL_LIBRARIES}")
-    list(APPEND AMS_APP_LIBRARIES ssl)
+    message(STATUS "OpenSSL libraries found: ${OPENSSL_LIBRARIES}")
+    message(STATUS "OpenSSL includes found: " ${OPENSSL_INCLUDE_DIR})
     get_filename_component(AMS_OPENSSL_FOUND_ROOT "${OPENSSL_SSL_LIBRARY}" DIRECTORY)
     get_filename_component(AMS_OPENSSL_FOUND_ROOT "${AMS_OPENSSL_FOUND_ROOT}" DIRECTORY)
-    message(STATUS "OpenSSL includes found: " ${OPENSSL_INCLUDE_DIR})
-    message(STATUS "OpenSSL libraries found: " ${OPENSSL_LIBRARIES})
+    message(STATUS "OPENSSL Root dir is ${AMS_OPENSSL_FOUND_ROOT}")
   else()
     message(STATUS "OpenSSL Not Found")
   endif()
-
+  set(AMS_LIBEVENT_HINTS ${MPI_DIRECTORIES})
+  
   find_package(libevent REQUIRED) # event loop library
-  list(APPEND AMS_APP_INCLUDES ${LIBEVENT_INCLUDE_DIR})
-  list(APPEND AMS_APP_LIBRARIES "${LIBEVENT_LIBRARIES}")
-  list(APPEND AMS_APP_LIBRARIES amqpcpp event_pthreads event)
 endif() # WITH_RMQ
 
 # ------------------------------------------------------------------------------
@@ -153,4 +156,3 @@ if (WITH_TESTS)
   include(CTest)
   add_subdirectory(tests)
 endif()
-

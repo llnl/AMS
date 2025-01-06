@@ -323,17 +323,15 @@ enum class ConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
   * @brief AMS represents the header as follows:
   * The header is 16 bytes long:
   *   - 1 byte is the size of the header (here 16). Limit max: 255
-  *   - 1 byte is the precision (4 for float, 8 for double). Limit max: 255
   *   - 2 bytes are the MPI rank (0 if AMS is not running with MPI). Limit max: 65535
   *   - 2 bytes to store the size of the MSG domain name. Limit max: 65535
-  *   - 4 bytes are the number of elements in the message. Limit max: 2^32 - 1
-  *   - 2 bytes are the input dimension. Limit max: 65535
-  *   - 2 bytes are the output dimension. Limit max: 65535
+  *   - 2 bytes are the number of input tensors . Limit max: 65535
+  *   - 2 bytes are the number of output tensors . Limit max: 65535
   *   - 2 bytes for padding. Limit max: 2^16 - 1
   *
-  * |_Header_|_Datatype_|___Rank___|__DomainSize__|__#elems__|___InDim____|___OutDim___|_Pad_|.real data.|
+  * |_Header_|___Rank___|__DomainSize__|___InDim____|___OutDim___|_Pad_|.real data.|
   * ^        ^          ^          ^              ^          ^            ^            ^     ^           ^
-  * | Byte 1 |  Byte 2  | Byte 3-4 |  Byte 5-6    |Byte 6-10 | Byte 10-12 | Byte 12-14 |-----| Byte 16-k |
+  * | Byte 1 | Byte 2-3 |    Byte 4-5  |  Byte 6-7  |Byte 8-9    | Byte 10-12 | Byte 12-14 |-----| Byte 16-k |
   *
   * where X = datatype * num_element * (InDim + OutDim). Total message size is 16+k. 
   *
@@ -346,17 +344,13 @@ enum class ConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
 struct AMSMsgHeader {
   /** @brief Header size (bytes) */
   uint8_t hsize;
-  /** @brief Data type size (bytes) */
-  uint8_t dtype;
   /** @brief MPI rank */
   uint16_t mpi_rank;
   /** @brief Domain Name Size */
   uint16_t domain_size;
-  /** @brief Number of elements */
-  uint32_t num_elem;
-  /** @brief Inputs dimension */
+  /** @brief Number of input tensors*/
   uint16_t in_dim;
-  /** @brief Outputs dimension */
+  /** @brief Number of ouput tensors */
   uint16_t out_dim;
 
   /**
@@ -368,10 +362,8 @@ struct AMSMsgHeader {
    */
   AMSMsgHeader(size_t mpi_rank,
                size_t domain_size,
-               size_t num_elem,
                size_t in_dim,
-               size_t out_dim,
-               size_t type_size);
+               size_t out_dim);
 
   /**
    * @brief Constructor for AMSMsgHeader
@@ -382,10 +374,8 @@ struct AMSMsgHeader {
    */
   AMSMsgHeader(uint16_t mpi_rank,
                uint16_t domain_size,
-               uint32_t num_elem,
                uint16_t in_dim,
-               uint16_t out_dim,
-               uint8_t type_size);
+               uint16_t out_dim);
 
   /**
    * @brief Return the size of a header in the AMS protocol.
@@ -393,9 +383,8 @@ struct AMSMsgHeader {
    */
   static size_t constexpr size()
   {
-    return ((sizeof(hsize) + sizeof(dtype) + sizeof(mpi_rank) +
-             sizeof(domain_size) + sizeof(num_elem) + sizeof(in_dim) +
-             sizeof(out_dim) + sizeof(double) - 1) /
+    return ((sizeof(hsize) + sizeof(mpi_rank) + sizeof(domain_size) +
+             sizeof(in_dim) + sizeof(out_dim) + sizeof(double) - 1) /
             sizeof(double)) *
            sizeof(double);
   }
@@ -421,6 +410,40 @@ struct AMSMsgHeader {
  */
 class AMSMessage
 {
+private:
+  static size_t computeSerializedSize(const torch::Tensor& tensor)
+  {
+    // First we need to store how many dimensions this tensor has.
+    size_t totalBytes = sizeof(size_t);
+    // Next we need to get the required bytes to store both shape and strides.
+    totalBytes += tensor.sizes().size() * sizeof(size_t) * 2;
+    // Next we need to store the number of bytes of this tensor.
+    totalBytes += sizeof(size_t);
+    // And finally the size of the data themselves.
+    return totalBytes + tensor.nbytes();
+  }
+
+  static void serializeTensor(const torch::Tensor& tensor, uint8_t*& blob)
+  {
+    *reinterpret_cast<size_t*>(blob) = tensor.sizes().size();
+    blob += sizeof(size_t);
+    for (auto& V : tensor.sizes()) {
+      *reinterpret_cast<size_t*>(blob) = static_cast<size_t>(V);
+      blob += sizeof(size_t);
+    }
+    // Copy in
+    for (auto& V : tensor.strides()) {
+      *reinterpret_cast<size_t*>(blob) = static_cast<size_t>(V);
+      blob += sizeof(size_t);
+    }
+
+    *reinterpret_cast<size_t*>(blob) = static_cast<size_t>(tensor.nbytes());
+    blob += sizeof(size_t);
+
+    std::memcpy(blob, tensor.data_ptr(), tensor.nbytes());
+    blob += tensor.nbytes();
+  }
+
 public:
   /** @brief message ID */
   int _id;
@@ -430,8 +453,6 @@ public:
   uint8_t* _data;
   /** @brief The total size of the binary blob in bytes */
   size_t _total_size;
-  /** @brief The number of input/output pairs */
-  size_t _num_elements;
   /** @brief The dimensions of inputs */
   size_t _input_dim;
   /** @brief The dimensions of outputs */
@@ -443,7 +464,6 @@ public:
   AMSMessage()
       : _id(0),
         _rank(0),
-        _num_elements(0),
         _input_dim(0),
         _output_dim(0),
         _data(nullptr),
@@ -459,31 +479,38 @@ public:
    * @param[in]  inputs              Inputs
    * @param[in]  outputs             Outputs
    */
-  template <typename TypeValue>
   AMSMessage(int id,
              uint64_t rId,
              std::string& domain_name,
-             size_t num_elements,
-             const std::vector<TypeValue*>& inputs,
-             const std::vector<TypeValue*>& outputs)
+             ArrayRef<torch::Tensor> Inputs,
+             ArrayRef<torch::Tensor> Outputs)
       : _id(id),
         _rank(rId),
-        _num_elements(num_elements),
-        _input_dim(inputs.size()),
-        _output_dim(outputs.size()),
+        _input_dim(Inputs.size()),
+        _output_dim(Outputs.size()),
         _data(nullptr),
         _total_size(0)
   {
-    CALIPER(CALI_MARK_BEGIN("AMS_MESSAGE");)
-    AMSMsgHeader header(_rank,
-                        domain_name.size(),
-                        _num_elements,
-                        _input_dim,
-                        _output_dim,
-                        sizeof(TypeValue));
+    SmallVector<torch::Tensor> _inputs;
+    SmallVector<torch::Tensor> _outputs;
+    auto tOptions = torch::TensorOptions()
+                        .dtype(torch::kFloat32)
+                        .device(c10::DeviceType::CPU);
 
-    _total_size = AMSMsgHeader::size() + domain_name.size() +
-                  getTotalElements() * sizeof(TypeValue);
+    for (auto& tensor : Inputs)
+      _inputs.push_back(tensor.contiguous().to(tOptions));
+
+    for (auto& tensor : Outputs)
+      _outputs.push_back(tensor.contiguous().to(tOptions));
+
+    AMSMsgHeader header(_rank, domain_name.size(), _input_dim, _output_dim);
+
+    _total_size = AMSMsgHeader::size() + domain_name.size();
+    for (auto& tensor : _inputs)
+      _total_size += computeSerializedSize(tensor);
+    for (auto& tensor : _outputs)
+      _total_size += computeSerializedSize(tensor);
+
     auto& rm = ams::ResourceManager::getInstance();
     _data = rm.allocate<uint8_t>(_total_size, AMSResourceType::AMS_HOST);
 
@@ -492,9 +519,19 @@ public:
                 domain_name.c_str(),
                 domain_name.size());
     current_offset += domain_name.size();
-    current_offset += encode_data(_data + current_offset, inputs, outputs);
-    DBG(AMSMessage, "Allocated message %d: %p", _id, _data);
-    CALIPER(CALI_MARK_END("AMS_MESSAGE");)
+
+    uint8_t* blob = _data + current_offset;
+
+
+    for (auto& tensor : _inputs)
+      serializeTensor(tensor, blob);
+    for (auto& tensor : _outputs)
+      serializeTensor(tensor, blob);
+    DBG(AMSMessage,
+        "Allocated message %d: %p with size: %ld",
+        _id,
+        _data,
+        reinterpret_cast<uintptr_t>(blob) - reinterpret_cast<uintptr_t>(_data));
   }
 
   /**
@@ -554,49 +591,6 @@ public:
       other._data = nullptr;
     }
     return *this;
-  }
-
-  /**
-   * @brief Fill a buffer with a data section starting at a given position.
-   * @param[in]  data_blob          The buffer to fill
-   * @param[in]  offset     Position where to start writing in the buffer
-   * @param[in]  inputs             Inputs
-   * @param[in]  outputs            Outputs
-   * @return The number of bytes in the message or 0 if error
-   */
-  template <typename TypeValue>
-  size_t encode_data(uint8_t* data_blob,
-                     const std::vector<TypeValue*>& inputs,
-                     const std::vector<TypeValue*>& outputs)
-  {
-    if (!data_blob) return 0;
-    size_t offset = 0;
-
-    // Creating the body part of the message
-    for (size_t i = 0; i < _input_dim; i++) {
-      std::memcpy(data_blob + offset,
-                  inputs[i],
-                  _num_elements * sizeof(TypeValue));
-      offset += (_num_elements * sizeof(TypeValue));
-    }
-
-    for (size_t i = 0; i < _output_dim; i++) {
-      std::memcpy(data_blob + offset,
-                  outputs[i],
-                  _num_elements * sizeof(TypeValue));
-      offset += (_num_elements * sizeof(TypeValue));
-    }
-
-    return ((_input_dim + _output_dim) * _num_elements) * sizeof(TypeValue);
-  }
-
-  /**
-   *  @brief Return the total number of elements in this message
-   *  @return  Size in bytes of the data portion
-   */
-  size_t getTotalElements() const
-  {
-    return (_num_elements * (_input_dim + _output_dim));
   }
 
   /**
@@ -1512,22 +1506,18 @@ public:
    * @param[in] inputs A vector containing arrays of inputs, each array has num_elements elements
    * @param[in] outputs A vector containing arrays of outputs, each array has num_elements elements
    */
-  template <typename TypeValue>
   void publish(std::string& domain_name,
-               size_t num_elements,
-               std::vector<TypeValue*>& inputs,
-               std::vector<TypeValue*>& outputs)
+               ArrayRef<torch::Tensor> Inputs,
+               ArrayRef<torch::Tensor> Outputs)
   {
     DBG(RMQInterface,
         "[tag=%d] stores %ld elements of input/output "
         "dimensions (%ld, %ld)",
         _msg_tag,
-        num_elements,
-        inputs.size(),
-        outputs.size())
+        Inputs.size(),
+        Outputs.size())
 
-    CALIPER(CALI_MARK_BEGIN("STORE_RMQ");)
-    AMSMessage msg(_msg_tag, _rId, domain_name, num_elements, inputs, outputs);
+    AMSMessage msg(_msg_tag, _rId, domain_name, Inputs, Outputs);
 
     // TODO: we could simplify the logic here
     // AMSMessage could directly produce a shared ptr
@@ -1621,27 +1611,12 @@ public:
    * @param[in] predicate (NOT SUPPORTED YET) Series of predicate
    */
   PERFFASPECT()
-  void store(size_t num_elements,
-             std::vector<double*>& inputs,
-             std::vector<double*>& outputs,
-             bool* predicate = nullptr) override
+  virtual void store(ArrayRef<torch::Tensor> Inputs,
+                     ArrayRef<torch::Tensor> Outputs)
   {
-    CFATAL(RMQDB,
-           predicate != nullptr,
-           "RMQ database does not support storing uq-predicates")
-    interface.publish(appDomain, num_elements, inputs, outputs);
+    interface.publish(appDomain, Inputs, Outputs);
   }
 
-  void store(size_t num_elements,
-             std::vector<float*>& inputs,
-             std::vector<float*>& outputs,
-             bool* predicate = nullptr) override
-  {
-    CFATAL(RMQDB,
-           predicate != nullptr,
-           "RMQ database does not support storing uq-predicates")
-    interface.publish(appDomain, num_elements, inputs, outputs);
-  }
 
   /**
    * @brief Return the type of this broker
