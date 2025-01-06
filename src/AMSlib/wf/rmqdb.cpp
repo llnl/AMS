@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
+#include <cstdint>
+
 #include "wf/basedb.hpp"
 
 using namespace ams::db;
@@ -15,15 +17,11 @@ using namespace ams::db;
 
 AMSMsgHeader::AMSMsgHeader(size_t mpi_rank,
                            size_t domain_size,
-                           size_t num_elem,
                            size_t in_dim,
-                           size_t out_dim,
-                           size_t type_size)
+                           size_t out_dim)
     : hsize(static_cast<uint8_t>(AMSMsgHeader::size())),
-      dtype(static_cast<uint8_t>(type_size)),
       mpi_rank(static_cast<uint16_t>(mpi_rank)),
       domain_size(static_cast<uint16_t>(domain_size)),
-      num_elem(static_cast<uint32_t>(num_elem)),
       in_dim(static_cast<uint16_t>(in_dim)),
       out_dim(static_cast<uint16_t>(out_dim))
 {
@@ -31,15 +29,11 @@ AMSMsgHeader::AMSMsgHeader(size_t mpi_rank,
 
 AMSMsgHeader::AMSMsgHeader(uint16_t mpi_rank,
                            uint16_t domain_size,
-                           uint32_t num_elem,
                            uint16_t in_dim,
-                           uint16_t out_dim,
-                           uint8_t type_size)
+                           uint16_t out_dim)
     : hsize(static_cast<uint8_t>(AMSMsgHeader::size())),
-      dtype(type_size),
       mpi_rank(mpi_rank),
       domain_size(domain_size),
-      num_elem(num_elem),
       in_dim(in_dim),
       out_dim(out_dim)
 {
@@ -53,28 +47,23 @@ size_t AMSMsgHeader::encode(uint8_t* data_blob)
   // Header size (should be 1 bytes)
   data_blob[current_offset] = hsize;
   current_offset += sizeof(hsize);
-  // Data type (should be 1 bytes)
-  data_blob[current_offset] = dtype;
-  current_offset += sizeof(dtype);
   // MPI rank (should be 2 bytes)
   std::memcpy(data_blob + current_offset, &(mpi_rank), sizeof(mpi_rank));
   current_offset += sizeof(mpi_rank);
   // Domain Size (should be 2 bytes)
   DBG(AMSMsgHeader,
-      "Generating domain name of size %d --- %d offset %d",
+      "Generating domain name of size %d --- %lu offset %lu",
       domain_size,
       sizeof(domain_size),
       current_offset);
   std::memcpy(data_blob + current_offset, &(domain_size), sizeof(domain_size));
   current_offset += sizeof(domain_size);
-  // Num elem (should be 4 bytes)
-  std::memcpy(data_blob + current_offset, &(num_elem), sizeof(num_elem));
-  current_offset += sizeof(num_elem);
   // Input dim (should be 2 bytes)
   std::memcpy(data_blob + current_offset, &(in_dim), sizeof(in_dim));
+  *reinterpret_cast<uint16_t*>(data_blob) = static_cast<uint16_t>(in_dim);
   current_offset += sizeof(in_dim);
   // Output dim (should be 2 bytes)
-  std::memcpy(data_blob + current_offset, &(out_dim), sizeof(out_dim));
+  *reinterpret_cast<uint16_t*>(data_blob) = static_cast<uint16_t>(out_dim);
   current_offset += sizeof(out_dim);
 
   return AMSMsgHeader::size();
@@ -117,12 +106,7 @@ AMSMsgHeader AMSMsgHeader::decode(uint8_t* data_blob)
   uint16_t new_out_dim;
   std::memcpy(&new_out_dim, data_blob + current_offset, sizeof(uint16_t));
 
-  return AMSMsgHeader(new_mpirank,
-                      new_domain_size,
-                      new_num_elem,
-                      new_in_dim,
-                      new_out_dim,
-                      new_dtype);
+  return AMSMsgHeader(new_mpirank, new_domain_size, new_in_dim, new_out_dim);
 }
 
 /**
@@ -133,40 +117,12 @@ void AMSMessage::swap(const AMSMessage& other)
 {
   _id = other._id;
   _rank = other._rank;
-  _num_elements = other._num_elements;
   _input_dim = other._input_dim;
   _output_dim = other._output_dim;
   _total_size = other._total_size;
   _data = other._data;
 }
 
-AMSMessage::AMSMessage(int id, uint64_t rId, uint8_t* data)
-    : _id(id),
-      _num_elements(0),
-      _input_dim(0),
-      _output_dim(0),
-      _data(data),
-      _total_size(0)
-{
-  auto header = AMSMsgHeader::decode(data);
-
-  int current_rank = rId;
-  _rank = header.mpi_rank;
-  CWARNING(AMSMessage,
-           _rank != current_rank,
-           "MPI rank are not matching (using %d)",
-           _rank)
-
-  _num_elements = header.num_elem;
-  _input_dim = header.in_dim;
-  _output_dim = header.out_dim;
-  _data = data;
-  auto type_value = header.dtype;
-
-  _total_size = AMSMsgHeader::size() + getTotalElements() * type_value;
-
-  DBG(AMSMessage, "Allocated message %d: %p", _id, _data);
-}
 
 /**
  * AMSMessageInbound
