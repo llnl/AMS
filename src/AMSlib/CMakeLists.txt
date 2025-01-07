@@ -52,6 +52,11 @@ if (WITH_RMQ)
   if (OPENSSL_FOUND)
     target_link_libraries(AMS PRIVATE OpenSSL::SSL OpenSSL::Crypto) 
   endif()
+  # NOTE: We set here the event/event pthreads as public. As there is no easy way
+  # to do a find package(libevent) and RMQ is not exposing that properly.
+  message(STATUS "Event libs are ${LIBEVENT_LIBRARY}")
+  message(STATUS "Event libs are ${LIBEVENT_LIBRARY} and ${LIBEVENT_THREAD}")
+  target_link_libraries(AMS PUBLIC ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
 endif()
 
 target_link_libraries(AMS PRIVATE stdc++fs torch)
