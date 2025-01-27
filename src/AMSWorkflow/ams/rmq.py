@@ -165,7 +165,7 @@ class AMSMessage(object):
         # Return input, output
         return (domain_name, data[:, :idim], data[:, idim:])
 
-    def _decode(self, body: str) -> Tuple[np.array]:
+    def _decode(self, body: str) -> Tuple[str, np.array, np.array]:
         input = []
         output = []
         # Multiple AMS messages could be packed in one RMQ message

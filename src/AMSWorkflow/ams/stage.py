@@ -283,6 +283,9 @@ class RMQDomainDataLoaderTask(Task):
         self.orig_sig_handlers = {}
         self.policy = policy
 
+        # Counter that get incremented when we receive a message
+        self.internal_msg_cnt = 0
+
         # Signals can only be used within the main thread
         if self.policy != "thread":
             # We ignore SIGTERM, SIGUSR1, SIGINT by default so later
@@ -312,13 +315,17 @@ class RMQDomainDataLoaderTask(Task):
         print("Adding terminate message at queue:", self.o_queue)
         self.o_queue.put(QueueMessage(MessageType.Terminate, None))
 
+    
+    @AMSMonitor(array=["msgs"], record=["datasize", "total_time"])
     def callback_message(self, ch, basic_deliver, properties, body):
         """
         Callback that will be called each time a message will be consummed.
         the connection (or if a problem happened with the connection).
         """
-        start_time = time.time()
-        domain_name, input_data, output_data = AMSMessage(body).decode()
+        start_time = time.time_ns()
+        msg = AMSMessage(body)
+
+        domain_name, input_data, output_data = msg.decode()
         row_size = input_data[0, :].nbytes + output_data[0, :].nbytes
         rows_per_batch = int(np.ceil(BATCH_SIZE / row_size))
         num_batches = int(np.ceil(input_data.shape[0] / rows_per_batch))
@@ -329,8 +336,27 @@ class RMQDomainDataLoaderTask(Task):
 
         for j, (i, o) in enumerate(zip(input_batches, output_batches)):
             self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(i, o, domain_name)))
+        end_time = time.time_ns()
 
-        self.total_time += time.time() - start_time
+        self.total_time += (end_time - start_time)
+        # TODO: Improve the code to manage potentially multiple messages per AMSMessage
+        # TODO: Right now the ID is not encoded in the AMSMessage by AMSlib
+        #       If order of messages matters we might have to encode it
+        msg = {
+            "id": self.internal_msg_cnt,
+            "delivery_tag": basic_deliver.delivery_tag,
+            "mpi_rank": msg.mpi_rank,
+            "domain_name": domain_name,
+            "num_elements": msg.num_elements,
+            "input_dim": msg.input_dim,
+            "output_dim": msg.output_dim,
+            "size_bytes": input_data.nbytes + output_data.nbytes,
+            "ts_received": start_time,
+            "ts_processed": end_time
+        }
+        # Msgs is the array (list) we push to (managed by AMSMonitor)
+        msgs.append(msg)
+        self.internal_msg_cnt += 1
 
     def signal_wrapper(self, name, pid):
         def handler(signum, frame):
@@ -343,7 +369,6 @@ class RMQDomainDataLoaderTask(Task):
         self.rmq_consumer.stop()
         print(f"Spend {self.total_time} at {self.__class__.__name__}")
 
-    @AMSMonitor(record=["datasize", "total_time"])
     def __call__(self):
         """
         Busy loop of consuming messages from RMQ queue
@@ -905,6 +930,25 @@ class RMQPipeline(Pipeline):
         self._model_update_queue = model_update_queue
         print("Received a data queue of", self._data_queue)
         print("Received a model_update queue of", self._model_update_queue)
+
+        # FIXME: temporary solution to kill properly the stager when using srun
+        self.write_pid()
+
+    def write_pid(self):
+        """
+        Write the PID of the current process in
+        a file. Append it to a file if the file
+        exists (multiple stagers could be running).
+
+        This is useful to kill the stager.
+
+        FIXME: this solution is not very clean or elegant
+        and can be improved. The simulations side could send a message
+        on a specific queue to signify that no more data will arrive for example.
+        """
+
+        with open("ams-stagers.pid", 'a') as f:
+            f.write(f" {os.getpid()}")
 
     def get_load_task(self, o_queue, policy):
         """
