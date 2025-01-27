@@ -271,8 +271,7 @@ class RMQDomainDataLoaderTask(Task):
         rmq_queue,
         policy,
         prefetch_count=1,
-        signals=[signal.SIGTERM, signal.SIGINT, signal.SIGUSR1],
-        # signals=list(signal.Signals)
+        signals=[signal.SIGINT, signal.SIGUSR1],
     ):
         self.o_queue = o_queue
         self.cert = cert
@@ -585,6 +584,41 @@ class Pipeline(ABC):
 
         self.store = store
 
+        # For signal handling
+        self.released = False
+
+        self.signals = [signal.SIGINT, signal.SIGTERM, signal.SIGUSR1]
+
+    def signal_wrapper(self, name, pid):
+        def handler(signum, frame):
+            print(f"Received SIGNUM={signum} for {name}[pid={pid}]")
+            # We trigger the underlying signal handlers for all tasks
+            # This should only trigger RMQDomainDataLoaderTask
+
+            # TODO: I don't like this system to shutdown the pipeline on demand
+            # It's extremely easy to mess thing up with signals.. and it's
+            # not a robust solution (if a task is not managing correctly SIGINT
+            # the pipeline can explode)
+            for e in self._executors:
+                os.kill(e.pid, signal.SIGINT)
+            self.release_signals()
+        return handler
+
+    def init_signals(self):
+        self.released = False
+        self.original_handlers = {}
+        for sig in self.signals:
+            self.original_handlers[sig] = signal.getsignal(sig)
+            signal.signal(sig, self.signal_wrapper(self.__class__.__name__, os.getpid()))
+
+    def release_signals(self):
+        if not self.released:
+            # We put back all the signal handlers
+            for sig in self.signals:
+                signal.signal(sig, self.original_handlers[sig])
+            
+            self.released = True
+
     def add_user_action(self, obj):
         """
         Adds an action to be performed at the data before storing them in the filesystem
@@ -617,15 +651,15 @@ class Pipeline(ABC):
             exec_vehicle_cls: The class to be used to generate entities
             executing actions by reading data from i/o_queue(s).
         """
-        executors = list()
+        self._executors = list()
         for a in self._tasks:
-            executors.append(exec_vehicle_cls(target=a))
+            self._executors.append(exec_vehicle_cls(target=a))
 
-        for e in executors:
+        for e in self._executors:
             e.start()
 
-        print(f"{self.__class__.__name__} joining threads")
-        for e in executors:
+        print(f"{self.__class__.__name__} joining {len(self._executors)} threads")
+        for e in self._executors:
             e.join()
         print(f"{self.__class__.__name__} Threads are done")
 
@@ -691,10 +725,12 @@ class Pipeline(ABC):
                 f"Pipeline execute does not support policy: {policy}, please select from  {Pipeline.supported_policies}"
             )
 
+        self.init_signals()
         # Create a pipeline of actions and link them with appropriate queues
         self._link_pipeline(policy)
         # Execute them
         self._execute_tasks(policy)
+        self.release_signals()
 
     @abstractmethod
     def requires_model_update(self):

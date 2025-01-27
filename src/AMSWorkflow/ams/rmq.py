@@ -572,6 +572,7 @@ class AsyncConsumer(object):
         """
         self.logger.debug(f'Declaring queue "{queue_name}"')
         cb = functools.partial(self.on_queue_declareok, userdata=queue_name)
+        # arguments = {"x-consumer-timeout":1800000} # 30 minutes in ms
         self._channel.queue_declare(queue=queue_name, exclusive=False, callback=cb)
 
     def on_queue_declareok(self, _unused_frame, userdata):
@@ -646,23 +647,23 @@ class AsyncConsumer(object):
         if self._channel:
             self._channel.close()
 
-    def on_message(self, _unused_channel, basic_deliver, properties, body):
+    def on_message(self, _unused_channel, method_frame, properties, body):
         """Invoked by pika when a message is delivered from RabbitMQ. The
-        channel is passed for your convenience. The basic_deliver object that
+        channel is passed for your convenience. The method_frame object that
         is passed in carries the exchange, routing key, delivery tag and
         a redelivered flag for the message. The properties passed in is an
         instance of BasicProperties with the message properties and the body
         is the message that was sent.
 
         :param pika.channel.Channel _unused_channel: The channel object
-        :param pika.Spec.Basic.Deliver: basic_deliver method
+        :param pika.Spec.Basic.Deliver: method_frame method
         :param pika.Spec.BasicProperties: properties
         :param bytes body: The message body
 
         """
-        self.logger.info(f"Received message #{basic_deliver.delivery_tag} from {properties}")
-        self._on_message_cb(_unused_channel, basic_deliver, properties, body)
-        self.acknowledge_message(basic_deliver.delivery_tag)
+        self.logger.info(f"Received message #{method_frame.delivery_tag} from {properties}")
+        self._on_message_cb(_unused_channel, method_frame, properties, body)
+        self.acknowledge_message(method_frame.delivery_tag)
 
     def acknowledge_message(self, delivery_tag):
         """Acknowledge the message delivery from RabbitMQ by sending a
