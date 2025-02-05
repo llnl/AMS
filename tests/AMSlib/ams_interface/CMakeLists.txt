@@ -171,7 +171,7 @@ function(BUILD_TEST exe source)
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
 endfunction()
 
-
+BUILD_TEST(ams_physics ams_physics.cpp)
 BUILD_TEST(ams_end_to_end ams_ete.cpp)
 BUILD_TEST(ams_inout_2d ams_ete_2d.cpp)
 BUILD_TEST(ams_ete_broadcast ams_ete_broadcast.cpp)
