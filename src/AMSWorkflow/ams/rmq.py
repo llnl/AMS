@@ -34,12 +34,17 @@ class AMSMessage(object):
         self.domain_names = []
         self.input_dim = None
         self.output_dim = None
+        self.message_id = None
 
     def __str__(self):
         dt = "float" if self.dtype_byte == 4 else 8
         if not self.dtype_byte:
             dt = None
-        return f"AMSMessage(domain={self.domain_names}, #mpi={self.mpi_rank}, num_elements={self.num_elements}, datatype={dt}, input_dim={self.input_dim}, output_dim={self.output_dim})"
+        s = f"AMSMessage(mpi_rank={self.mpi_rank}, "
+        s += f"message_id={self.message_id}, domain={self.domain_names}, "
+        s += f"num_elements={self.num_elements}, datatype={dt}, "
+        s += f"input_dim={self.input_dim}, output_dim={self.output_dim})"
+        return s
 
     def __repr__(self):
         return self.__str__()
@@ -55,9 +60,9 @@ class AMSMessage(object):
         - 4 bytes are the number of elements in the message. Limit max: 2^32 - 1
         - 2 bytes are the input dimension. Limit max: 65535
         - 2 bytes are the output dimension. Limit max: 65535
-        - 2 bytes are for aligning memory to 8
+        - 2 bytes are the message ID given by AMSlib (local to each MPI rank). Limit max: 65535
 
-            |_Header_|_Datatype_|_Rank_|_DomainSize_|_#elems_|_InDim_|_OutDim_|_Pad_|_DomainName_|.Real_Data.|
+            |_Header_|_Datatype_|_Rank_|_DomainSize_|_#elems_|_InDim_|_OutDim_|_MessageID_|_DomainName_|.Real_Data.|
 
         Then the data starts at byte 16 with the domain name, then the real data and
         is structured as pairs of input/outputs. Let K be the total number of elements,
@@ -75,7 +80,7 @@ class AMSMessage(object):
         """
         return "="
 
-    def encode(self, num_elem: int, domain_name: str, input_dim: int, output_dim: int, dtype_byte: int = 4) -> bytes:
+    def encode(self, num_elem: int, domain_name: str, input_dim: int, output_dim: int, message_id: int , dtype_byte: int = 4) -> bytes:
         """
         For debugging and testing purposes, this function encode a message identical to what AMS would send
         """
@@ -87,8 +92,7 @@ class AMSMessage(object):
         data = np.random.rand(num_elem * (input_dim + output_dim))
         domain_name_size = len(domain_name)
         domain_name = bytes(domain_name, "utf-8")
-        padding = 0
-        header_content = (hsize, dtype_byte, mpi_rank, domain_name_size, data.size, input_dim, output_dim, padding)
+        header_content = (hsize, dtype_byte, mpi_rank, domain_name_size, data.size, input_dim, output_dim, message_id)
         # float or double
         msg_format = f"{header_format}{domain_name_size}s{data.size}{dt}"
         return struct.pack(msg_format, *header_content, domain_name, *data)
@@ -113,7 +117,7 @@ class AMSMessage(object):
             res["num_element"],
             res["input_dim"],
             res["output_dim"],
-            res["padding"],
+            res["message_id"],
         ) = struct.unpack(fmt, body[:hsize])
         assert hsize == res["hsize"]
         assert res["datatype"] in [4, 8]
@@ -134,6 +138,7 @@ class AMSMessage(object):
         self.domain_name_size = int(res["domain_size"])
         self.input_dim = int(res["input_dim"])
         self.output_dim = int(res["output_dim"])
+        self.message_id = int(res["message_id"])
 
         return res
 

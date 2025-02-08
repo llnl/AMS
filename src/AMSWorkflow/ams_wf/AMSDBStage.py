@@ -93,7 +93,7 @@ def main():
     print(f"End to End time spend : {end - start}")
 
     if args.output_json is not None:
-        print(f"{AMSMonitor.info()}")
+        # print(f"{AMSMonitor.info()}")
         # Output profiling output to JSON (just as an example)
         AMSMonitor.json(args.output_json)
 

@@ -19,14 +19,16 @@ AMSMsgHeader::AMSMsgHeader(size_t mpi_rank,
                            size_t num_elem,
                            size_t in_dim,
                            size_t out_dim,
-                           size_t type_size)
+                           size_t type_size,
+                           size_t message_id)
     : hsize(static_cast<uint8_t>(AMSMsgHeader::size())),
       dtype(static_cast<uint8_t>(type_size)),
       mpi_rank(static_cast<uint16_t>(mpi_rank)),
       domain_size(static_cast<uint16_t>(domain_size)),
       num_elem(static_cast<uint32_t>(num_elem)),
       in_dim(static_cast<uint16_t>(in_dim)),
-      out_dim(static_cast<uint16_t>(out_dim))
+      out_dim(static_cast<uint16_t>(out_dim)),
+      message_id(static_cast<uint16_t>(message_id))
 {
 }
 
@@ -35,14 +37,16 @@ AMSMsgHeader::AMSMsgHeader(uint16_t mpi_rank,
                            uint32_t num_elem,
                            uint16_t in_dim,
                            uint16_t out_dim,
-                           uint8_t type_size)
+                           uint8_t type_size,
+                           uint16_t message_id)
     : hsize(static_cast<uint8_t>(AMSMsgHeader::size())),
       dtype(type_size),
       mpi_rank(mpi_rank),
       domain_size(domain_size),
       num_elem(num_elem),
       in_dim(in_dim),
-      out_dim(out_dim)
+      out_dim(out_dim),
+      message_id(message_id)
 {
 }
 
@@ -77,6 +81,9 @@ size_t AMSMsgHeader::encode(uint8_t* data_blob)
   // Output dim (should be 2 bytes)
   std::memcpy(data_blob + current_offset, &(out_dim), sizeof(out_dim));
   current_offset += sizeof(out_dim);
+  // message ID (should be 2 bytes)
+  std::memcpy(data_blob + current_offset, &(message_id), sizeof(message_id));
+  current_offset += sizeof(message_id);
 
   return AMSMsgHeader::size();
 }
@@ -117,13 +124,18 @@ AMSMsgHeader AMSMsgHeader::decode(uint8_t* data_blob)
   // Output dim (should be 2 bytes)
   uint16_t new_out_dim;
   std::memcpy(&new_out_dim, data_blob + current_offset, sizeof(uint16_t));
+  current_offset += sizeof(uint16_t);
+  // Message ID (should be 2 bytes)
+  uint16_t new_message_id;
+  std::memcpy(&new_message_id, data_blob + current_offset, sizeof(uint16_t));
 
   return AMSMsgHeader(new_mpirank,
                       new_domain_size,
                       new_num_elem,
                       new_in_dim,
                       new_out_dim,
-                      new_dtype);
+                      new_dtype,
+                      new_message_id);
 }
 
 /**
@@ -386,7 +398,6 @@ void AMSPublisherLogging::logErrorAMSMessage(int id, const char* err)
   lock();
   for (auto& element : _data["publisher"]["msgs"]) {
     if (element["id"] == id) {
-      std::lock_guard<std::mutex> lock(_mutex);
       _data["publisher"]["msgs"][id]["ack"] = false;
       _data["publisher"]["msgs"][id]["error"] = err;
     }
@@ -584,6 +595,7 @@ std::tuple<uint64_t, std::string> RMQConsumerHandler::getLatestModel()
 {
   std::string model = "";
   uint64_t latest_tag = 0;
+  // FIXME: replace this loop by std::find
   for (AMSMessageInbound& e : *_messages) {
     if (latest_tag < e.id) {
       model = e.getModelPath();
@@ -867,7 +879,7 @@ RMQPublisherHandler::RMQPublisherHandler(
 {
 }
 
-std::vector<AMSMessage>& RMQPublisherHandler::msgBuffer() { return _messages; }
+std::list<AMSMessage>& RMQPublisherHandler::msgBuffer() { return _messages; }
 
 void RMQPublisherHandler::cleanup() { freeAllMessages(_messages); }
 
@@ -880,7 +892,7 @@ unsigned RMQPublisherHandler::unacknowledged() const
   return _rchannel->unacknowledged();
 }
 
-void RMQPublisherHandler::publish(AMSMessage&& msg)
+void RMQPublisherHandler::publish(AMSMessage& msg)
 {
   CALIPER(CALI_MARK_BEGIN("RMQ_PUBLISH");)
   {
@@ -1001,15 +1013,15 @@ void RMQPublisherHandler::onReady(AMQP::TcpConnection* connection)
       });
 }
 
-void RMQPublisherHandler::freeMessage(int msg_id, std::vector<AMSMessage>& buf)
+void RMQPublisherHandler::freeMessage(int msg_id, std::list<AMSMessage>& buffer)
 {
   const std::lock_guard<std::mutex> lock(_mutex);
   auto it =
-      std::find_if(buf.begin(), buf.end(), [&msg_id](const AMSMessage& obj) {
+      std::find_if(buffer.begin(), buffer.end(), [&msg_id](const AMSMessage& obj) {
         return obj.id() == msg_id;
       });
   CFATAL(RMQPublisherHandler,
-         it == buf.end(),
+         it == buffer.end(),
          "Failed to deallocate msg #%d: not found",
          msg_id)
   auto& msg = *it;
@@ -1017,10 +1029,10 @@ void RMQPublisherHandler::freeMessage(int msg_id, std::vector<AMSMessage>& buf)
   rm.deallocate(msg.data(), AMSResourceType::AMS_HOST);
 
   DBG(RMQPublisherHandler, "Deallocated msg #%d (%p)", msg.id(), msg.data())
-  buf.erase(it);
+  buffer.erase(it);
 }
 
-void RMQPublisherHandler::freeAllMessages(std::vector<AMSMessage>& buffer)
+void RMQPublisherHandler::freeAllMessages(std::list<AMSMessage>& buffer)
 {
   const std::lock_guard<std::mutex> lock(_mutex);
   auto& rm = ams::ResourceManager::getInstance();
@@ -1053,13 +1065,13 @@ RMQPublisher::RMQPublisher(uint64_t rId,
                            const AMQP::Address& address,
                            std::string cacert,
                            std::string queue,
-                           std::vector<AMSMessage>&& msgs_to_send,
+                           const std::list<AMSMessage>& msgs_to_send,
                            std::shared_ptr<AMSPerfLogging> logger)
     : _rId(rId),
       _queue(queue),
       _cacert(cacert),
       _handler(nullptr),
-      _buffer_msg(std::move(msgs_to_send))
+      _buffer_msg(msgs_to_send)
 {
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
   evthread_use_pthreads();
@@ -1095,7 +1107,7 @@ RMQPublisher::RMQPublisher(uint64_t rId,
   _connection = new AMQP::TcpConnection(_handler.get(), address);
 }
 
-void RMQPublisher::publish(AMSMessage&& message)
+void RMQPublisher::publish(AMSMessage& message)
 {
   // We could have some messages to send first (from a potential restart)
   if (_buffer_msg.size() > 0) {
@@ -1104,13 +1116,13 @@ void RMQPublisher::publish(AMSMessage&& message)
           "Publishing backed up message %d: %p",
           msg.id(),
           msg.data())
-      _handler->publish(std::move(msg));
+      _handler->publish(msg);
     }
     _buffer_msg.clear();
   }
 
   DBG(RMQPublisher, "Publishing message %d: %p", message.id(), message.data())
-  _handler->publish(std::move(message));
+  _handler->publish(message);
 }
 
 bool RMQPublisher::readyPublish()
@@ -1134,7 +1146,7 @@ void RMQPublisher::stop() { event_base_loopexit(_loop.get(), NULL); }
 
 bool RMQPublisher::connectionValid() { return _handler->connectionValid(); }
 
-std::vector<AMSMessage>& RMQPublisher::getMsgBuffer()
+std::list<AMSMessage>& RMQPublisher::getMsgBuffer()
 {
   return _handler->msgBuffer();
 }
@@ -1166,10 +1178,11 @@ bool RMQPublisher::close(unsigned ms, int repeat)
  */
 
 RMQInterface::RMQInterface()
-    : _publisher_connected(false), _consumer_connected(false), _rId(0)
+    : _publisher_connected(false), _consumer_connected(false), _rId(0), _timeout(3000), _retry(10)
 {
   // Here we generate 64-bits wide random numbers to have a unique distributed ID
   // WARNING: there is no guarantee of uniqueness here as each MPI rank will have its own generator
+  // FIXME: we should think of another design here. Ideally we would ensure that MPI starts before AMS
   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
   std::default_random_engine generator(seed);
   std::uniform_int_distribution<int> distrib(0,
@@ -1212,34 +1225,31 @@ std::pair<bool, bool> RMQInterface::connect(std::string rmq_name,
                                               *_address,
                                               _cacert,
                                               _queue_sender,
-                                              std::vector<AMSMessage>(),
+                                              std::list<AMSMessage>(),
                                               _logger);
 
   _publisher_thread = std::thread([&]() { _publisher->start(); });
 
-  if (!_publisher->waitToEstablish(100, 10)) {
+  if (!_publisher->waitToEstablish(_timeout, _retry)) {
     _publisher->stop();
     _publisher_thread.join();
-    FATAL(RMQInterface, "Could not establish connection");
+    FATAL(RMQInterface, "Could not establish publisher connection (timeout)");
   }
   _publisher_connected = true;
   _consumer_connected = false;
 
   // We allow surrogate model update
   if (update_surrogate) {
-    // std::shared_ptr<AMSPerfLogging> _consumer_logger = nullptr;
-    // if (activate_monitoring)
-    //   _consumer_logger = std::make_shared<AMSPerfLogging>(_rId, monitoring_file);
-
+    //TODO: Right the consumer is not being monitored
     if (_exchange != "") {
       _consumer = std::make_shared<RMQConsumer>(
           _rId, *_address, _cacert, _exchange, _routing_key);
       _consumer_thread = std::thread([&]() { _consumer->start(); });
 
-      if (!_consumer->waitToEstablish(100, 10)) {
+      if (!_consumer->waitToEstablish(_timeout, _retry)) {
         _consumer->stop();
         _consumer_thread.join();
-        FATAL(RMQInterface, "Could not establish consumer connection");
+        FATAL(RMQInterface, "Could not establish consumer connection (timeout)");
       }
       _consumer_connected = true;
     } else {
@@ -1256,7 +1266,7 @@ std::pair<bool, bool> RMQInterface::connect(std::string rmq_name,
 void RMQInterface::restartPublisher()
 {
   CALIPER(CALI_MARK_BEGIN("RMQ_RESTART_PUBLISHER");)
-  std::vector<AMSMessage> messages = _publisher->getMsgBuffer();
+  auto messages = _publisher->getMsgBuffer();
 
   if (messages.size() > 0) {
     AMSMessage& msg_min =
@@ -1271,11 +1281,15 @@ void RMQInterface::restartPublisher()
         _rId,
         messages.size(),
         msg_min.id())
+  } else {
+    DBG(RMQInterface,
+      "[r%d] restarting RMQPublisher: 0 buffered messages")
   }
 
   auto logger = _publisher->getLogger();
 
   // Stop the faulty publisher
+  _publisher->close(_timeout, _retry);
   _publisher->stop();
   _publisher_thread.join();
   _publisher.reset();
@@ -1284,6 +1298,12 @@ void RMQInterface::restartPublisher()
   _publisher = std::make_shared<RMQPublisher>(
       _rId, *_address, _cacert, _queue_sender, std::move(messages), logger);
   _publisher_thread = std::thread([&]() { _publisher->start(); });
+
+  if (!_publisher->waitToEstablish(_timeout, _retry)) {
+    _publisher->stop();
+    _publisher_thread.join();
+    FATAL(RMQInterface, "Could not re-establish publisher connection (timeout)");
+  }
   _publisher_connected = true;
   CALIPER(CALI_MARK_END("RMQ_RESTART_PUBLISHER");)
 }
@@ -1291,22 +1311,22 @@ void RMQInterface::restartPublisher()
 void RMQInterface::close()
 {
   if (_publisher_connected) {
-    bool status = _publisher->close(100, 10);
+    bool status = _publisher->close(_timeout, _retry);
+    auto nack = _publisher->unacknowledged();
     CWARNING(RMQInterface,
              !status,
              "Could not gracefully close publisher TCP connection")
 
     DBG(RMQInterface, "Number of messages sent: %d", _msg_tag)
     DBG(RMQInterface,
-        "Number of unacknowledged messages are %d",
-        _publisher->unacknowledged())
+        "Number of unacknowledged messages are %d", nack)
     _publisher->stop();
     if (_publisher_thread.joinable()) _publisher_thread.join();
     _publisher_connected = false;
   }
 
   if (_consumer_connected) {
-    bool status = _consumer->close(100, 10);
+    bool status = _consumer->close(_timeout, _retry);
     CWARNING(RMQInterface,
              !status,
              "Could not gracefully close consumer TCP connection")

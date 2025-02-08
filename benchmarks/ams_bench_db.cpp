@@ -294,10 +294,6 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  if (dbType != AMSDBType::AMS_RMQ) {
-    AMSConfigureFSDatabase(dbType, db_config);
-  }
-
   // -------------------------------------------------------------------------
   // AMS allocators setup
   // -------------------------------------------------------------------------

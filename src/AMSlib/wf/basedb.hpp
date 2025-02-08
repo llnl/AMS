@@ -66,6 +66,7 @@ namespace fs = std::experimental::filesystem;
 #include <chrono>
 #include <deque>
 #include <future>
+#include <list>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <thread>
@@ -670,11 +671,11 @@ enum RMQConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
   *   - 4 bytes are the number of elements in the message. Limit max: 2^32 - 1
   *   - 2 bytes are the input dimension. Limit max: 65535
   *   - 2 bytes are the output dimension. Limit max: 65535
-  *   - 2 bytes for padding. Limit max: 2^16 - 1
+  *   - 2 bytes for message ID. Limit max: 2^16 - 1
   *
-  * |_Header_|_Datatype_|___Rank___|__DomainSize__|__#elems__|___InDim____|___OutDim___|_Pad_|.real data.|
-  * ^        ^          ^          ^              ^          ^            ^            ^     ^           ^
-  * | Byte 1 |  Byte 2  | Byte 3-4 |  Byte 5-6    |Byte 6-10 | Byte 10-12 | Byte 12-14 |-----| Byte 16-k |
+  * |_Header_|_Datatype_|___Rank___|__DomainSize__|__#elems__|___InDim____|___OutDim___|_ID_|.real data.|
+  * ^        ^          ^          ^              ^          ^            ^            ^    ^           ^
+  * | Byte 1 |  Byte 2  | Byte 3-4 |  Byte 5-6    |Byte 6-10 | Byte 10-12 | Byte 12-14 | Byte 14-16 | Byte 16-k |
   *
   * where X = datatype * num_element * (InDim + OutDim). Total message size is 16+k. 
   *
@@ -699,6 +700,8 @@ struct AMSMsgHeader {
   uint16_t in_dim;
   /** @brief Outputs dimension */
   uint16_t out_dim;
+  /** @brief Message ID */
+  uint16_t message_id;
 
   /**
    * @brief Constructor for AMSMsgHeader
@@ -712,7 +715,8 @@ struct AMSMsgHeader {
                size_t num_elem,
                size_t in_dim,
                size_t out_dim,
-               size_t type_size);
+               size_t type_size,
+               size_t message_id);
 
   /**
    * @brief Constructor for AMSMsgHeader
@@ -726,7 +730,8 @@ struct AMSMsgHeader {
                uint32_t num_elem,
                uint16_t in_dim,
                uint16_t out_dim,
-               uint8_t type_size);
+               uint8_t type_size,
+               uint16_t message_id);
 
   /**
    * @brief Return the size of a header in the AMS protocol.
@@ -736,7 +741,7 @@ struct AMSMsgHeader {
   {
     return ((sizeof(hsize) + sizeof(dtype) + sizeof(mpi_rank) +
              sizeof(domain_size) + sizeof(num_elem) + sizeof(in_dim) +
-             sizeof(out_dim) + sizeof(double) - 1) /
+             sizeof(out_dim) + sizeof(message_id) + sizeof(double) - 1) /
             sizeof(double)) *
            sizeof(double);
   }
@@ -790,6 +795,7 @@ public:
         _data(nullptr),
         _total_size(0)
   {
+    DBG(AMSMessage, "Allocated empty %d", _id);
   }
 
   /**
@@ -820,7 +826,8 @@ public:
                         _num_elements,
                         _input_dim,
                         _output_dim,
-                        sizeof(TypeValue));
+                        sizeof(TypeValue),
+                        id);
 
     _total_size = AMSMsgHeader::size() + domain_name.size() +
                   getTotalElements() * sizeof(TypeValue);
@@ -849,7 +856,7 @@ public:
 
   AMSMessage(const AMSMessage& other)
   {
-    DBG(AMSMessage, "Copy AMSMessage : %p -- %d", other._data, other._id);
+    DBG(AMSMessage, "Copy AMSMessage (%d, %p) <- (%d, %p)", _id, _data, other._id, other._data);
     swap(other);
   };
 
@@ -859,13 +866,14 @@ public:
    */
   void swap(const AMSMessage& other);
 
-  AMSMessage& operator=(const AMSMessage&) = delete;
+  // AMSMessage(AMSMessage&& other) = delete;
+  // AMSMessage& operator=(AMSMessage&& other) = delete;
 
   AMSMessage(AMSMessage&& other) noexcept { *this = std::move(other); }
 
   AMSMessage& operator=(AMSMessage&& other) noexcept
   {
-    // DBG(AMSMessage, "Move AMSMessage : %p -- %d", other._data, other._id);
+    DBG(AMSMessage, "Move AMSMessage (%d, %p) <- (%d, %p)", _id, _data, other._id, other._data);
     if (this != &other) {
       swap(other);
       other._data = nullptr;
@@ -1604,7 +1612,7 @@ private:
   /** @brief Mutex to protect multithread accesses to _messages */
   std::mutex _mutex;
   /** @brief Messages that have not been successfully acknowledged */
-  std::vector<AMSMessage> _messages;
+  std::list<AMSMessage> _messages;
 
 public:
   /**
@@ -1625,13 +1633,13 @@ public:
    *  @brief  Publish data on RMQ queue.
    *  @param[in]  msg            The AMSMessage to publish
    */
-  void publish(AMSMessage&& msg);
+  void publish(AMSMessage& msg);
 
   /**
    *  @brief  Return the messages that have NOT been acknowledged by the RabbitMQ server. 
    *  @return     A vector of AMSMessage
    */
-  std::vector<AMSMessage>& msgBuffer();
+  std::list<AMSMessage>& msgBuffer();
 
   /**
    *  @brief    Free AMSMessages held by the handler
@@ -1675,13 +1683,13 @@ private:
    *  @param[in]  addr            Address of memory to free.
    *  @param[in]  buffer          The vector containing memory buffers
    */
-  void freeMessage(int msg_id, std::vector<AMSMessage>& buf);
+  void freeMessage(int msg_id, std::list<AMSMessage>& buffer);
 
   /**
    *  @brief  Free the data pointed by each pointer in a vector.
    *  @param[in]  buffer            The vector containing memory buffers
    */
-  void freeAllMessages(std::vector<AMSMessage>& buffer);
+  void freeAllMessages(std::list<AMSMessage>& buffer);
 
 };  // class RMQPublisherHandler
 
@@ -1710,7 +1718,7 @@ private:
   /** @brief The handler which contains various callbacks for the sender */
   std::shared_ptr<RMQPublisherHandler> _handler;
   /** @brief Buffer holding unacknowledged messages in case of crash */
-  std::vector<AMSMessage> _buffer_msg;
+  std::list<AMSMessage> _buffer_msg;
 
 public:
   RMQPublisher(const RMQPublisher&) = delete;
@@ -1721,7 +1729,7 @@ public:
       const AMQP::Address& address,
       std::string cacert,
       std::string queue,
-      std::vector<AMSMessage>&& msgs_to_send = std::vector<AMSMessage>(),
+      const std::list<AMSMessage>& msgs_to_send = std::list<AMSMessage>(),
       std::shared_ptr<AMSPerfLogging> logger = nullptr);
 
   /**
@@ -1764,7 +1772,7 @@ public:
    * acknowledgements have not arrived yet.
    * @return A vector of AMSMessage
    */
-  std::vector<AMSMessage>& getMsgBuffer();
+  std::list<AMSMessage>& getMsgBuffer();
 
   /**
    * @brief Return the internal monitoring object (warning move the ptr).
@@ -1778,7 +1786,7 @@ public:
    */
   void cleanup();
 
-  void publish(AMSMessage&& message);
+  void publish(AMSMessage& message);
 
   /**
    *  @brief    Total number of messages sent
@@ -1886,12 +1894,18 @@ private:
   bool _publisher_connected;
   /** @brief True if consumer connected to RabbitMQ */
   bool _consumer_connected;
+  /** @brief Time in ms before timeout when connecting to RabbitMQ */
+  int _timeout;
+  /** @brief Number of retry when connecting to RabbitMQ */
+  int _retry;
+  // int rank;
+
   /** @brief Performance logging object */
   std::shared_ptr<AMSPerfLogging> _logger;
 
 public:
+  // TODO use friend
   /** @brief Performance logging object */
-  int rank;
 
   RMQInterface();
 
@@ -1995,20 +2009,9 @@ public:
 
     AMSMessage msg(_msg_tag, _rId, domain_name, num_elements, inputs, outputs);
 
-    if (!_publisher->connectionValid() || _msg_tag == 3) {
-      _publisher->close(100, 3);
-      _publisher_connected = false;
-      restartPublisher();
-      bool status = _publisher->waitToEstablish(100, 10);
-      if (!status) {
-        _publisher->stop();
-        _publisher_thread.join();
-        FATAL(RMQInterface,
-              "Could not establish publisher RabbitMQ connection");
-      }
-      _publisher_connected = true;
-    }
-    _publisher->publish(std::move(msg));
+    if (!_publisher->connectionValid()) restartPublisher();
+
+    _publisher->publish(msg);
     _msg_tag++;
     CALIPER(CALI_MARK_END("RMQ_STORE");)
   }
@@ -2157,6 +2160,13 @@ public:
    */
   AMSDBType dbType() override { return AMSDBType::AMS_RMQ; };
 
+  void close() {
+    if (interface.isConnected()) {
+      DBG(RabbitMQDB, "Closing RMQInterface")
+      interface.close();
+    }
+  }
+
   ~RabbitMQDB() {}
 };  // class RabbitMQDB
 
@@ -2258,9 +2268,10 @@ public:
           e.second.use_count() - 1);
       if (e.second.use_count() > 0) e.second->close();
     }
-    if (rmq_interface.isConnected()) {
-      rmq_interface.close();
-    }
+    // if (rmq_interface.isConnected()) {
+    //   DBG(DBManager, "Closing RMQInterface")
+    //   rmq_interface.close();
+    // }
   }
 
   DBManager(const DBManager&) = delete;
@@ -2364,8 +2375,9 @@ public:
           "[r%d] Creating new Database writting to file: %s",
           rId,
           domainName.c_str());
-
-      rmq_interface.rank = rId;
+      
+      // FIXME: fix that ugly direct access
+      // rmq_interface.setID(rId);
       return db;
     }
 

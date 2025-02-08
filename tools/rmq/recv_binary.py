@@ -39,8 +39,9 @@ def parse_header(body: str) -> dict:
       - 4 bytes are the number of elements in the message. Limit max: 2^32 - 1
       - 2 bytes are the input dimension. Limit max: 65535
       - 2 bytes are the output dimension. Limit max: 65535
+      - 2 bytes are the message ID from AMSlib. Limit max: 65535
 
-        |_Header_|_Datatype_|___Rank___|__DomainSize__|__#elems__|___InDim____|___OutDim___|.real data
+        |_Header_|_Datatype_|___Rank___|__DomainSize__|__#elems__|___InDim____|___OutDim___|__Message_ID__|.real data
      
     Then the data starts at 16 and is structered as pairs of input/outputs.
     Let K be the total number of elements, then we have K pairs of inputs/outputs (either float or double):
@@ -67,10 +68,10 @@ def parse_header(body: str) -> dict:
         res["num_element"] = np.frombuffer(body[6:10], dtype=np.uint32)[0]
         res["input_dim"] = np.frombuffer(body[10:12], dtype=np.uint16)[0]
         res["output_dim"] = np.frombuffer(body[12:14], dtype=np.uint16)[0]
-        res["padding"] = np.frombuffer(body[14:16], dtype=np.uint16)[0]
+        res["message_id"] = np.frombuffer(body[14:16], dtype=np.uint16)[0]
         # Theoritical size in Bytes for the incoming message (without the header)
         # Int() is needed otherwise we might overflow here (because of uint16 / uint8)
-        res["data_size"] = int(res["datatype"]) * res["num_element"] * (int(res["input_dim"]) + int(res["output_dim"])+res["padding"])
+        res["data_size"] = int(res["datatype"]) * res["num_element"] * (int(res["input_dim"]) + int(res["output_dim"]) + res["message_id"])
         res["multiple_msg"] = len(body) != (header_size + res["data_size"])
     except ValueError as e:
         return {}
@@ -120,12 +121,14 @@ def callback(ch, method, properties, body, args = None):
         domain_name, data_input, data_output = parse_data(stream, header_info)
         num_element = header_info["num_element"]
         mpirank = header_info["mpirank"]
+        message_id = header_info["message_id"]
+
         # total size of byte we read for that message
         chunk_size = header_info["header_size"] + header_info["domain_size"] + header_info["data_size"]
 
         print(
             f" [{nbmsg}/{i}] Received from exchange=\"{method.exchange}\" routing_key=\"{method.routing_key}\"\n"
-            f"        > [r{mpirank}] ({domain_name})   : {len(stream)/(1024*1024)} MB / {num_element} elements\n")
+            f"        > [r{mpirank}/{message_id}] ({domain_name})   : {len(stream)/(1024*1024)} MB / {num_element} elements\n")
 
         if data_input.size > 0:
             all_messages.append(data_input)

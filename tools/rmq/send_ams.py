@@ -24,9 +24,9 @@ def ams_header_format() -> str:
     - 4 bytes are the number of elements in the message. Limit max: 2^32 - 1
     - 2 bytes are the input dimension. Limit max: 65535
     - 2 bytes are the output dimension. Limit max: 65535
-    - 2 bytes are for aligning memory to 8
+    - 2 bytes are for message ID
 
-        |_Header_|_Datatype_|_Rank_|_DomainSize_|_#elems_|_InDim_|_OutDim_|_Pad_|_DomainName_|.Real_Data.|
+        |_Header_|_Datatype_|_Rank_|_DomainSize_|_#elems_|_InDim_|_OutDim_|_Message_ID_|_DomainName_|.Real_Data.|
 
     Then the data starts at byte 16 with the domain name, then the real data and 
     is structured as pairs of input/outputs. Let K be the total number of elements,
@@ -44,7 +44,7 @@ def ams_endianness() -> str:
     """
     return "="
 
-def ams_encode_message(num_elem: int, domain_name: str, input_dim: int, output_dim: int, dtype_byte: int = 4) -> bytes:
+def ams_encode_message(num_elem: int, domain_name: str, input_dim: int, output_dim: int, message_id: int, dtype_byte: int = 4) -> bytes:
     """
     For debugging and testing purposes, this function encode a message identical to what AMS would send
     """
@@ -56,8 +56,7 @@ def ams_encode_message(num_elem: int, domain_name: str, input_dim: int, output_d
     data = np.random.rand(num_elem * (input_dim + output_dim))
     domain_name_size = len(domain_name)
     domain_name = bytes(domain_name, "utf-8")
-    padding = 0
-    header_content = (hsize, dtype_byte, mpi_rank, domain_name_size, data.size, input_dim, output_dim, padding)
+    header_content = (hsize, dtype_byte, mpi_rank, domain_name_size, data.size, input_dim, output_dim, message_id)
     # float or double
     msg_format = f"{header_format}{domain_name_size}s{data.size}{dt}"
     return struct.pack(msg_format, *header_content, domain_name, *data)
@@ -96,14 +95,15 @@ def main(args: dict):
     result = channel.queue_declare(queue = args.queue, exclusive = False)
     queue_name = result.method.queue
 
-    encoded_msg = ams_encode_message(
-        num_elem = args.num_elem,
-        domain_name = args.domain_name,
-        input_dim = args.input_dim,
-        output_dim = args.output_dim,
-        dtype_byte = args.data_type
-    )
     for i in range(1, args.num_msg+1):
+        encoded_msg = ams_encode_message(
+            num_elem = args.num_elem,
+            domain_name = args.domain_name,
+            input_dim = args.input_dim,
+            output_dim = args.output_dim,
+            message_id = i,
+            dtype_byte = args.data_type
+        )
         channel.basic_publish(exchange='', routing_key = args.routing_key, body = encoded_msg)
         print(f"[{i}/{args.num_msg}] Sent message with {args.num_elem} elements of dim=({args.input_dim},{args.output_dim}) elements on queue='{queue_name}'/routing_key='{args.routing_key}'")
     connection.close()

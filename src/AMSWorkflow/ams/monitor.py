@@ -206,7 +206,7 @@ class AMSMonitor:
 
     def start_monitor(self, *args, **kwargs):
         self.start_time = time.time_ns()
-        self.internal_ts = str(time.time_ns())
+        self.internal_ts = time.time_ns()
 
     def stop_monitor(self):
         end = time.time_ns()
@@ -233,7 +233,7 @@ class AMSMonitor:
         """
 
         def wrapper(*args, **kwargs):
-            ts = str(time.time_ns())
+            ts = time.time_ns()
             start = time.time_ns()
 
             if self.use_arrays:
@@ -364,11 +364,11 @@ class AMSMonitor:
             return data
         return {k: v for k, v in data.items() if k in keys}
 
-    def _get_ts(self, class_name: str, func: str) -> str:
+    def _get_ts(self, class_name: str, func: str) -> int:
         """
         Return initial timestamp for a given monitored function.
         """
-        ts = str(time.time_ns())
+        ts = time.time_ns()
         if class_name not in AMSMonitor._stats or func not in AMSMonitor._stats[class_name]:
             return ts
 

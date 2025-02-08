@@ -215,7 +215,7 @@ class FSLoaderTask(Task):
         self.loader = loader
         self.datasize = 0
 
-    @AMSMonitor(record=["datasize"])
+    @AMSMonitor(array=["msgs"], record=["datasize"])
     def __call__(self):
         """
         Busy loop of reading all files matching the pattern and creating
@@ -226,6 +226,7 @@ class FSLoaderTask(Task):
         start = time.time()
         files = list(glob.glob(self.pattern))
         for fn in files:
+            start_time_fs = time.time_ns()
             with self.loader(fn) as fd:
                 domain_name, input_data, output_data = fd.load()
                 print("Domain Name is", domain_name)
@@ -237,13 +238,27 @@ class FSLoaderTask(Task):
                 for j, (i, o) in enumerate(zip(input_batches, output_batches)):
                     self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(i, o, domain_name)))
                 self.datasize += input_data.nbytes + output_data.nbytes
+
+                end_time_fs = time.time_ns()
+                msg = {
+                    "file": fn,
+                    "domain_name": domain_name,
+                    "row_size": row_size,
+                    "batch_size": BATCH_SIZE,
+                    "rows_per_batch": rows_per_batch,
+                    "num_batches": num_batches,
+                    "size_bytes": input_data.nbytes + output_data.nbytes,
+                    "process_time_ns": end_time_fs - start_time_fs,
+                }
+                # Msgs is the array (list) we push to (managed by AMSMonitor)
+                msgs.append(msg)
+
             print(f"Sending Delete Message Type {self.__class__.__name__}")
             self.o_queue.put(QueueMessage(MessageType.Delete, fn))
         self.o_queue.put(QueueMessage(MessageType.Terminate, None))
 
         end = time.time()
         print(f"Spend {end - start} at {self.__class__.__name__}")
-
 
 class RMQDomainDataLoaderTask(Task):
     """
@@ -283,8 +298,6 @@ class RMQDomainDataLoaderTask(Task):
         self.orig_sig_handlers = {}
         self.policy = policy
 
-        # Counter that get incremented when we receive a message
-        self.internal_msg_cnt = 0
 
         # Signals can only be used within the main thread
         if self.policy != "thread":
@@ -340,12 +353,10 @@ class RMQDomainDataLoaderTask(Task):
 
         self.total_time += (end_time - start_time)
         # TODO: Improve the code to manage potentially multiple messages per AMSMessage
-        # TODO: Right now the ID is not encoded in the AMSMessage by AMSlib
-        #       If order of messages matters we might have to encode it
         msg = {
-            "id": self.internal_msg_cnt,
             "delivery_tag": basic_deliver.delivery_tag,
             "mpi_rank": msg.mpi_rank,
+            "message_id": msg.message_id,
             "domain_name": domain_name,
             "num_elements": msg.num_elements,
             "input_dim": msg.input_dim,
@@ -356,7 +367,6 @@ class RMQDomainDataLoaderTask(Task):
         }
         # Msgs is the array (list) we push to (managed by AMSMonitor)
         msgs.append(msg)
-        self.internal_msg_cnt += 1
 
     def signal_wrapper(self, name, pid):
         def handler(signum, frame):
@@ -621,11 +631,15 @@ class Pipeline(ABC):
             # This should only trigger RMQDomainDataLoaderTask
 
             # TODO: I don't like this system to shutdown the pipeline on demand
-            # It's extremely easy to mess thing up with signals.. and it's
+            # It's extremely easy to mess things up with signals.. and it's
             # not a robust solution (if a task is not managing correctly SIGINT
             # the pipeline can explode)
             for e in self._executors:
-                os.kill(e.pid, signal.SIGINT)
+                if e is not None:
+                    try:
+                        os.kill(e.pid, signal.SIGINT)
+                    except Exception as e:
+                        print(f"Error: {e}")
             self.release_signals()
         return handler
 
