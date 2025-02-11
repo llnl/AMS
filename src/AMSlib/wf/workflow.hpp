@@ -21,6 +21,7 @@
 #include "macro.h"
 #include "ml/surrogate.hpp"
 #include "resource_manager.hpp"
+#include "utils.hpp"
 #include "wf/basedb.hpp"
 #include "wf/debug.h"
 
@@ -189,9 +190,6 @@ public:
     }
     for (int i = 0; i < computedDomain.size(); i++) {
       auto indexed_shape = computedDomain[i].sizes();
-      std::cout << "Scattering outputs " << entireDomain[i].sizes() << " CD "
-                << computedDomain[i].sizes() << " Predicate "
-                << Predicate.sizes() << "\n";
       entireDomain[i].index_put_({Predicate},
                                  computedDomain[i].view(indexed_shape));
     }
@@ -208,9 +206,6 @@ public:
       int ConcatAxisSize = dst.sizes()[dst.dim() - 1];
       torch::Tensor Slice =
           Src.narrow(outerDim, offset, ConcatAxisSize).to(dst.options());
-      std::cout << "Slice Shape is:" << Slice.sizes() << "\n";
-      std::cout << "Dst shape is " << dst.sizes() << "\n";
-      std::cout << "Predicate is " << Predicate.sizes() << "\n";
       dst.index_put_({Predicate}, Slice.index({Predicate}));
       offset += ConcatAxisSize;
     }
@@ -278,12 +273,23 @@ public:
         InOuts.size(),
         Outs.size());
 
+    std::string msg{"ApplicationInput: [ "};
     for (auto &TI : Ins)
-      std::cout << "ITensor Shape is " << TI.sizes() << "\n";
+      msg += shapeToString(TI) + " ";
+    msg += "]";
+    DBG(Workflow, "%s", msg.c_str());
+
+    msg = "ApplicationInOut: [ ";
     for (auto &TIO : InOuts)
-      std::cout << "IOTensor Shape is " << TIO.sizes() << "\n";
+      msg += shapeToString(TIO) + " ";
+    msg += "]";
+    DBG(Workflow, "%s", msg.c_str());
+
+    msg = "ApplicationOutput: [ ";
     for (auto &TO : Outs)
-      std::cout << "OTensor Shape is " << TO.sizes() << "\n";
+      msg += shapeToString(TO) + " ";
+    msg += "]";
+    DBG(Workflow, "%s", msg.c_str());
 
 
     SmallVector<torch::Tensor> InputTensors(Ins.begin(), Ins.end());
@@ -373,21 +379,10 @@ public:
       PhysicInOutsBefore.push_back(S.clone());
 
 
-    for (auto &TI : PhysicIns)
-      std::cout << "Before Phy ITensor Shape is " << TI.sizes() << "\n";
-    for (auto &TO : PhysicOuts)
-      std::cout << "Before Phy OTensor Shape is " << TO.sizes() << "\n";
-
-
     // We call the application here
     CALIPER(CALI_MARK_BEGIN("PHYSICS MODULE");)
     callApplication(CallBack, PhysicIns, PhysicInOuts, PhysicOuts);
     CALIPER(CALI_MARK_END("PHYSICS MODULE");)
-
-    for (auto &TI : PhysicIns)
-      std::cout << "After Phy ITensor Shape is " << TI.sizes() << "\n";
-    for (auto &TO : PhysicOuts)
-      std::cout << "After Phy OTensor Shape is " << TO.sizes() << "\n";
 
 
     CALIPER(CALI_MARK_BEGIN("UNPACK");)
