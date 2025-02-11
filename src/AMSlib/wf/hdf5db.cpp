@@ -196,7 +196,9 @@ void hdf5DB::writeDataToDataset(ams::MutableArrayRef<hsize_t> currentShape,
 
   // Prepare the dataset for new data
   ams::SmallVector<hsize_t> newShape(tensor_dims.begin(), tensor_dims.end());
+
   newShape[0] += currentShape[0];  // Update the first dimension
+
   status = H5Dset_extent(dset, newShape.data());
   if (status < 0) {
     throw std::runtime_error("Failed to extend dataset's dimensions.");
@@ -239,7 +241,7 @@ void hdf5DB::writeDataToDataset(ams::MutableArrayRef<hsize_t> currentShape,
   }
 
   // Update currentShape
-  currentShape[0] += newShape[0];
+  currentShape[0] = newShape[0];
 
   // Close HDF5 objects
   H5Sclose(memSpace);
@@ -250,8 +252,8 @@ void hdf5DB::writeDataToDataset(ams::MutableArrayRef<hsize_t> currentShape,
 void hdf5DB::_store(const at::Tensor& inputs, const at::Tensor& outputs)
 {
   DBG(DB,
-      "DB of type %s stores input/output tensors of  shapes(%s, "
-      "%s)",
+      "DB of type %s stores input/output tensors of  shapes %s, "
+      "%s",
       type().c_str(),
       tensorSizeToString(inputs.sizes()).c_str(),
       tensorSizeToString(outputs.sizes()).c_str());
@@ -262,6 +264,11 @@ void hdf5DB::_store(const at::Tensor& inputs, const at::Tensor& outputs)
 
   writeDataToDataset(currentInputShape, HDIset, inputs);
   writeDataToDataset(currentOutputShape, HDOset, outputs);
+  DBG(DB,
+      "DB (file:%s) next elements to be stored at Input:%s Output: %s",
+      fn.c_str(),
+      SmallVectorToString(currentOutputShape).c_str(),
+      SmallVectorToString(currentInputShape).c_str());
 }
 
 
@@ -321,13 +328,7 @@ void hdf5DB::store(ArrayRef<torch::Tensor> Inputs,
   c10::SmallVector<torch::Tensor> ConvertedInputs(Inputs.begin(), Inputs.end());
   c10::SmallVector<torch::Tensor> ConvertedOutputs(Outputs.begin(),
                                                    Outputs.end());
-  for (auto& T : ConvertedInputs) {
-    std::cout << "CI Shape is " << T.sizes() << "\n";
-  }
 
-  for (auto& T : ConvertedOutputs) {
-    std::cout << "CO Shape is " << T.sizes() << "\n";
-  }
   auto inputs =
       torch::cat(ConvertedInputs, Inputs[0].sizes().size() - 1).to(tOptions);
   auto outputs =

@@ -11,6 +11,7 @@
 #include "AMS.h"
 #include "surrogate.hpp"
 #include "wf/debug.h"
+#include "wf/utils.hpp"
 
 using namespace ams;
 static std::string getDTypeAsString(torch::Dtype dtype)
@@ -247,7 +248,9 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
   }
 
   auto ITensor = torch::cat(ConvertedInputs, CAxis);
-  std::cout << "Input concatenated tensor is " << ITensor.sizes() << "\n";
+  DBG(Surrogate,
+      "Input concatenated tensor is %s",
+      shapeToString(ITensor).c_str());
 
   auto [OTensor, Predicate] = _evaluate(ITensor, policy, threshold);
   if (InputDevice != torch_device) {
