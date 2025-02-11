@@ -81,11 +81,9 @@ static ams::SmallVector<ams::AMSTensor> torchToAMSTensors(
     auto shapes = ArrayRef(tensor.sizes().begin(), tensor.strides().size());
     auto strides = ArrayRef(tensor.strides().begin(), tensor.strides().size());
     if (dType == AMSDType::AMS_SINGLE) {
-      std::cout << "Setting pointer " << tensor.data_ptr<float>() << "\n";
       ams_tensors.push_back(
           AMSTensor::view(tensor.data_ptr<float>(), shapes, strides, rType));
     } else if (dType == AMSDType::AMS_DOUBLE) {
-      std::cout << "Setting pointer " << tensor.data_ptr<double>() << "\n";
       ams_tensors.push_back(
           AMSTensor::view(tensor.data_ptr<double>(), shapes, strides, rType));
     }
@@ -137,15 +135,6 @@ void callAMS(ams::AMSWorkflow *executor,
   ams::SmallVector<torch::Tensor> tins = amsToTorchTensors(ins);
   ams::SmallVector<torch::Tensor> tinouts = amsToTorchTensors(inouts);
   ams::SmallVector<torch::Tensor> touts = amsToTorchTensors(outs);
-
-  for (auto &TI : tins)
-    std::cout << "ITensor Shape is " << TI.sizes() << "\n";
-  for (auto &TIO : tinouts)
-    std::cout << "IOTensor Shape is " << TIO.sizes() << "\n";
-
-  for (auto &TO : touts)
-    std::cout << "OTensor Shape is " << TO.sizes() << "\n";
-
 
   executor->evaluate(Physics, tins, tinouts, touts);
 }
