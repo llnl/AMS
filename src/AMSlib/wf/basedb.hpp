@@ -34,7 +34,7 @@
 
 namespace fs = std::experimental::filesystem;
 
-#ifdef __ENABLE_HDF5__
+#ifdef __AMS_ENABLE_HDF5__
 #include <H5Ipublic.h>
 #include <hdf5.h>
 #define HDF5_ERROR(Eid)                                             \
@@ -49,7 +49,7 @@ namespace fs = std::experimental::filesystem;
 #include <caliper/cali_macros.h>
 #endif
 
-#ifdef __ENABLE_RMQ__
+#ifdef __AMS_ENABLE_RMQ__
 #include <amqpcpp.h>
 #include <amqpcpp/libevent.h>
 #include <amqpcpp/linux_tcp.h>
@@ -72,7 +72,7 @@ namespace fs = std::experimental::filesystem;
 #include <thread>
 #include <tuple>
 
-#endif  // __ENABLE_RMQ__
+#endif  // __AMS_ENABLE_RMQ__
 
 namespace ams
 {
@@ -206,7 +206,7 @@ public:
 };
 
 
-#ifdef __ENABLE_HDF5__
+#ifdef __AMS_ENABLE_HDF5__
 class hdf5DB final : public FileDB
 {
 private:
@@ -314,7 +314,7 @@ public:
 #endif
 
 
-#ifdef __ENABLE_RMQ__
+#ifdef __AMS_ENABLE_RMQ__
 // TODO IMPLEMENT THIS AFTER everything else is working
 
 enum class ConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
@@ -1651,7 +1651,7 @@ public:
   void close() {}
 };
 
-#endif  // __ENABLE_RMQ__
+#endif  // __AMS_ENABLE_RMQ__
 
 class FilesystemInterface
 {
@@ -1696,7 +1696,7 @@ public:
 class DBManager
 {
 
-#ifdef __ENABLE_RMQ__
+#ifdef __AMS_ENABLE_RMQ__
   friend RabbitMQDB;
 #endif
 
@@ -1707,7 +1707,7 @@ private:
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
-  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false) {};
+  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false){};
 
 protected:
   RMQInterface rmq_interface;
@@ -1775,14 +1775,14 @@ public:
     }
 
     switch (dbType) {
-#ifdef __ENABLE_HDF5__
+#ifdef __AMS_ENABLE_HDF5__
       case AMSDBType::AMS_HDF5:
         return std::make_shared<hdf5DB>(fs_interface.path(),
                                         domainName,
                                         dbLabel,
                                         rId);
 #endif
-#ifdef __ENABLE_RMQ__
+#ifdef __AMS_ENABLE_RMQ__
       case AMSDBType::AMS_RMQ:
         return std::make_shared<RabbitMQDB>(rmq_interface,
                                             domainName,
@@ -1895,7 +1895,7 @@ public:
              rmq_cert.c_str());
     dbType = AMSDBType::AMS_RMQ;
     updateSurrogate = update_surrogate;
-#ifdef __ENABLE_RMQ__
+#ifdef __AMS_ENABLE_RMQ__
     rmq_interface.connect(rmq_user,
                           rmq_pass,
                           rmq_vhost,

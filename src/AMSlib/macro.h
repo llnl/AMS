@@ -6,7 +6,7 @@
 #define CALIPER(stmt)
 #endif
 
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
 #include <mpi.h>
 #define MPI_CALL(stmt)                                                         \
   if (stmt != MPI_SUCCESS) {                                                   \
@@ -22,4 +22,3 @@ typedef void *MPI_Comm;
 #else
 #define PERFFASPECT()
 #endif
-

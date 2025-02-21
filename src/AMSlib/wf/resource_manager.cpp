@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#ifdef __ENABLE_CUDA__
+#ifdef __AMS_ENABLE_CUDA__
 #include <cuda_runtime.h>
 #endif
 
@@ -36,7 +36,7 @@ struct AMSDefaultDeviceAllocator final : AMSAllocator {
 
   void *allocate(size_t num_bytes, size_t alignment)
   {
-#ifdef __ENABLE_CUDA__
+#ifdef __AMS_ENABLE_CUDA__
     void *devPtr;
     cudaMalloc(&devPtr, num_bytes);
     return devPtr;
@@ -47,7 +47,7 @@ struct AMSDefaultDeviceAllocator final : AMSAllocator {
 
   void deallocate(void *ptr)
   {
-#ifdef __ENABLE_CUDA__
+#ifdef __AMS_ENABLE_CUDA__
     cudaFree(ptr);
 #endif
   }
@@ -74,7 +74,7 @@ struct AMSDefaultPinnedAllocator final : AMSAllocator {
 
   void *allocate(size_t num_bytes, size_t alignment)
   {
-#ifdef __ENABLE_CUDA__
+#ifdef __AMS_ENABLE_CUDA__
     void *ptr;
     cudaHostAlloc(&ptr, num_bytes, cudaHostAllocPortable);
     return ptr;
@@ -85,7 +85,7 @@ struct AMSDefaultPinnedAllocator final : AMSAllocator {
 
   void deallocate(void *ptr)
   {
-#ifdef __ENABLE_CUDA__
+#ifdef __AMS_ENABLE_CUDA__
     cudaFreeHost(ptr);
 #endif
   }
@@ -109,7 +109,7 @@ void _raw_copy(void *src,
           std::memcpy(dest, src, num_bytes);
           break;
         case AMSResourceType::AMS_DEVICE:
-#ifdef __ENABLE_CUDA__
+#ifdef __AMS_ENABLE_CUDA__
           cudaMemcpy(dest, src, num_bytes, cudaMemcpyHostToDevice);
 #endif
           break;
@@ -118,7 +118,7 @@ void _raw_copy(void *src,
           break;
       }
       break;
-#ifdef __ENABLE_CUDA__
+#ifdef __AMS_ENABLE_CUDA__
     case AMSResourceType::AMS_DEVICE:
       switch (dest_dev) {
         case AMSResourceType::AMS_DEVICE:

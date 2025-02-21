@@ -80,30 +80,30 @@ void eval_ams(AMSExecutor &wf,
                       AMSResourceType::AMS_HOST));
 
 
-  EOSLambda OrigComputation =
-      [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
-          ams::SmallVector<ams::AMSTensor> &ams_inouts,
-          ams::SmallVector<ams::AMSTensor> &ams_outs) {
-        int prunedZones = ams_ins[0].shape()[0];
-        std::cout << "Pruned are " << prunedZones << "\n";
-        real_t *pruned_mat[prunedZones];
-        // The 2D data of materials are unnder a c_vector.
-        real_t *c_mats = ams_ins[0].data<real_t>();
-        // We need this as eval requires a c like 2D vector
-        for (int i = 0; i < prunedZones; i++) {
-          pruned_mat[i] = &c_mats[i * ams_ins[0].shape()[1]];
-        }
-        eval(ams_inouts[0].data<real_t>(),// density was the first entry in inout
-             ams_outs[0].data<real_t>(),
-             ams_inouts[1].data<real_t>(), // qc was the second entry in inout
-             *ams_ins[1].data<real_t>(),
-             pruned_mat,
-             NumComps,
-             prunedZones);
-      };
+  EOSLambda OrigComputation = [&](const ams::SmallVector<ams::AMSTensor>
+                                      &ams_ins,
+                                  ams::SmallVector<ams::AMSTensor> &ams_inouts,
+                                  ams::SmallVector<ams::AMSTensor> &ams_outs) {
+    int prunedZones = ams_ins[0].shape()[0];
+    std::cout << "Pruned are " << prunedZones << "\n";
+    real_t *pruned_mat[prunedZones];
+    // The 2D data of materials are unnder a c_vector.
+    real_t *c_mats = ams_ins[0].data<real_t>();
+    // We need this as eval requires a c like 2D vector
+    for (int i = 0; i < prunedZones; i++) {
+      pruned_mat[i] = &c_mats[i * ams_ins[0].shape()[1]];
+    }
+    eval(ams_inouts[0].data<real_t>(),  // density was the first entry in inout
+         ams_outs[0].data<real_t>(),
+         ams_inouts[1].data<real_t>(),  // qc was the second entry in inout
+         *ams_ins[1].data<real_t>(),
+         pruned_mat,
+         NumComps,
+         prunedZones);
+  };
   // After I call this, I expect the database to have the following order:
-  // input_Data: **input_tensors, **inout_tensors 
-  // input_Data: **output_tensors, **inout_tensors 
+  // input_Data: **input_tensors, **inout_tensors
+  // input_Data: **output_tensors, **inout_tensors
   // In this example the database will have the following:
   // Input: |Mat_0|Mat_1|dt|density|qc| Output : |e_mass|density|qc|
   AMSExecute(wf, OrigComputation, input_tensors, inout_tensors, output_tensors);
@@ -125,6 +125,7 @@ void initializeRandom(real_t *data,
 
 int main(int argc, char *argv[])
 {
+  AMSInit();
   int numZones = std::atoi(argv[1]);
   int numComps = std::atoi(argv[2]);
   real_t *actualDensity = new real_t[numZones];
@@ -181,4 +182,6 @@ int main(int argc, char *argv[])
     }
     std::cout << "\n";
   }
+  AMSFinalize();
+  return 0;
 }

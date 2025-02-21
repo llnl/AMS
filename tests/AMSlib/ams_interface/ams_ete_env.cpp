@@ -152,6 +152,7 @@ void callBackSingle(void *cls, long elements, void **inputs, void **outputs)
 int main(int argc, char **argv)
 {
 
+  AMSInit();
   if (argc != 9) {
     std::cout << "Wrong cli\n";
     std::cout << argv[0]
@@ -186,5 +187,6 @@ int main(int argc, char **argv)
     }
   }
 
+  AMSFinalize();
   return 0;
 }

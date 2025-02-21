@@ -6,19 +6,38 @@
  */
 
 
+#include <limits.h>
+#include <unistd.h>
+
 #include <algorithm>  // for std::equal
 #include <cctype>     // for std::toupper
 #include <cstdlib>    // for getenv()
 #include <experimental/filesystem>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <ostream>
+#include <regex>
 #include <string>
 
 #include "debug.h"
 #include "logger.hpp"
 #include "wf/debug.h"
 #include "wf/logger.hpp"
+
+static int get_rank_id()
+{
+  if (const char* flux_id = std::getenv("FLUX_TASK_RANK")) {
+    return std::stoi(flux_id);
+  } else if (const char* rid = std::getenv("SLURM_PROCID")) {
+    return std::stoi(rid);
+  } else if (const char* jsm = std::getenv("JSM_NAMESPACE_RANK")) {
+    return std::stoi(jsm);
+  } else if (const char* pmi = std::getenv("PMIX_RANK")) {
+    return std::stoi(pmi);
+  }
+  return 0;
+}
 
 
 namespace ams
@@ -87,6 +106,8 @@ void Logger::setLoggingMsgLevel(LogVerbosityLevel level)
 Logger* Logger::getActiveLogger()
 {
   static Logger logger;
+  static std::once_flag _amsLogger;
+  std::call_once(_amsLogger, [&]() { logger.setup_loggers(); });
   return &logger;
 }
 
@@ -118,6 +139,73 @@ void Logger::initialize_std_io_err(const bool enable_log,
     }
   }
 }
+
+
+void Logger::setup_loggers()
+{
+  namespace fs = std::experimental::filesystem;
+  const char* ams_logger_level = std::getenv("AMS_LOG_LEVEL");
+  const char* ams_logger_dir = std::getenv("AMS_LOG_DIR");
+  const char* ams_logger_prefix = std::getenv("AMS_LOG_PREFIX");
+  std::string log_fn("");
+  std::string log_path("./");
+
+  bool enable_log = false;
+
+  if (ams_logger_level) {
+    auto log_lvl = ams::util::getVerbosityLevel(ams_logger_level);
+    setLoggingMsgLevel(log_lvl);
+    enable_log = true;
+  }
+
+  // In the case we specify a directory and we do not specify a file
+  // by default we write to a file.
+  if (ams_logger_dir && !ams_logger_prefix) {
+    ams_logger_prefix = "ams";
+  }
+
+  if (ams_logger_prefix) {
+    // We are going to redirect stdout to some file
+    // By default we store to the current directory
+    std::string pattern("");
+    std::string log_prefix(ams_logger_prefix);
+
+    if (ams_logger_dir) {
+      log_path = std::string(ams_logger_dir);
+    }
+
+    char hostname[HOST_NAME_MAX];
+    if (gethostname(hostname, HOST_NAME_MAX) != 0) {
+      FATAL(AMS, "Get hostname returns error");
+    }
+
+    int id = 0;
+    if (log_prefix.find("<RID>") != std::string::npos) {
+      pattern = std::string("<RID>");
+      id = get_rank_id();
+    } else if (log_prefix.find("<PID>") != std::string::npos) {
+      pattern = std::string("<PID>");
+      id = getpid();
+    }
+
+    // Combine hostname and pid
+    std::ostringstream combined;
+    combined << "." << hostname << "." << id;
+
+    if (!pattern.empty()) {
+      log_path = fs::absolute(log_path).string();
+      log_fn =
+          std::regex_replace(log_prefix, std::regex(pattern), combined.str());
+    } else {
+      log_path = fs::absolute(log_path).string();
+      log_fn = log_prefix + combined.str();
+    }
+  }
+  initialize_std_io_err(enable_log, log_path, log_fn);
+
+  return;
+}
+
 
 void Logger::flush()
 {

@@ -11,23 +11,13 @@
 #include <wf/basedb.hpp>
 #include <wf/resource_manager.hpp>
 
+#include "../utils.hpp"
 #include "AMS.h"
 #include "ml/surrogate.hpp"
+#include "wf/debug.h"
 
 using namespace ams;
 
-AMSDType getDataType(char *d_type)
-{
-  AMSDType dType = AMSDType::AMS_DOUBLE;
-  if (std::strcmp(d_type, "float") == 0) {
-    dType = AMSDType::AMS_SINGLE;
-  } else if (std::strcmp(d_type, "double") == 0) {
-    dType = AMSDType::AMS_DOUBLE;
-  } else {
-    assert(false && "Unknown data type");
-  }
-  return dType;
-}
 
 template <typename DType>
 struct Problem {
@@ -148,7 +138,7 @@ int main(int argc, char **argv)
     return -1;
   }
 
-
+  AMSInit();
   int use_device = std::atoi(argv[1]);
   int num_inputs = std::atoi(argv[2]);
   int num_outputs = std::atoi(argv[3]);
@@ -178,13 +168,11 @@ int main(int argc, char **argv)
   AMSExecutor wf = AMSCreateExecutor(model_descr, 0, 1);
   if (data_type == AMSDType::AMS_SINGLE) {
     Problem<float> prob(num_inputs, num_outputs);
-
-
     prob.ams_run(wf, resource, num_iterations, avg_elements);
   } else {
     Problem<double> prob(num_inputs, num_outputs);
     prob.ams_run(wf, resource, num_iterations, avg_elements);
   }
-
+  AMSFinalize();
   return 0;
 }
