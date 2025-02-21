@@ -51,8 +51,7 @@ std::string deviceTypeToString(c10::DeviceType deviceType)
       {c10::DeviceType::HIP, "HIP"},
       {c10::DeviceType::FPGA, "FPGA"},
       {c10::DeviceType::XLA, "XLA"},
-      {c10::DeviceType::Meta, "Meta"},
-      {c10::DeviceType::ORT, "ORT"}};
+      {c10::DeviceType::Meta, "Meta"}};
   return deviceMap.count(deviceType) ? deviceMap.at(deviceType)
                                      : "unknown device";
 }

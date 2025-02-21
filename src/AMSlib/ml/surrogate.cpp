@@ -91,6 +91,9 @@ std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
   }
 
   // If no parameters or buffers are found, default to unknown
+  FATAL(Surrogate,
+        "Cannot determine device type of model %s",
+        _model_path.c_str());
   return std::make_tuple(AMS_UNKNOWN,
                          c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES);
 }
@@ -98,7 +101,7 @@ std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
 std::tuple<AMSDType, torch::Dtype> SurrogateModel::getModelDataType()
 {
   AMSDType dParamType = AMSDType::AMS_DOUBLE;
-  torch::Dtype torchType;
+  torch::Dtype torchType = at::kDouble;
   for (const auto& parameter : module.parameters()) {
     // Return the device of the first parameter found
     if (parameter.dtype() == at::kFloat) {
@@ -112,6 +115,7 @@ std::tuple<AMSDType, torch::Dtype> SurrogateModel::getModelDataType()
                                std::string(parameter.dtype().name()));
     }
   }
+
   // Verify
   for (const auto& parameter : module.parameters()) {
     if (parameter.dtype() != torchType)
@@ -142,6 +146,10 @@ std::tuple<AMSDType, torch::Dtype> SurrogateModel::getModelDataType()
     throw std::runtime_error(
         "Provided model has mixed data types between parameters and buffers");
 
+  DBG(Surrogate,
+      "Detected model data type %s %s",
+      getDTypeAsString(torchType).c_str(),
+      getAMSDTypeAsString(dParamType).c_str());
   return std::make_tuple(dParamType, torchType);
 }
 
@@ -237,7 +245,6 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
           "types\n");
     }
   }
-
   c10::SmallVector<torch::Tensor> ConvertedInputs(Inputs.begin(), Inputs.end());
   // If either the model's execution device or the data type differ
   // in respect to the inputs we need to handle this separately.

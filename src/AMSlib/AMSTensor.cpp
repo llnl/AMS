@@ -54,8 +54,7 @@ AMSTensor::AMSTensor(uint8_t* data,
   }
 }
 
-template <typename FPType,
-          typename = std::enable_if_t<std::is_floating_point<FPType>::value>>
+template <typename FPType, typename>
 AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
                             ams::ArrayRef<AMSTensor::IntDimType> strides,
                             AMSResourceType location)
@@ -79,8 +78,7 @@ AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
 }
 
 
-template <typename FPType,
-          typename = std::enable_if_t<std::is_floating_point<FPType>::value>>
+template <typename FPType, typename>
 AMSTensor AMSTensor::view(FPType* data,
                           ams::ArrayRef<AMSTensor::IntDimType> shapes,
                           ams::ArrayRef<AMSTensor::IntDimType> strides,

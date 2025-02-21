@@ -62,6 +62,7 @@ public:
 
 private:
   Logger() noexcept;
+  void setup_loggers();
 
   bool m_is_enabled[LogVerbosityLevel::Num_Levels];
   FILE *ams_out, *ams_err;

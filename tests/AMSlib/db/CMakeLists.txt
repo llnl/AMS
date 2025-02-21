@@ -10,6 +10,21 @@ function(BUILD_UNIT_TEST exe source)
     target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
   endif()
 
+  if (WITH_CALIPER)
+    message(STATUS "BUilding witth calier ${exe}")
+    target_link_libraries(${exe} PRIVATE caliper)
+  endif()
+
+  if (WITH_RMQ)
+    target_link_libraries(${exe} PRIVATE amqpcpp)
+    if (OPENSSL_FOUND)
+      target_link_libraries(${exe} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    endif()
+    # NOTE: We set here the event/event pthreads as public. As there is no easy way
+    # to do a find package(libevent) and RMQ is not exposing that properly.
+    target_link_libraries(${exe} PRIVATE ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
+  endif()
+
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
 endfunction()
 

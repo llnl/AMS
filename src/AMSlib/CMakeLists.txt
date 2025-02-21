@@ -22,6 +22,7 @@ get_target_property(AMS_TYPE AMS TYPE)
 # setup the lib first
 message(STATUS "ALL INCLUDES ARE ${AMS_APP_INCLUDES}")
 target_compile_definitions(AMS PRIVATE ${AMS_APP_DEFINES})
+message(STATUS "All AMS Internal Defines are ${AMS_APP_DEFINES}")
 target_include_directories(AMS PRIVATE 
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>)
 target_include_directories(AMS PUBLIC
@@ -37,7 +38,6 @@ endif()
 if (WITH_HDF5)
   target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
 endif()
-
 
 if (WITH_CALIPER)
   target_link_libraries(AMS PRIVATE caliper)

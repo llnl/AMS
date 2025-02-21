@@ -7,7 +7,7 @@
 
 #include <limits.h>
 
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
 #include <mpi.h>
 #endif
 #include <unistd.h>
@@ -32,19 +32,6 @@ using namespace ams;
 
 namespace
 {
-static int get_rank_id()
-{
-  if (const char *flux_id = std::getenv("FLUX_TASK_RANK")) {
-    return std::stoi(flux_id);
-  } else if (const char *rid = std::getenv("SLURM_PROCID")) {
-    return std::stoi(rid);
-  } else if (const char *jsm = std::getenv("JSM_NAMESPACE_RANK")) {
-    return std::stoi(jsm);
-  } else if (const char *pmi = std::getenv("PMIX_RANK")) {
-    return std::stoi(pmi);
-  }
-  return 0;
-}
 
 struct AMSAbstractModel {
   enum UQAggrType {
@@ -409,80 +396,9 @@ private:
     return;
   }
 
-  std::pair<bool, std::string> setup_loggers()
-  {
-    const char *ams_logger_level = std::getenv("AMS_LOG_LEVEL");
-    const char *ams_logger_dir = std::getenv("AMS_LOG_DIR");
-    const char *ams_logger_prefix = std::getenv("AMS_LOG_PREFIX");
-    std::string log_fn("");
-    std::string log_path("./");
-
-    auto logger = ams::util::Logger::getActiveLogger();
-    bool enable_log = false;
-
-    if (ams_logger_level) {
-      auto log_lvl = ams::util::getVerbosityLevel(ams_logger_level);
-      logger->setLoggingMsgLevel(log_lvl);
-      enable_log = true;
-    }
-
-    // In the case we specify a directory and we do not specify a file
-    // by default we write to a file.
-    if (ams_logger_dir && !ams_logger_prefix) {
-      ams_logger_prefix = "ams";
-    }
-
-    if (ams_logger_prefix) {
-      // We are going to redirect stdout to some file
-      // By default we store to the current directory
-      std::string pattern("");
-      std::string log_prefix(ams_logger_prefix);
-
-      if (ams_logger_dir) {
-        log_path = std::string(ams_logger_dir);
-      }
-
-      char hostname[HOST_NAME_MAX];
-      if (gethostname(hostname, HOST_NAME_MAX) != 0) {
-        FATAL(AMS, "Get hostname returns error");
-      }
-
-      int id = 0;
-      if (log_prefix.find("<RID>") != std::string::npos) {
-        pattern = std::string("<RID>");
-        id = get_rank_id();
-      } else if (log_prefix.find("<PID>") != std::string::npos) {
-        pattern = std::string("<PID>");
-        id = getpid();
-      }
-
-      // Combine hostname and pid
-      std::ostringstream combined;
-      combined << "." << hostname << "." << id;
-
-      if (!pattern.empty()) {
-        log_path = fs::absolute(log_path).string();
-        log_fn =
-            std::regex_replace(log_prefix, std::regex(pattern), combined.str());
-      } else {
-        log_path = fs::absolute(log_path).string();
-        log_fn = log_prefix + combined.str();
-      }
-    }
-    logger->initialize_std_io_err(enable_log, log_path, log_fn);
-
-    return std::make_pair(enable_log, log_path);
-  }
-
 public:
   AMSWrap() : memManager(ams::ResourceManager::getInstance())
   {
-    auto log_stats = setup_loggers();
-    DBG(AMS,
-        "Enable Log %d stored under %s",
-        log_stats.first,
-        log_stats.second.c_str())
-
     memManager.init();
 
     if (const char *object_descr = std::getenv("AMS_OBJECTS")) {
@@ -555,23 +471,6 @@ static std::once_flag _amsInitFlag;
 static std::once_flag _amsFinalizeFlag;
 static std::unique_ptr<AMSWrap> _amsWrap;
 
-void AMSInit()
-{
-  std::call_once(_amsInitFlag, [&]() {
-    DBG(AMS, "Initialization of AMS")
-    _amsWrap = std::make_unique<AMSWrap>();
-  });
-}
-
-void AMSFinalize()
-{
-  std::call_once(_amsFinalizeFlag, [&]() {
-    DBG(AMS, "Finalization of AMS")
-    _amsWrap.reset();
-  });
-}
-
-
 ams::AMSWorkflow *_AMSCreateExecutor(AMSCAbstrModel model,
                                      int process_id,
                                      int world_size)
@@ -599,6 +498,23 @@ AMSExecutor _AMSRegisterExecutor(ams::AMSWorkflow *workflow)
 
 namespace ams
 {
+
+void AMSInit()
+{
+  std::call_once(_amsInitFlag, [&]() {
+    DBG(AMS, "Initialization of AMS")
+    _amsWrap = std::make_unique<AMSWrap>();
+  });
+}
+
+void AMSFinalize()
+{
+  std::call_once(_amsFinalizeFlag, [&]() {
+    DBG(AMS, "Finalization of AMS")
+    _amsWrap.reset();
+  });
+}
+
 
 AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
                               int process_id,
@@ -681,8 +597,7 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         const char *surrogate_path,
                                         const char *db_label)
 {
-  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
-  std::cout << "_amsWrap = " << _amsWrap.get() << std::endl;
+  CFATAL(AMS, !_amsWrap, "AMSInit has not been called.")
   auto id = _amsWrap->get_model_index(domain_name);
   if (id == -1) {
     id = _amsWrap->register_model(
@@ -706,7 +621,7 @@ void AMSConfigureFSDatabase(AMSDBType db_type, const char *db_path)
 }
 
 
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
 AMSExecutor AMSCreateDistributedExecutor(AMSCAbstrModel model,
                                          MPI_Comm Comm,
                                          int process_id,
