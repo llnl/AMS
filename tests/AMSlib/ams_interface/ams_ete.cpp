@@ -13,6 +13,7 @@
 
 #include "AMS.h"
 #include "ml/surrogate.hpp"
+#include "wf/debug.h"
 
 using namespace ams;
 

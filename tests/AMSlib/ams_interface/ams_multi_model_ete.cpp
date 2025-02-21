@@ -1,3 +1,4 @@
+#include <stdexcept>
 #ifdef __AMS_ENABLE_MPI__
 #include <mpi.h>
 #endif
@@ -7,12 +8,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
-#include <ml/uq.hpp>
 #include <wf/basedb.hpp>
 #include <wf/resource_manager.hpp>
 
 #include "AMS.h"
-#include "wf/debug.h"
+#include "ml/surrogate.hpp"
+
+using namespace ams;
 
 AMSDType getDataType(char *d_type)
 {
@@ -34,7 +36,7 @@ struct Problem {
   int multiplier;
   Problem(int ni, int no) : num_inputs(ni), num_outputs(no), multiplier(100) {}
 
-  void run(long num_elements, DType **inputs, DType **outputs)
+  void run(long num_elements, DType **inputs, DType **outputs, DType scalar)
   {
     for (int i = 0; i < num_elements; i++) {
       DType sum = 0;
@@ -43,13 +45,13 @@ struct Problem {
       }
 
       for (int j = 0; j < num_outputs; j++) {
-        outputs[j][i] = sum;
+        outputs[j][i] = sum + scalar;
       }
     }
   }
 
 
-  const DType *initialize_inputs(DType *inputs, long length)
+  DType *initialize_inputs(DType *inputs, long length)
   {
     for (int i = 0; i < length; i++) {
       inputs[i] = static_cast<DType>(i);
@@ -60,65 +62,83 @@ struct Problem {
   void ams_run(AMSExecutor &wf,
                AMSResourceType resource,
                int iterations,
-               int num_elements)
+               int num_elements,
+               int scalar)
   {
     for (int i = 0; i < iterations; i++) {
       int elements = num_elements;  // * ((DType)(rand()) / RAND_MAX) + 1;
-      std::vector<const DType *> inputs;
-      std::vector<DType *> outputs;
+      SmallVector<AMSTensor> input_tensors;
+      SmallVector<AMSTensor> output_tensors;
 
       // Allocate Input memory
       for (int j = 0; j < num_inputs; j++) {
         DType *data = new DType[elements];
-        inputs.push_back(initialize_inputs(data, elements));
+        DType *ptr = initialize_inputs(data, elements);
+        input_tensors.push_back(AMSTensor::view(
+            ptr,
+            SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
+            SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
+            resource));
       }
 
       // Allocate Output memory
       for (int j = 0; j < num_outputs; j++) {
-        outputs.push_back(new DType[elements]);
+        auto tmp = new DType[elements];
+        output_tensors.push_back(AMSTensor::view(
+            initialize_inputs(tmp, elements),
+            SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
+            SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
+            resource));
       }
 
-      AMSExecute(wf,
-                 (void *)this,
-                 elements,
-                 reinterpret_cast<const void **>(inputs.data()),
-                 reinterpret_cast<void **>(outputs.data()),
-                 inputs.size(),
-                 outputs.size());
+      EOSLambda OrigComputation =
+          [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
+              ams::SmallVector<ams::AMSTensor> &ams_inouts,
+              ams::SmallVector<ams::AMSTensor> &ams_outs) {
+            DType *ins[num_inputs];
+            DType *outs[num_outputs];
+            if (num_inputs != ams_ins.size())
+              throw std::runtime_error(
+                  "Expecting dimensions of inputs to remain the same");
+            else if (num_outputs != ams_outs.size())
+              throw std::runtime_error(
+                  "Expecting dimensions of outputs to remain the same");
 
-      for (int j = 0; j < num_outputs; j++) {
-        delete[] outputs[j];
+            // Here I can use domain knowledge (inouts is empty)
+            int num_elements = ams_ins[0].shape()[0];
+            for (int i = 0; i < num_inputs; i++) {
+              ins[i] = ams_ins[i].data<DType>();
+              if (ams_ins[i].shape()[0] != num_elements)
+                throw std::runtime_error(
+                    "Expected tensors to have the same shape");
+            }
+            for (int i = 0; i < num_outputs; i++) {
+              outs[i] = ams_outs[i].data<DType>();
+              if (ams_outs[i].shape()[0] != num_elements)
+                throw std::runtime_error(
+                    "Expected tensors to have the same shape");
+            }
+            run(num_elements, ins, outs, scalar);
+          };
+
+      ams::SmallVector<AMSTensor> inouts;
+      AMSExecute(wf, OrigComputation, input_tensors, inouts, output_tensors);
+
+      for (int i = 0; i < input_tensors.size(); i++) {
+        delete input_tensors[i].data<DType>();
       }
 
 
-      for (int j = 0; j < num_inputs; j++) {
-        delete[] inputs[j];
+      for (int i = 0; i < output_tensors.size(); i++) {
+        delete output_tensors[i].data<DType>();
       }
     }
   }
 };
 
-void callBackDouble(void *cls, long elements, void **inputs, void **outputs)
-{
-  std::cout << "Called the double model\n";
-  static_cast<Problem<double> *>(cls)->run(elements,
-                                           (double **)(inputs),
-                                           (double **)(outputs));
-}
-
-
-void callBackSingle(void *cls, long elements, void **inputs, void **outputs)
-{
-  std::cout << "Called the single model\n";
-  static_cast<Problem<float> *>(cls)->run(elements,
-                                          (float **)(inputs),
-                                          (float **)(outputs));
-}
-
-
 int main(int argc, char **argv)
 {
-  if (argc != 15) {
+  if (argc != 12) {
     std::cout << "Wrong cli\n";
     std::cout << argv[0]
               << " use_device(0|1) num_inputs num_outputs model_path "
@@ -131,20 +151,17 @@ int main(int argc, char **argv)
 
 
   int use_device = std::atoi(argv[1]);
-  int num_inputs_1 = std::atoi(argv[2]);
-  int num_outputs_1 = std::atoi(argv[3]);
-  char *model_path_1 = argv[4];
+  int num_inputs = std::atoi(argv[2]);
+  int num_outputs = std::atoi(argv[3]);
+  char *model_path = argv[4];
   AMSDType data_type = getDataType(argv[5]);
   std::string uq_name = std::string(argv[6]);
-  const AMSUQPolicy uq_policy = BaseUQ::UQPolicyFromStr(uq_name);
+  const AMSUQPolicy uq_policy = UQ::UQPolicyFromStr(uq_name);
   float threshold = std::atof(argv[7]);
   int num_iterations = std::atoi(argv[8]);
   int avg_elements = std::atoi(argv[9]);
   std::string db_type_str = std::string(argv[10]);
   std::string fs_path = std::string(argv[11]);
-  int num_inputs_2 = std::atoi(argv[12]);
-  int num_outputs_2 = std::atoi(argv[13]);
-  char *model_path_2 = argv[14];
   AMSDBType db_type = ams::db::getDBType(db_type_str);
   AMSResourceType resource = AMSResourceType::AMS_HOST;
   srand(time(NULL));
@@ -156,68 +173,28 @@ int main(int argc, char **argv)
           uq_policy == AMSUQPolicy::AMS_RANDOM) &&
          "Test only supports duq models");
 
-  AMSCAbstrModel model_descr_1 = AMSRegisterAbstractModel(
-      "test_1", uq_policy, threshold, model_path_1, nullptr, "test_1", -1);
+  AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
+      "test_1", uq_policy, threshold, nullptr, "test_1");
 
-  AMSCAbstrModel model_descr_2 = AMSRegisterAbstractModel(
-      "test_2", uq_policy, threshold, model_path_2, nullptr, "test_2", -1);
+  AMSCAbstrModel model_descr1 = AMSRegisterAbstractModel(
+      "test_2", uq_policy, threshold, nullptr, "test_2");
+
+  std::cout << "Running with " << num_iterations << "\n";
+  AMSExecutor wf1 = AMSCreateExecutor(model_descr, 0, 1);
+  AMSExecutor wf2 = AMSCreateExecutor(model_descr1, 0, 1);
+  for (int i = 0; i < 10; i++) {
+    if (data_type == AMSDType::AMS_SINGLE) {
+      Problem<float> prob1(num_inputs, num_outputs);
+      Problem<float> prob2(num_inputs + 1, num_outputs + 1);
 
 
-  if (data_type == AMSDType::AMS_SINGLE) {
-    Problem<float> prob1(num_inputs_1, num_outputs_1);
-    Problem<float> prob2(num_inputs_2, num_outputs_2);
-
-    AMSExecutor wf_1 = AMSCreateExecutor(model_descr_1,
-                                         AMSDType::AMS_SINGLE,
-                                         resource,
-                                         (AMSPhysicFn)callBackSingle,
-                                         0,
-                                         1);
-
-    AMSExecutor wf_2 = AMSCreateExecutor(model_descr_2,
-                                         AMSDType::AMS_SINGLE,
-                                         resource,
-                                         (AMSPhysicFn)callBackSingle,
-                                         0,
-                                         1);
-
-    for (int i = 0; i < num_iterations; i++) {
-      size_t elems =
-          (static_cast<double>(rand()) / RAND_MAX) * 2 * avg_elements -
-          avg_elements + avg_elements;
-      prob1.ams_run(wf_1, resource, 1, elems);
-      size_t elems1 =
-          (static_cast<double>(rand()) / RAND_MAX) * 2 * avg_elements -
-          avg_elements + avg_elements;
-      prob2.ams_run(wf_2, resource, 1, elems1);
-    }
-  } else {
-    Problem<double> prob1(num_inputs_1, num_outputs_1);
-    Problem<double> prob2(num_inputs_2, num_outputs_2);
-
-    AMSExecutor wf_1 = AMSCreateExecutor(model_descr_1,
-                                         AMSDType::AMS_DOUBLE,
-                                         resource,
-                                         (AMSPhysicFn)callBackDouble,
-                                         0,
-                                         1);
-
-    AMSExecutor wf_2 = AMSCreateExecutor(model_descr_2,
-                                         AMSDType::AMS_DOUBLE,
-                                         resource,
-                                         (AMSPhysicFn)callBackDouble,
-                                         0,
-                                         1);
-
-    for (int i = 0; i < num_iterations; i++) {
-      size_t elems = avg_elements;
-      //          (static_cast<double>(rand()) / RAND_MAX) * 2 * avg_elements -
-      //          avg_elements + avg_elements;
-      prob1.ams_run(wf_1, resource, 1, elems);
-      size_t elems1 = avg_elements;
-      //          (static_cast<double>(rand()) / RAND_MAX) * 2 * avg_elements -
-      //          avg_elements + avg_elements;
-      prob2.ams_run(wf_2, resource, 1, elems1);
+      prob1.ams_run(wf1, resource, num_iterations, avg_elements, 0);
+      prob2.ams_run(wf2, resource, num_iterations, avg_elements, 1);
+    } else {
+      Problem<double> prob1(num_inputs, num_outputs);
+      Problem<double> prob2(num_inputs + 1, num_outputs + 1);
+      prob2.ams_run(wf2, resource, num_iterations, avg_elements, 1);
+      prob1.ams_run(wf1, resource, num_iterations, avg_elements, 0);
     }
   }
 

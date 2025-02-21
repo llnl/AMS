@@ -178,7 +178,13 @@ BUILD_TEST(ams_ete_broadcast ams_ete_broadcast.cpp)
 INTEGRATION_TEST()
 BUILD_TEST(ams_end_to_end_env ams_ete_env.cpp)
 INTEGRATION_TEST_ENV()
-#BUILD_TEST(ams_multi_model_end_to_end ams_multi_model_ete.cpp)
+BUILD_TEST(ams_multi_model_end_to_end ams_multi_model_ete.cpp)
+ADD_API_UNIT_TEST(API_DIRECT_QUERY AMS::API::MultiModelDefine::Random::Double::DB::OnlyPhysics::None::HOST "${CMAKE_CURRENT_BINARY_DIR}/ams_multi_model_end_to_end 0 8 8 ${TORCH_MODEL_DIR}/linear_scripted_single_cpu_random.pt \"double\" \"random\" 0.0 1 128 \"none\" \"./\"; python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 ${CMAKE_CURRENT_SOURCE_DIR}/linear_scripted_cpu.pt \"double\" \"random\" 0.0 1 128 \"none\" \"./\"")
+
+
+BUILD_TEST(ams_multi_model_end_to_end_env ams_multi_model_ete_env.cpp)
+ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::MultiModelDefine::Random10::Random50::Double::DB::${db_type}::HOST "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 128 app_random_10 app_random_50;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 128 app_random_10 app_random_50")
+
 
 #BUILD_TEST(ams_rmq ams_rmq_env.cpp)
 #INTEGRATION_TEST_RMQ()
