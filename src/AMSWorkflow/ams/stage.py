@@ -10,15 +10,13 @@ import os
 import shutil
 import signal
 import time
-from abc import ABC, abstractclassmethod, abstractmethod
+from abc import ABC, abstractmethod
 from enum import Enum
 from multiprocessing import Process
 from multiprocessing import Queue as mp_queue
 from pathlib import Path
 from queue import Queue as ser_queue
 from threading import Thread
-from typing import Callable
-import warnings
 
 import numpy as np
 from ams.config import AMSInstance
@@ -131,7 +129,7 @@ class ForwardTask(Task):
         self.i_queue = i_queue
         self.o_queue = o_queue
         self.user_obj = user_obj
-        self.datasize = 0
+        self.datasize_byte = 0
 
     @property
     def db_path(self):
@@ -167,7 +165,7 @@ class ForwardTask(Task):
         _updated = self.user_obj.update_model_cb(domain, model)
         print(f"Model update status: {_updated}")
 
-    @AMSMonitor(record=["datasize"])
+    @AMSMonitor(record=["datasize_byte"])
     def __call__(self):
         """
         A busy loop reading messages from the i_queue, acting on those messages and forwarding
@@ -186,7 +184,7 @@ class ForwardTask(Task):
                     data = item.data()
                     inputs, outputs = self._data_cb(data)
                     self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(inputs, outputs, data.domain_name)))
-                    self.datasize += inputs.nbytes + outputs.nbytes
+                    self.datasize_byte += inputs.nbytes + outputs.nbytes
                 elif item.is_new_model():
                     data = item.data()
                     self._model_update_cb(db, data)
@@ -215,9 +213,10 @@ class FSLoaderTask(Task):
         self.o_queue = o_queue
         self.pattern = pattern
         self.loader = loader
-        self.datasize = 0
+        self.datasize_byte = 0
+        self.total_time_ns = 0
 
-    @AMSMonitor(record=["datasize"])
+    @AMSMonitor(array=["msgs"], record=["datasize_byte", "total_time_ns"])
     def __call__(self):
         """
         Busy loop of reading all files matching the pattern and creating
@@ -225,9 +224,10 @@ class FSLoaderTask(Task):
         the Task pushes a 'Terminate' message to the queue and returns.
         """
 
-        start = time.time()
+        start = time.time_ns()
         files = list(glob.glob(self.pattern))
         for fn in files:
+            start_time_fs = time.time_ns()
             with self.loader(fn) as fd:
                 domain_name, input_data, output_data = fd.load()
                 print("Domain Name is", domain_name)
@@ -238,13 +238,29 @@ class FSLoaderTask(Task):
                 output_batches = np.array_split(output_data, num_batches)
                 for j, (i, o) in enumerate(zip(input_batches, output_batches)):
                     self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(i, o, domain_name)))
-                self.datasize += input_data.nbytes + output_data.nbytes
+                self.datasize_byte += input_data.nbytes + output_data.nbytes
+
+                end_time_fs = time.time_ns()
+                msg = {
+                    "file": fn,
+                    "domain_name": domain_name,
+                    "row_size": row_size,
+                    "batch_size": BATCH_SIZE,
+                    "rows_per_batch": rows_per_batch,
+                    "num_batches": num_batches,
+                    "size_bytes": input_data.nbytes + output_data.nbytes,
+                    "process_time_ns": end_time_fs - start_time_fs,
+                }
+                # msgs is a list that is managed by AMSMonitor, we simply append to it
+                msgs.append(msg)
+
             print(f"Sending Delete Message Type {self.__class__.__name__}")
             self.o_queue.put(QueueMessage(MessageType.Delete, fn))
         self.o_queue.put(QueueMessage(MessageType.Terminate, None))
 
-        end = time.time()
-        print(f"Spend {end - start} at {self.__class__.__name__}")
+        end = time.time_ns()
+        self.total_time_ns += (end - start)
+        print(f"Spend {(end - start)/1e9} at {self.__class__.__name__}")
 
 
 class RMQDomainDataLoaderTask(Task):
@@ -279,8 +295,8 @@ class RMQDomainDataLoaderTask(Task):
         self.cert = cert
         self.rmq_queue = rmq_queue
         self.prefetch_count = prefetch_count
-        self.datasize = 0
-        self.total_time = 0
+        self.datasize_byte = 0
+        self.total_time_ns = 0
         self.signals = signals
         self.orig_sig_handlers = {}
         self.policy = policy
@@ -314,25 +330,40 @@ class RMQDomainDataLoaderTask(Task):
         print("Adding terminate message at queue:", self.o_queue)
         self.o_queue.put(QueueMessage(MessageType.Terminate, None))
 
+    @AMSMonitor(array=["msgs"], record=["datasize_byte", "total_time_ns"])
     def callback_message(self, ch, basic_deliver, properties, body):
         """
         Callback that will be called each time a message will be consummed.
         the connection (or if a problem happened with the connection).
         """
-        start_time = time.time()
-        domain_name, input_data, output_data = AMSMessage(body).decode()
+        start_time = time.time_ns()
+        msg = AMSMessage(body)
+        domain_name, input_data, output_data = msg.decode()
         row_size = input_data[0, :].nbytes + output_data[0, :].nbytes
         rows_per_batch = int(np.ceil(BATCH_SIZE / row_size))
         num_batches = int(np.ceil(input_data.shape[0] / rows_per_batch))
         input_batches = np.array_split(input_data, num_batches)
         output_batches = np.array_split(output_data, num_batches)
 
-        self.datasize += input_data.nbytes + output_data.nbytes
+        self.datasize_byte += input_data.nbytes + output_data.nbytes
 
         for j, (i, o) in enumerate(zip(input_batches, output_batches)):
             self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(i, o, domain_name)))
-
-        self.total_time += time.time() - start_time
+        end_time = time.time_ns()
+        self.total_time_ns += (end_time - start_time)
+        # TODO: Improve the code to manage potentially multiple messages per AMSMessage
+        msg = {
+            "delivery_tag": basic_deliver.delivery_tag,
+            "mpi_rank": msg.mpi_rank,
+            "domain_name": domain_name,
+            "num_elements": msg.num_elements,
+            "input_dim": msg.input_dim,
+            "output_dim": msg.output_dim,
+            "size_bytes": input_data.nbytes + output_data.nbytes,
+            "ts_received": start_time,
+            "ts_processed": end_time
+        }
+        msgs.append(msg)
 
     def signal_wrapper(self, name, pid):
         def handler(signum, frame):
@@ -343,9 +374,8 @@ class RMQDomainDataLoaderTask(Task):
 
     def stop(self):
         self.rmq_consumer.stop()
-        print(f"Spend {self.total_time} at {self.__class__.__name__}")
+        print(f"Spend {self.total_time_ns/1e9} at {self.__class__.__name__}")
 
-    @AMSMonitor(record=["datasize", "total_time"])
     def __call__(self):
         """
         Busy loop of consuming messages from RMQ queue
@@ -356,7 +386,7 @@ class RMQDomainDataLoaderTask(Task):
                 signal.signal(s, self.signal_wrapper(self.__class__.__name__, os.getpid()))
         print(f"{self.__class__.__name__} PID is:", os.getpid())
         self.rmq_consumer.run()
-        print("Returning")
+        print(f"Returning from {self.__class__.__name__}")
 
 
 class RMQControlMessageTask(RMQDomainDataLoaderTask):
@@ -385,7 +415,7 @@ class RMQControlMessageTask(RMQDomainDataLoaderTask):
         if data["request_type"] == "done-training":
             self.o_queue.put(QueueMessage(MessageType.NewModel, data))
 
-        self.total_time += time.time() - start_time
+        self.total_time_ns += time.time_ns() - start_time
 
 
 class FSWriteTask(Task):
@@ -410,7 +440,7 @@ class FSWriteTask(Task):
         self.o_queue = o_queue
         self.suffix = writer_cls.get_file_format_suffix()
 
-    @AMSMonitor(record=["datasize"])
+    @AMSMonitor(record=["datasize_byte"])
     def __call__(self):
         """
         A busy loop reading messages from the i_queue, writting the input,output data in a file
@@ -465,7 +495,7 @@ class FSWriteTask(Task):
                         del data_files[data.domain_name]
 
         end = time.time()
-        self.datasize = total_bytes_written
+        self.datasize_byte = total_bytes_written
         print(f"Spend {end - start} {total_bytes_written} at {self.__class__.__name__}")
 
 
@@ -483,7 +513,7 @@ class PushToStore(Task):
 
     def __init__(self, i_queue, ams_config, db_path, store):
         """
-        Tnitializes the PushToStore Task. It reads files from i_queue, if the file
+        Initializes the PushToStore Task. It reads files from i_queue, if the file
         is not under db_path, it copies the file to this location and if store defined
         it makes the kosh-store aware about the existence of the file.
         """
@@ -779,7 +809,7 @@ class Pipeline(ABC):
         parser.set_defaults(store=True)
         return
 
-    @abstractclassmethod
+    @abstractmethod
     def from_cli(cls):
         pass
 
