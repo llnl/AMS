@@ -92,7 +92,7 @@ class AMSMonitor:
         record: attributes to record, if None, all attributes
             will be recorded, except objects (e.g., multiprocessing.Queue)
             which can cause problem. if empty ([]), no attributes will
-            be recorded, only amsmonitor_duration_ms will be recorded.
+            be recorded, only amsmonitor_duration will be recorded.
         array: User can give a variable in which data can be accumulated over
             function calls. For example, `@AMSMonitor(array=["msg"])`
             give the possibilty to use the list `msg` within the decorated
@@ -117,7 +117,9 @@ class AMSMonitor:
     _lock = threading.Lock()
     _count = 0
 
-    def __init__(self, record=None, array=[], accumulate=False, obj=None, tag=None, logger: logging.Logger = None, **kwargs):
+    def __init__(
+        self, record=None, array=[], accumulate=False, obj=None, tag=None, logger: logging.Logger = None, **kwargs
+    ):
         self.accumulate = accumulate
         self.kwargs = kwargs
         self.record = record
@@ -275,7 +277,7 @@ class AMSMonitor:
 
                 # We remove stuff we do not want (attribute of the calling class captured by vars())
                 new_data = self._filter(new_data, self.record)
-                new_data["amsmonitor_duration_ms"] = (end - start) / 1e6
+                new_data["amsmonitor_duration(ms)"] = (end - start) / 1e6
             else:
                 new_data = self.array_context
             self._update_db(new_data, class_name, func_name, ts)
@@ -287,17 +289,17 @@ class AMSMonitor:
         """
         This function update the hashmap containing all the records.
         """
-        if new_data == {}: return
+        if new_data == {}:
+            return
         AMSMonitor.lock()
         if class_name not in AMSMonitor._stats:
             AMSMonitor._stats[class_name] = {}
 
         if func_name not in AMSMonitor._stats[class_name]:
             temp = AMSMonitor._stats[class_name]
-            temp.update({func_name: {"records" : []}})
+            temp.update({func_name: {"records": []}})
             AMSMonitor._stats[class_name] = temp
         temp = AMSMonitor._stats[class_name]
-
 
         # If we have to deal with arrays (if array != [])
         # Note that if we record arrays for this class / function
@@ -317,7 +319,7 @@ class AMSMonitor:
                 ts = self._get_ts(class_name, func_name)
                 temp[func_name]["records"][ts] = self._acc(temp[func_name][ts], new_data)
             else:
-                item = {'timestamp': ts}
+                item = {"timestamp": ts}
                 for k, v in new_data.items():
                     item[k] = v
                 temp[func_name]["records"].append(item)
