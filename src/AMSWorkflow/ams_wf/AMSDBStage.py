@@ -7,7 +7,6 @@ import argparse
 import time
 
 from ams.loader import load_class
-from ams.monitor import AMSMonitor
 from ams.stage import get_pipeline
 
 
@@ -29,6 +28,14 @@ def main():
         help="The execution vehicle of every stage in the pipeline",
         choices=["process", "thread", "sequential"],
         default="process",
+    )
+
+    parser.add_argument(
+        "--json-monitoring",
+        "-jm",
+        dest="output_json",
+        help="File where to output the monitoring data from the stage (JSON)",
+        default=None,
     )
 
     parser.add_argument("--mechanism", "-m", dest="mechanism", choices=["fs", "network"], default="fs")
@@ -75,14 +82,18 @@ def main():
         obj = user_class.from_cli(user_args)
         pipeline.add_user_action(obj)
 
+    if args.output_json is not None:
+        print(f"Monitoring output file: {args.output_json}")
+        from ams.monitor import AMSMonitor
+
     start = time.time()
     pipeline.execute(args.policy)
     end = time.time()
     print(f"End to End time spend : {end - start}")
-    print(f"{AMSMonitor.info()}")
-    # Output profiling output to JSON (just as an example)
-    AMSMonitor.json("ams_monitor.json")
 
+    if args.output_json is not None:
+        # Output profiling output to JSON
+        AMSMonitor.json(args.output_json)
 
 if __name__ == "__main__":
     main()

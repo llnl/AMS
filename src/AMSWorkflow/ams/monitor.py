@@ -10,6 +10,7 @@ import logging
 import multiprocessing
 import threading
 import time
+from collections import deque
 from typing import Callable, List, Union
 
 
@@ -53,6 +54,12 @@ class AMSMonitor:
                         self.total_bytes2 = 1
                         i += 1
 
+            # Example: We can also collect data at a finer grain
+            @AMSMonitor(array=["myarray"])
+            def f(self):
+                i = 0
+                while (i<2): myarray.append({"i":i})
+
     Each time `ExampleTask1()` is being called, AMSMonitor will
     populate `_stats` as follows (showed with two calls here):
         {
@@ -68,6 +75,15 @@ class AMSMonitor:
                         "total_bytes2": 30,
                         "amsmonitor_duration": 4.10461138
                     }
+                },
+                "f": {
+                    "myarray": [
+                        {
+                            "i": 0,
+                        },
+                        {
+                            "i": 1,
+                        }
                 }
             }
         }
@@ -77,6 +93,10 @@ class AMSMonitor:
             will be recorded, except objects (e.g., multiprocessing.Queue)
             which can cause problem. if empty ([]), no attributes will
             be recorded, only amsmonitor_duration will be recorded.
+        array: User can give a variable in which data can be accumulated over
+            function calls. For example, `@AMSMonitor(array=["msg"])`
+            give the possibilty to use the list `msg` within the decorated
+            function to accumalate data.
         accumulate: If True, AMSMonitor will accumulate recorded
             data instead of recording a new timestamp for
             any subsequent call of AMSMonitor on the same method.
@@ -97,7 +117,7 @@ class AMSMonitor:
     _lock = threading.Lock()
     _count = 0
 
-    def __init__(self, record=None, accumulate=False, obj=None, tag=None, logger: logging.Logger = None, **kwargs):
+    def __init__(self, record=None, array=[], accumulate=False, obj=None, tag=None, logger: logging.Logger = None, **kwargs):
         self.accumulate = accumulate
         self.kwargs = kwargs
         self.record = record
@@ -112,6 +132,20 @@ class AMSMonitor:
         self.tag = tag
         AMSMonitor._count += 1
         self.logger = logger if logger else logging.getLogger(__name__)
+
+        # Section to manage JSON array
+        if not isinstance(array, list):
+            array = [array]
+        self.array_names = array
+        self.variables_list = []
+        self.array_context = {}
+
+        for var in self.array_names:
+            self.variables_list.append(deque())
+            self.array_context[var] = self.variables_list[-1]
+
+        # convenient bool to know if we need to support appending operations to array
+        self.use_arrays = self.array_names != []
 
     def __str__(self) -> str:
         return AMSMonitor.info() if AMSMonitor._stats != {} else "{}"
@@ -142,14 +176,16 @@ class AMSMonitor:
         s = ""
         if cls._stats == {}:
             return "{}"
-        for k, v in cls._stats.items():
-            s += f"{k}\n"
-            for i, j in v.items():
-                s += f"  {i}\n"
-                for p, z in j.items():
-                    s += f"    {p:<10}\n"
-                    for r, q in z.items():
-                        s += f"      {r:<30} => {q}\n"
+        for class_name, func_calls in cls._stats.items():
+            s += f"{class_name}\n"
+            for func, categories in func_calls.items():
+                s += f"  {func}\n"
+                for cat_name, elems in categories.items():
+                    s += f"    {cat_name:<10}\n"
+                    for elem in elems:
+                        for key, value in elem.items():
+                            s += f"      {key:<30} => {value}\n"
+                        s += f"\n"
         return s.rstrip()
 
     @classmethod
@@ -184,11 +220,11 @@ class AMSMonitor:
         cls.unlock()
 
     def start_monitor(self, *args, **kwargs):
-        self.start_time = time.time()
-        self.internal_ts = datetime.datetime.now().strftime(self._ts_format)
+        self.start_time = time.time_ns()
+        self.internal_ts = time.time_ns()
 
     def stop_monitor(self):
-        end = time.time()
+        end = time.time_ns()
         class_name = self.object.__class__.__name__
         func_name = self.tag
 
@@ -212,22 +248,36 @@ class AMSMonitor:
         """
 
         def wrapper(*args, **kwargs):
-            ts = datetime.datetime.now().strftime(self._ts_format)
-            start = time.time()
-            value = func(*args, **kwargs)
-            end = time.time()
+            ts = time.time_ns()
+            start = time.time_ns()
+
+            if self.use_arrays:
+                # Save copy of any global values that will be replaced.
+                saved_values = {key: func.__globals__[key] for key in self.array_context if key in func.__globals__}
+                func.__globals__.update(self.array_context)
+
+            try:
+                value = func(*args, **kwargs)
+            finally:
+                if self.use_arrays:
+                    func.__globals__.update(saved_values)  # Restore any replaced globals.
+
+            end = time.time_ns()
             if not hasattr(args[0], "__dict__"):
                 return value
             class_name = args[0].__class__.__name__
             func_name = self.tag if self.tag else func.__name__
-            new_data = vars(args[0])
+            if not self.use_arrays:
+                # new_data is a dict of value from vars(). It contains all the class variable etc
+                new_data = vars(args[0])
+                # Filter out multiprocessing which cannot be stored without causing RuntimeError
+                new_data = self._filter_out_object(new_data)
 
-            # Filter out multiprocessing which cannot be stored without causing RuntimeError
-            new_data = self._filter_out_object(new_data)
-
-            # We remove stuff we do not want (attribute of the calling class captured by vars())
-            new_data = self._filter(new_data, self.record)
-            new_data["amsmonitor_duration"] = end - start
+                # We remove stuff we do not want (attribute of the calling class captured by vars())
+                new_data = self._filter(new_data, self.record)
+                new_data["amsmonitor_duration(ms)"] = (end - start) / 1e6
+            else:
+                new_data = self.array_context
             self._update_db(new_data, class_name, func_name, ts)
             return value
 
@@ -237,29 +287,52 @@ class AMSMonitor:
         """
         This function update the hashmap containing all the records.
         """
+        if new_data == {}: return
         AMSMonitor.lock()
         if class_name not in AMSMonitor._stats:
             AMSMonitor._stats[class_name] = {}
 
         if func_name not in AMSMonitor._stats[class_name]:
             temp = AMSMonitor._stats[class_name]
-            temp.update({func_name: {}})
+            temp.update({func_name: {"records" : []}})
             AMSMonitor._stats[class_name] = temp
         temp = AMSMonitor._stats[class_name]
 
-        # We accumulate for each class with a different name
-        if self.accumulate and temp[func_name] != {}:
-            ts = self._get_ts(class_name, func_name)
-            temp[func_name][ts] = self._acc(temp[func_name][ts], new_data)
+
+        # If we have to deal with arrays (if array != [])
+        # Note that if we record arrays for this class / function
+        # we do not record "records"
+        if self.use_arrays:
+            for tag in self.array_context:
+                # Each tag has a list of elems
+                while len(self.array_context[tag]) > 0:
+                    # we remove the first elem to write it in the DB
+                    elem = self.array_context[tag].popleft()
+                    if tag not in temp[func_name]:
+                        temp[func_name][tag] = []
+                    temp[func_name][tag].append(elem)
         else:
-            temp[func_name][ts] = {}
-            for k, v in new_data.items():
-                temp[func_name][ts][k] = v
-        # This trick is needed because AMSMonitor._stats is a manager.dict (not shared memory)
+            # We accumulate for each class with a different name
+            if self.accumulate and temp[func_name] != []:
+                ts = self._get_ts(class_name, func_name)
+                temp[func_name]["records"][ts] = self._acc(temp[func_name][ts], new_data)
+            else:
+                item = {'timestamp': ts}
+                for k, v in new_data.items():
+                    item[k] = v
+                temp[func_name]["records"].append(item)
+
+        # This step is needed because AMSMonitor._stats is a manager.dict (not shared memory)
+        # by reassigning the dictionary, the manager.dict is notified of the change
         AMSMonitor._stats[class_name] = temp
         AMSMonitor.unlock()
+        # We flush the context array to receive the next chunk
+        # self.array_context = []
 
     def _remove_reserved_keys(self, d: Union[dict, List]) -> dict:
+        """
+        Remove all the reserved keys from the dict given as input.
+        """
         for key in self._reserved_keys:
             if key in d:
                 self.logger.warning(f"attribute {key} is protected and will be ignored ({d})")
@@ -306,15 +379,18 @@ class AMSMonitor:
             return data
         return {k: v for k, v in data.items() if k in keys}
 
-    def _get_ts(self, class_name: str, tag: str) -> str:
+    def _get_ts(self, class_name: str, func: str) -> int:
         """
         Return initial timestamp for a given monitored function.
         """
-        ts = datetime.datetime.now().strftime(self._ts_format)
-        if class_name not in AMSMonitor._stats or tag not in AMSMonitor._stats[class_name]:
+        ts = time.time_ns()
+        if class_name not in AMSMonitor._stats or func not in AMSMonitor._stats[class_name]:
             return ts
 
-        init_ts = list(AMSMonitor._stats[class_name][tag].keys())
+        print(f"{class_name} {func} {AMSMonitor._stats}")
+        init_ts = AMSMonitor._stats[class_name][func]
+        if len(init_ts) == []:
+            return ts
         if len(init_ts) > 1:
-            self.logger.warning(f"more than 1 timestamp detected for {class_name} / {tag}")
+            self.logger.warning(f"more than 1 timestamp detected for {class_name} / {func}")
         return ts if init_ts == [] else init_ts[0]
