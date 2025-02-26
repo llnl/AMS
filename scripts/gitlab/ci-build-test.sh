@@ -3,6 +3,8 @@
 source scripts/gitlab/setup-env.sh
 
 export CTEST_OUTPUT_ON_FAILURE=1
+export NUMEXPR_NUM_THREADS=1
+export NUMEXPR_MAX_THREADS=1
 # WITH_CUDA is defined in the per machine job yml.
 
 cleanup() {
