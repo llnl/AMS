@@ -1,4 +1,10 @@
-from ams.ams_jobs import AMSDomainJob, AMSNetworkStageJob, AMSMLTrainJob, AMSOrchestratorJob, AMSSubSelectJob
+from ams.ams_jobs import (
+    AMSDomainJob,
+    AMSNetworkStageJob,
+    AMSMLTrainJob,
+    AMSOrchestratorJob,
+    AMSSubSelectJob,
+)
 import os
 import time
 from ams.ams_flux import AMSFluxExecutor
@@ -8,6 +14,7 @@ from ams.store import AMSDataStore
 import flux
 import json
 from flux.job.list import get_job
+from concurrent.futures import wait
 
 from typing import Tuple, Dict, List, Optional, Set
 from dataclasses import dataclass
@@ -86,6 +93,7 @@ class AMSWorkflowManager:
         self._stage_jobs = stage_jobs
         self._sub_select_jobs = sub_select_jobs
         self._train_jobs = train_jobs
+        self._stager_jobs = {}
 
     @property
     def rmq_config(self):
@@ -117,7 +125,6 @@ class AMSWorkflowManager:
             rmq_config.rabbitmq_cert,
             rmq_config.rabbitmq_ml_submit_queue,
         ) as rmq_fd:
-
             for ml_job in self._train_jobs:
                 request = json.dumps(
                     [
@@ -146,31 +153,62 @@ class AMSWorkflowManager:
                 )
                 rmq_fd.send_message(request)
 
-    def done_cb(self, future):
+    def stager_done_cb(self, future):
         job_id = future.jobid()
-        print(f"{job_id} is done")
+        print(f"Stager with {job_id} is done")
+
+    def domain_done_cb(self, future):
+        job_id = future.jobid()
+        print(f"Domain with {job_id} is done")
 
     def start_domain(self, store, rmq_config, domain_uri):
         print("Start Domain")
+        self.jobs = {}
         with AMSFluxExecutor(False, threads=1, handle_args=(domain_uri,)) as domain_executor:
+            handle = flux.Flux(url=domain_uri)
             for domain_job in self._domain_jobs:
+                # This is a hook, it will update the 'AMS_OBJECTS' env variable to point
+                # to the latest model so the submitted job will pick it up.
+                # It is not great, as it requires a piped execution.
                 domain_job.precede_deploy(store, rmq_config)
                 print("Domain command is:", " ".join(domain_job.generate_cli_command()))
                 domain_future = domain_executor.submit(domain_job.to_flux_jobspec())
+                domain_future.add_done_callback(self.domain_done_cb)
                 job_id = domain_future.jobid()
                 print(f"Executing Domain with job id {job_id}")
-                print(f"Domain with job id {job_id} result: {domain_future.result()}")
+                # We are synchronizing the queue here. Is this is necessary for us to push model
+                # updates in this.
+                domain_future.done()
+                time.sleep(1)
+                try:
+                    domain_future.result()
+                except Exception as e:
+                    print("")
+                    rpc_handle = flux.job.job_list_id(handle, job_id)
+                    ji = rpc_handle.get_jobinfo()
+                    print(json.dumps(ji.to_dict(False), indent=6))
+                    print(ji.inactive_reason)
 
-    def start_stagers(self, store, rmq_config, domain_uri, stage_uri):
+                print(f"Domain with job id {job_id} result: {domain_future.result()}")
+            domain_executor.shutdown(wait=True)
+
+    def start_stagers(self, store, rmq_config, domain_uri, stage_uri, orchestrator_publisher):
         with AMSFluxExecutor(False, threads=1, handle_args=(stage_uri,)) as stager_executor:
             print("Connected to stager executor", stage_uri)
+            # Spawn all stagers
+            stager_futures = set()
             for stager in self._stage_jobs:
                 print("Stager command is:", " ".join(stager.generate_cli_command()))
                 stager_future = stager_executor.submit(stager.to_flux_jobspec())
-                stager_future.add_done_callback(self.done_cb)
+                stager_futures.add(stager_future)
                 job_id = stager_future.jobid()
                 print(f"Stager JOB-ID is  {job_id}")
-                self.start_domain(store, rmq_config, domain_uri)
+            print("Done scheduling stagers")
+            self.start_domain(store, rmq_config, domain_uri)
+            # AFAIK we need this cause here we lose a message.
+            time.sleep(15)
+            orchestrator_publisher.broadcast(json.dumps({"request_type": "terminate"}))
+            stager_executor.shutdown(wait=True)
 
     def start(self, domain_uri, stage_uri, ml_uri):
         ams_orchestartor_job = AMSOrchestratorJob(ml_uri, self.rmq_config)
@@ -178,6 +216,8 @@ class AMSWorkflowManager:
         print(f"Starting ..... {ml_uri} ... {stage_uri} ... {domain_uri}")
         with AMSDataStore(self._kosh_path, self._store_name, self._db_name) as store:
             print("Opened the AMS Store")
+            # We start first the ML as we want to terminate only
+            # after we have trained all the models.
             with AMSFluxExecutor(False, threads=1, handle_args=(ml_uri,)) as ml_executor:
                 print("Connected to ml executor")
                 # The AMSFanOutProducer enables us to send control message to all stagers and
@@ -193,9 +233,12 @@ class AMSWorkflowManager:
                     ml_future = ml_executor.submit(ams_orchestartor_job.to_flux_jobspec())
                     job_id = ml_future.jobid()
                     print("ML JOB ID is:", job_id)
-                    self.start_stagers(store, rmq_config, domain_uri, stage_uri)
+                    # We broadcast the training specification ...
                     self.broadcast_train_specs(rmq_config)
-                    orchestrator_publisher.broadcast(json.dumps({"request_type": "terminate"}))
+                    print("Broadcasted specs")
+                    # Then we start the stagers. Stagers need to come online
+                    # after the model server is up and running.
+                    self.start_stagers(store, rmq_config, domain_uri, stage_uri, orchestrator_publisher)
                 ml_executor.shutdown(wait=True)
 
     @classmethod
@@ -204,7 +247,6 @@ class AMSWorkflowManager:
         json_file: str,
         rmq_config: Optional[str] = None,
     ):
-
         def collect_domains(jobs: JobList) -> Set[str]:
             return {job.domain for job in jobs}
 
@@ -251,7 +293,11 @@ class AMSWorkflowManager:
         stage_resources = AMSJobResources(nodes=1, tasks_per_node=1, cores_per_task=6, gpus_per_task=0)
         stage_jobs = JobList()
         stage_job = AMSNetworkStageJob.from_descr(
-            data["stage-job"], store.get_candidate_path(), store.root_path, rmq_config, stage_resources
+            data["stage-job"],
+            store.get_candidate_path(),
+            store.root_path,
+            rmq_config,
+            stage_resources,
         )
         # NOTE: We need to always copy in our environment. To make sure we find the respective packages
         stage_job.environ = os.environ
@@ -281,6 +327,7 @@ class AMSWorkflowManager:
         wf_domain_names = list(set(wf_domain_names))
 
         for domain in wf_domain_names:
+            print(domain)
             assert domain in train_domains, f"Domain {domain} misses a train description"
             assert domain in sub_select_domains, f"Domain {domain} misses a subselection description"
         store.close()

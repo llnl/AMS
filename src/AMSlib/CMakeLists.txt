@@ -72,6 +72,7 @@ if (${WITH_CALIPER})
 endif()
 
 if (${WITH_MPI})
+  message(FATAL "I am here")
   set(MPI_DEFINES "#define __AMS_ENABLE_MPI__")
 endif()
 
@@ -86,13 +87,48 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS.h" "${PROJECT_BINARY_DI
 #SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,$ORIGIN")
 # ------------------------------------------------------------------------------
 # installation paths
+# Install the AMS library
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 install(TARGETS AMS
-        EXPORT AMSTargets
-        DESTINATION lib)
+    EXPORT AMSTargets
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"      # For shared libraries
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"      # For static libraries
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"      # For executables (Windows-specific)
+    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" # Install headers directory
+)
 
+# Export the AMS targets for use by external projects
 install(EXPORT AMSTargets
-  FILE AMS.cmake
-  DESTINATION lib/cmake/AMS)
+    NAMESPACE AMS::                              # Prefix target names with AMS::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/AMS" # Install location for CMake config
+)
 
-install(FILES ${PROJECT_BINARY_DIR}/include/AMS.h DESTINATION include)
-install(FILES ${PROJECT_BINARY_DIR}/include/AMS-config.h DESTINATION include)
+# Install the public headers
+install(FILES
+    ${PROJECT_BINARY_DIR}/include/AMS.h
+    ${PROJECT_BINARY_DIR}/include/AMS-config.h
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/"    # Headers installed into AMS subdir
+)
+
+
+# Generate a version file for the package
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/AMSConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+# Configure the package configuration file
+configure_package_config_file(
+    "${CMAKE_SOURCE_DIR}/cmake/AMSConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/AMSConfig.cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/AMS"
+)
+
+# Install the generated config and version files
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/AMSConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/AMSConfigVersion.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/AMS"
+)

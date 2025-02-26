@@ -11,10 +11,12 @@ import struct
 import traceback
 from pathlib import Path
 from typing import Callable, Optional, Tuple
+import sys
 
 import numpy as np
 import json
 import pika
+
 
 class AMSMessage(object):
     """
@@ -76,7 +78,14 @@ class AMSMessage(object):
         """
         return "="
 
-    def encode(self, num_elem: int, domain_name: str, input_dim: int, output_dim: int, dtype_byte: int = 4) -> bytes:
+    def encode(
+        self,
+        num_elem: int,
+        domain_name: str,
+        input_dim: int,
+        output_dim: int,
+        dtype_byte: int = 4,
+    ) -> bytes:
         """
         For debugging and testing purposes, this function encode a message identical to what AMS would send
         """
@@ -89,7 +98,16 @@ class AMSMessage(object):
         domain_name_size = len(domain_name)
         domain_name = bytes(domain_name, "utf-8")
         padding = 0
-        header_content = (hsize, dtype_byte, mpi_rank, domain_name_size, data.size, input_dim, output_dim, padding)
+        header_content = (
+            hsize,
+            dtype_byte,
+            mpi_rank,
+            domain_name_size,
+            data.size,
+            input_dim,
+            output_dim,
+            padding,
+        )
         # float or double
         msg_format = f"{header_format}{domain_name_size}s{data.size}{dt}"
         return struct.pack(msg_format, *header_content, domain_name, *data)
@@ -119,12 +137,18 @@ class AMSMessage(object):
         assert hsize == res["hsize"]
         assert res["datatype"] in [4, 8]
         if len(body) < hsize:
-            print(f"Incomplete message of size {len(body)}. Header should be of size {hsize}. skipping")
+            print(
+                f"Incomplete message of size {len(body)}. Header should be of size {hsize}. skipping"
+            )
             return {}
 
         # Theoritical size in Bytes for the incoming message (without the header)
         # Int() is needed otherwise we might overflow here (because of uint16 / uint8)
-        res["dsize"] = int(res["datatype"]) * int(res["num_element"]) * (int(res["input_dim"]) + int(res["output_dim"]))
+        res["dsize"] = (
+            int(res["datatype"])
+            * int(res["num_element"])
+            * (int(res["input_dim"]) + int(res["output_dim"]))
+        )
         res["msg_size"] = hsize + res["dsize"]
         res["multiple_msg"] = len(body) != res["msg_size"]
 
@@ -138,7 +162,9 @@ class AMSMessage(object):
 
         return res
 
-    def _parse_data(self, body: str, header_info: dict) -> Tuple[str, np.array, np.array]:
+    def _parse_data(
+        self, body: str, header_info: dict
+    ) -> Tuple[str, np.array, np.array]:
         data = np.array([])
         if len(body) == 0:
             return data
@@ -150,11 +176,13 @@ class AMSMessage(object):
         try:
             if header_info["datatype"] == 4:  # if datatype takes 4 bytes (float)
                 data = np.frombuffer(
-                    body[hsize + domain_name_size : hsize + domain_name_size + dsize], dtype=np.float32
+                    body[hsize + domain_name_size : hsize + domain_name_size + dsize],
+                    dtype=np.float32,
                 )
             else:
                 data = np.frombuffer(
-                    body[hsize + domain_name_size : hsize + domain_name_size + dsize], dtype=np.float64
+                    body[hsize + domain_name_size : hsize + domain_name_size + dsize],
+                    dtype=np.float64,
                 )
         except ValueError as e:
             print(f"Error: {e} => {header_info}")
@@ -176,7 +204,9 @@ class AMSMessage(object):
             domain_name, temp_input, temp_output = self._parse_data(body, header_info)
             # print(f"MSG: {domain_name} input shape {temp_input.shape} outpute shape {temp_output.shape}")
             # total size of byte we read for that message
-            chunk_size = header_info["hsize"] + header_info["dsize"] + header_info["domain_size"]
+            chunk_size = (
+                header_info["hsize"] + header_info["dsize"] + header_info["domain_size"]
+            )
             input.append(temp_input)
             output.append(temp_output)
             # We remove the current message and keep going
@@ -187,16 +217,24 @@ class AMSMessage(object):
     def decode(self) -> Tuple[str, np.array, np.array]:
         return self._decode(self.body)
 
+
 def default_ams_callback(method, properties, body):
     """Simple callback that decode incoming message assuming they are AMS binary messages"""
     return AMSMessage(body)
+
 
 class AMSChannel:
     """
     A wrapper around Pika RabbitMQ channel
     """
 
-    def __init__(self, connection, q_name, callback: Optional[Callable] = None, logger: Optional[logging.Logger] = None):
+    def __init__(
+        self,
+        connection,
+        q_name,
+        callback: Optional[Callable] = None,
+        logger: Optional[logging.Logger] = None,
+    ):
         self.connection = connection
         self.q_name = q_name
         self.logger = logger if logger else logging.getLogger(__name__)
@@ -210,7 +248,7 @@ class AMSChannel:
         self.close()
 
     def default_callback(self, method, properties, body):
-        """ Simple callback that return the message received"""
+        """Simple callback that return the message received"""
         return body
 
     def open(self):
@@ -220,7 +258,7 @@ class AMSChannel:
     def close(self):
         self.channel.close()
 
-    def receive(self, n_msg: int = None, timeout: int = None, accum_msg = list()):
+    def receive(self, n_msg: int = None, timeout: int = None, accum_msg=list()):
         """
         Consume a message on the queue and post processing by calling the callback.
         @param n_msg The number of messages to receive.
@@ -241,7 +279,9 @@ class AMSChannel:
                 n_msg = max(n_msg, 0)
                 message_consumed = 0
                 # Comsume n_msg messages and break out
-                for method_frame, properties, body in self.channel.consume(self.q_name, inactivity_timeout=timeout):
+                for method_frame, properties, body in self.channel.consume(
+                    self.q_name, inactivity_timeout=timeout
+                ):
                     if (method_frame, properties, body) == (None, None, None):
                         self.logger.info(f"Timeout after {timeout} seconds")
                         self.channel.cancel()
@@ -263,7 +303,7 @@ class AMSChannel:
                         self.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
                         message_consumed += 1
                     self.logger.warning(
-                        f"Consumed message {message_consumed}/{method_frame.delivery_tag} (exchange=\'{method_frame.exchange}\', routing_key={method_frame.routing_key})"
+                        f"Consumed message {message_consumed}/{method_frame.delivery_tag} (exchange='{method_frame.exchange}', routing_key={method_frame.routing_key})"
                     )
                     # Escape out of the loop after nb_msg messages
                     if message_consumed == n_msg:
@@ -272,13 +312,15 @@ class AMSChannel:
                         break
         return accum_msg
 
-    def send(self, text: str, exchange : str = ""):
+    def send(self, text: str, exchange: str = ""):
         """
         Send a message
         @param text The text to send
         @param exchange Exchange to use
         """
-        self.channel.basic_publish(exchange=exchange, routing_key=self.q_name, body=text)
+        self.channel.basic_publish(
+            exchange=exchange, routing_key=self.q_name, body=text
+        )
         return
 
     def get_messages(self):
@@ -288,6 +330,7 @@ class AMSChannel:
         """Removes all the messages from the queue."""
         if self.channel and self.channel.is_open:
             self.channel.queue_purge(self.q_name)
+
 
 class BlockingClient:
     """
@@ -303,7 +346,7 @@ class BlockingClient:
         password: str,
         cert: Optional[str] = None,
         callback: Optional[Callable] = None,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         # CA Cert, can be generated with (where $REMOTE_HOST and $REMOTE_PORT can be found in the JSON file):
         # openssl s_client -connect $REMOTE_HOST:$REMOTE_PORT -showcerts < /dev/null 2>/dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' rmq-pds.crt
@@ -592,7 +635,9 @@ class AsyncConsumer(object):
         with different prefetch values to achieve desired performance.
 
         """
-        self._channel.basic_qos(prefetch_count=self._prefetch_count, callback=self.on_basic_qos_ok)
+        self._channel.basic_qos(
+            prefetch_count=self._prefetch_count, callback=self.on_basic_qos_ok
+        )
 
     def on_basic_qos_ok(self, _unused_frame):
         """Invoked by pika when the Basic.QoS method has completed. At this
@@ -617,10 +662,14 @@ class AsyncConsumer(object):
         """
         self.logger.debug("Issuing consumer related RPC commands")
         self.add_on_cancel_callback()
-        self._consumer_tag = self._channel.basic_consume(self._queue, self.on_message, auto_ack=False)
+        self._consumer_tag = self._channel.basic_consume(
+            self._queue, self.on_message, auto_ack=False
+        )
         self.was_consuming = True
         self._consuming = True
-        self.logger.info(f"Waiting for messages (tag: {self._consumer_tag}). To exit press CTRL+C")
+        self.logger.info(
+            f"Waiting for messages (tag: {self._consumer_tag}). To exit press CTRL+C"
+        )
 
     def add_on_cancel_callback(self):
         """Add a callback that will be invoked if RabbitMQ cancels the consumer
@@ -638,7 +687,9 @@ class AsyncConsumer(object):
         :param pika.frame.Method method_frame: The Basic.Cancel frame
 
         """
-        self.logger.debug(f"Consumer was cancelled remotely, shutting down: {method_frame}")
+        self.logger.debug(
+            f"Consumer was cancelled remotely, shutting down: {method_frame}"
+        )
         if self._channel:
             self._channel.close()
 
@@ -656,7 +707,9 @@ class AsyncConsumer(object):
         :param bytes body: The message body
 
         """
-        self.logger.info(f"Received message #{method_frame.delivery_tag} from {properties}")
+        self.logger.info(
+            f"Received message #{method_frame.delivery_tag} from {properties}"
+        )
         self._on_message_cb(_unused_channel, method_frame, properties, body)
         self.acknowledge_message(method_frame.delivery_tag)
 
@@ -691,7 +744,9 @@ class AsyncConsumer(object):
 
         """
         self._consuming = False
-        self.logger.debug(f"RabbitMQ acknowledged the cancellation of the consumer: {userdata}")
+        self.logger.debug(
+            f"RabbitMQ acknowledged the cancellation of the consumer: {userdata}"
+        )
         self.close_channel()
 
     def close_channel(self):
@@ -741,26 +796,43 @@ class AsyncFanOutConsumer(AsyncConsumer):
         logger: Optional[logging.Logger] = None,
     ):
         super().__init__(
-            host, port, vhost, user, password, cert, queue, prefetch_count, on_message_cb, on_close_cb, logger
+            host,
+            port,
+            vhost,
+            user,
+            password,
+            cert,
+            queue,
+            prefetch_count,
+            on_message_cb,
+            on_close_cb,
+            logger,
         )
 
     # Callback when the channel is open
     def on_channel_open(self, channel):
         self._channel = channel
         self.logger.debug("Channel opened")
+        sys.stdout.flush()
         self.add_on_channel_close_callback()
         self._channel.exchange_declare(
-            exchange="control-panel", exchange_type="fanout", callback=self.on_exchange_declared
+            exchange="control-panel",
+            exchange_type="fanout",
+            callback=self.on_exchange_declared,
         )
 
     # Callback when the exchange is declared
     def on_exchange_declared(self, frame):
-        self._channel.queue_declare(queue="", exclusive=True, callback=self.on_queue_declared)
+        self._channel.queue_declare(
+            queue="", exclusive=True, callback=self.on_queue_declared
+        )
 
     # Callback when the queue is declared
     def on_queue_declared(self, queue_result):
         self._queue = queue_result.method.queue
-        self._channel.queue_bind(exchange="control-panel", queue=self._queue, callback=self.on_queue_bound)
+        self._channel.queue_bind(
+            exchange="control-panel", queue=self._queue, callback=self.on_queue_bound
+        )
 
     # Callback when the queue is bound to the exchange
     def on_queue_bound(self, frame):
@@ -768,7 +840,6 @@ class AsyncFanOutConsumer(AsyncConsumer):
 
 
 class AMSSyncProducer:
-
     def __init__(
         self,
         host: str,
@@ -780,7 +851,6 @@ class AMSSyncProducer:
         publish_queue: str,
         logger: Optional[logging.Logger] = None,
     ):
-
         self.host = host
         self.port = port
         self.vhost = vhost
@@ -828,7 +898,9 @@ class AMSSyncProducer:
     def send_message(self, message):
         self._num_sent_messages += 1
         try:
-            self.channel.basic_publish(exchange="", routing_key=self._publish_queue, body=message)
+            self.channel.basic_publish(
+                exchange="", routing_key=self._publish_queue, body=message
+            )
         except pika.exceptions.UnroutableError:
             print(f" [{self._num_sent_messages}] Message could not be confirmed")
         else:
@@ -836,7 +908,6 @@ class AMSSyncProducer:
 
 
 class AMSFanOutProducer(AMSSyncProducer):
-
     def __init__(
         self,
         host: str,
@@ -847,7 +918,9 @@ class AMSFanOutProducer(AMSSyncProducer):
         cert: str,
         logger: logging.Logger = None,
     ):
-        super().__init__(host, port, vhost, user, password, cert, "control-panel", logger)
+        super().__init__(
+            host, port, vhost, user, password, cert, "control-panel", logger
+        )
 
     def open(self):
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -875,7 +948,9 @@ class AMSFanOutProducer(AMSSyncProducer):
     def broadcast(self, message):
         self._num_sent_messages += 1
         try:
-            self.channel.basic_publish(exchange="control-panel", routing_key="", body=message)
+            self.channel.basic_publish(
+                exchange="control-panel", routing_key="", body=message
+            )
             print(f" [x] Sent '{message}'")
         except pika.exceptions.UnroutableError:
             print(f" [{self._num_sent_messages}] Message could not be confirmed")
@@ -896,7 +971,6 @@ class AMSRMQConfiguration:
                     "service-port": 0,
                     "service-host": "",
                     "rabbitmq-erlang-cookie": "",
-                    "rabbitmq-name": "",
                     "rabbitmq-password": "",
                     "rabbitmq-user": "",
                     "rabbitmq-vhost": "",
@@ -909,23 +983,25 @@ class AMSRMQConfiguration:
             }
         }
     """
+
     service_port: int
     service_host: str
-    rabbitmq_erlang_cookie: str
-    rabbitmq_name: str
     rabbitmq_password: str
     rabbitmq_user: str
     rabbitmq_vhost: str
     rabbitmq_cert: str
-    rabbitmq_outbound_queue: str
-    rabbitmq_ml_submit_queue: str  = ""
-    rabbitmq_ml_status_queue: str  = ""
-    rabbitmq_exchange: str  = "not-used"
-    rabbitmq_routing_key: str = ""
+    rabbitmq_erlang_cookie: str = ""
+    rabbitmq_queue_physics: str = ""
+    rabbitmq_ml_submit_queue: str = ""
+    rabbitmq_ml_status_queue: str = ""
+    rabbitmq_exchange_training: str = "not-used"
+    rabbitmq_key_training: str = ""
 
     def __post_init__(self):
         if not Path(self.rabbitmq_cert).exists():
-            raise RuntimeError(f"Certificate rmq path: {self.rabbitmq_cert} does not exist")
+            raise RuntimeError(
+                f"Certificate rmq path: {self.rabbitmq_cert} does not exist"
+            )
 
     @classmethod
     def from_json(cls, json_file):
@@ -939,20 +1015,22 @@ class AMSRMQConfiguration:
         return cls(**data)
 
     def to_dict(self, AMSlib=False):
-        assert AMSlib, "AMSRMQConfiguration cannot convert class to non amslib dictionary"
+        assert (
+            AMSlib
+        ), "AMSRMQConfiguration cannot convert class to non amslib dictionary"
         if AMSlib:
             return {
                 "service-port": self.service_port,
                 "service-host": self.service_host,
                 "rabbitmq-erlang-cookie": self.rabbitmq_erlang_cookie,
-                "rabbitmq-name": self.rabbitmq_name,
                 "rabbitmq-password": self.rabbitmq_password,
                 "rabbitmq-user": self.rabbitmq_user,
                 "rabbitmq-vhost": self.rabbitmq_vhost,
                 "rabbitmq-cert": self.rabbitmq_cert,
-                "rabbitmq-outbound-queue": self.rabbitmq_outbound_queue,
-                "rabbitmq-exchange": self.rabbitmq_exchange,
-                "rabbitmq-routing-key": self.rabbitmq_routing_key,
+                "rabbitmq-queue-physics": self.rabbitmq_queue_physics,
+                "rabbitmq-exchange": "not-used",
+                "rabbitmq-exchange-training": self.rabbitmq_exchange_training,
+                "rabbitmq-key-training": self.rabbitmq_key_training,
                 "rabbitmq-ml-submit-queue": self.rabbitmq_ml_submit_queue,
                 "rabbitmq-ml-status-queue": self.rabbitmq_ml_status_queue,
             }

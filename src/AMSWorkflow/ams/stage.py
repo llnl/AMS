@@ -5,12 +5,14 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import glob
+import sys
 import json
 import os
 import shutil
 import signal
 import time
-from abc import ABC, abstractmethod
+from abc import ABC, abstractclassmethod, abstractmethod
+from typing import Optional, List
 from enum import Enum
 from multiprocessing import Process
 from multiprocessing import Queue as mp_queue
@@ -22,7 +24,7 @@ import numpy as np
 from ams.config import AMSInstance
 from ams.faccessors import get_reader, get_writer
 from ams.monitor import AMSMonitor
-from ams.rmq import AMSMessage, AsyncConsumer, AMSRMQConfiguration
+from ams.rmq import AMSMessage, AsyncConsumer, AMSRMQConfiguration, AsyncFanOutConsumer
 from ams.store import AMSDataStore
 from ams.util import get_unique_fn
 
@@ -178,6 +180,7 @@ class ForwardTask(Task):
                 # This is a blocking call
                 item = self.i_queue.get(block=True)
                 if item.is_terminate():
+                    print(f"Received Terminate {self.__class__.__name__}")
                     self.o_queue.put(QueueMessage(MessageType.Terminate, None))
                     break
                 elif item.is_process():
@@ -259,7 +262,7 @@ class FSLoaderTask(Task):
         self.o_queue.put(QueueMessage(MessageType.Terminate, None))
 
         end = time.time_ns()
-        self.total_time_ns += (end - start)
+        self.total_time_ns += end - start
         print(f"Spend {(end - start)/1e9} at {self.__class__.__name__}")
 
 
@@ -328,6 +331,7 @@ class RMQDomainDataLoaderTask(Task):
         the connection (or if a problem happened with the connection).
         """
         print("Adding terminate message at queue:", self.o_queue)
+        print("Destroying")
         self.o_queue.put(QueueMessage(MessageType.Terminate, None))
 
     @AMSMonitor(array=["msgs"], record=["datasize_byte", "total_time_ns"])
@@ -350,7 +354,7 @@ class RMQDomainDataLoaderTask(Task):
         for j, (i, o) in enumerate(zip(input_batches, output_batches)):
             self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(i, o, domain_name)))
         end_time = time.time_ns()
-        self.total_time_ns += (end_time - start_time)
+        self.total_time_ns += end_time - start_time
         # TODO: Improve the code to manage potentially multiple messages per AMSMessage
         msg = {
             "delivery_tag": basic_deliver.delivery_tag,
@@ -361,7 +365,7 @@ class RMQDomainDataLoaderTask(Task):
             "output_dim": msg.output_dim,
             "size_bytes": input_data.nbytes + output_data.nbytes,
             "ts_received": start_time,
-            "ts_processed": end_time
+            "ts_processed": end_time,
         }
         msgs.append(msg)
 
@@ -373,6 +377,7 @@ class RMQDomainDataLoaderTask(Task):
         return handler
 
     def stop(self):
+        print(f"Stopping {self.__class__.__name__}")
         self.rmq_consumer.stop()
         print(f"Spend {self.total_time_ns/1e9} at {self.__class__.__name__}")
 
@@ -418,6 +423,69 @@ class RMQControlMessageTask(RMQDomainDataLoaderTask):
         self.total_time_ns += time.time_ns() - start_time
 
 
+class AMSShutdown(AsyncFanOutConsumer):
+    """
+    A RMQ consumer client that listens to control messages from the AMS Deployment tool. When it receives a 'terminate' message
+    it shutdown the rest of the connections/threads to the RMQ server and gracefully terminates.
+    """
+
+    def __init__(
+        self,
+        consumers: List[RMQDomainDataLoaderTask],
+        host: str,
+        port: int,
+        vhost: str,
+        user: str,
+        password: str,
+        cert: str,
+        prefetch_count: int = 1,
+    ):
+        self._consumers = consumers
+        super().__init__(
+            host,
+            port,
+            vhost,
+            user,
+            password,
+            cert,
+            "",
+            prefetch_count,
+            on_message_cb=self.on_message_cb,
+            on_close_cb=self.on_close_cb,
+        )
+        self._signal_pid = []
+
+    def on_message_cb(self, ch, basic_deliver, properties, body):
+        message = json.loads(body)
+        print(f"Received Signalling {message}")
+        sys.stdout.flush()
+        if "request_type" in message:
+            if message["request_type"] == "terminate":
+                # I assumer here that I operate through threading. Thus, I can
+                # directly call the consumer stop method.
+                if len(self._signal_pid) == 0:
+                    for consumer in self._consumers:
+                        consumer.stop()
+                else:
+                    # When using subprocess I cannot access the consumer class but I access a
+                    # copy of that class. As such, I can kill the consumer.
+                    for sig_num in self._signal_pid:
+                        print("Signalling")
+                        sys.stdout.flush()
+                        os.kill(sig_num, signal.SIGINT)
+                self.stop()
+
+    def on_close_cb(self):
+        print("Closing")
+
+    def __call__(self, pids=None):
+        if pids:
+            print("Received PIDS: ", pids)
+            self._signal_pid = pids
+        sys.stdout.flush()
+        self.run()
+
+
 class FSWriteTask(Task):
     """
     A Class representing a task flushing data in the specified output directory
@@ -451,19 +519,19 @@ class FSWriteTask(Task):
         start = time.time()
         total_bytes_written = 0
         data_files = dict()
+        total_messages = 0
         # with self.data_writer_cls(fn) as fd:
         with AMSMonitor(obj=self, tag="internal_loop", accumulate=False):
             while True:
                 # This is a blocking call
-                print(f"{self.__class__.__name__} Receives messages at queue:", self.i_queue)
                 item = self.i_queue.get(block=True)
-                print(f"{self.__class__.__name__} Received messages at queue:", self.i_queue)
+                print(f"{self.__class__.__name__} Received message {total_messages}")
+                total_messages += 1
                 if item.is_terminate():
                     for k, v in data_files.items():
                         v[0].close()
                         self.o_queue.put(QueueMessage(MessageType.Process, (k, v[0].file_name)))
                     del data_files
-                    print(f"Received Terminate {self.__class__.__name__}")
                     self.o_queue.put(QueueMessage(MessageType.Terminate, None))
                     break
                 elif item.is_delete():
@@ -484,6 +552,7 @@ class FSWriteTask(Task):
                     data_files[data.domain_name][1] += bytes_written
                     total_bytes_written += data.inputs.size * data.inputs.itemsize
                     total_bytes_written += data.outputs.size * data.outputs.itemsize
+                    print(f"Received Terminate {data.inputs.shape} {data.outputs.shape}")
 
                     if data_files[data.domain_name][1] >= 2 * 1024 * 1024 * 1024:
                         data_files[data.domain_name][0].close()
@@ -634,6 +703,7 @@ class Pipeline(ABC):
             for e in self._executors:
                 os.kill(e.pid, signal.SIGINT)
             self.release_signals()
+
         return handler
 
     def init_signals(self):
@@ -648,7 +718,7 @@ class Pipeline(ABC):
             # We put back all the signal handlers
             for sig in self.signals:
                 signal.signal(sig, self.original_handlers[sig])
-            
+
             self.released = True
 
     def add_user_action(self, obj):
@@ -687,10 +757,23 @@ class Pipeline(ABC):
         for a in self._tasks:
             self._executors.append(exec_vehicle_cls(target=a))
 
-        for e in self._executors:
+        pids_to_kill = []
+        for e, a in zip(self._executors, self._tasks):
+            print(f"Started executor {a}")
             e.start()
 
+        if isinstance(self._tasks[0], RMQDomainDataLoaderTask):
+            print("Found Head RMQ Loader")
+            pids_to_kill.append(self._executors[0].pid)
+        else:
+            print("Expected 0 to be RMQ, but was", self._tasks[0].__clas__.__name__)
+
+        shutdown_task = exec_vehicle_cls(target=self.shutdown, args=([pids_to_kill]))
+        shutdown_task.start()
+        shutdown_task.join()
+        sys.stdout.flush()
         print(f"{self.__class__.__name__} joining {len(self._executors)} threads")
+        sys.stdout.flush()
         for e in self._executors:
             e.join()
         print(f"{self.__class__.__name__} Threads are done")
@@ -757,12 +840,12 @@ class Pipeline(ABC):
                 f"Pipeline execute does not support policy: {policy}, please select from  {Pipeline.supported_policies}"
             )
 
-        self.init_signals()
+        # self.init_signals()
         # Create a pipeline of actions and link them with appropriate queues
         self._link_pipeline(policy)
         # Execute them
         self._execute_tasks(policy)
-        self.release_signals()
+        # self.release_signals()
 
     @abstractmethod
     def requires_model_update(self):
@@ -821,6 +904,10 @@ class Pipeline(ABC):
 
         p_to_type = {"sequential": ser_queue, "thread": ser_queue, "process": mp_queue}
         return p_to_type[policy]
+
+    @abstractmethod
+    def shutdown(self):
+        pass
 
 
 class FSPipeline(Pipeline):
@@ -890,6 +977,9 @@ class FSPipeline(Pipeline):
     def get_model_update_task(self, o_queue, policy):
         raise RuntimeError("FSPipeline does not support model update")
 
+    def shutdown(self, pids):
+        pass
+
 
 class RMQPipeline(Pipeline):
     """
@@ -936,6 +1026,8 @@ class RMQPipeline(Pipeline):
         self._model_update_queue = model_update_queue
         print("Received a data queue of", self._data_queue)
         print("Received a model_update queue of", self._model_update_queue)
+        self._gracefull_shutdown = None
+        self._o_queue = None
 
     def get_load_task(self, o_queue, policy):
         """
@@ -947,7 +1039,8 @@ class RMQPipeline(Pipeline):
         Returns: An RMQDomainDataLoaderTask instance reading data from the
         filesystem and forwarding the values to the o_queue.
         """
-        return RMQDomainDataLoaderTask(
+
+        Loader = RMQDomainDataLoaderTask(
             o_queue,
             self._host,
             self._port,
@@ -958,6 +1051,18 @@ class RMQPipeline(Pipeline):
             self._data_queue,
             policy,
         )
+        self._o_queue = o_queue
+        self._gracefull_shutdown = AMSShutdown(
+            [Loader],
+            self._host,
+            self._port,
+            self._vhost,
+            self._user,
+            self._password,
+            self._cert,
+        )
+
+        return Loader
 
     def get_model_update_task(self, o_queue, policy):
         """
@@ -969,6 +1074,9 @@ class RMQPipeline(Pipeline):
         Returns: An RMQControlMessageTask instance reading data from self._model_update_queue
         and forwarding the values to the o_queue.
         """
+
+        # The model update tasks does not need to have a gracefull shutdown.
+        # TODO: We need to think about this once we actually use it
         return RMQControlMessageTask(
             o_queue,
             self._host,
@@ -1012,11 +1120,18 @@ class RMQPipeline(Pipeline):
             config.rabbitmq_password,
             config.rabbitmq_cert,
             config.rabbitmq_queue_physics,
-            config.rabbitmq_exchange_training if args.update_rmq_models else None
+            config.rabbitmq_exchange_training if args.update_rmq_models else None,
         )
 
     def requires_model_update(self):
         return self._model_update_queue is not None
+
+    def shutdown(self, pid):
+        print(f"Waiting in shutdown {self.__class__.__name__}")
+        sys.stdout.flush()
+        self._gracefull_shutdown(pid)
+        print(f"Received Terminate {self.__class__.__name__}")
+        self._o_queue.put(QueueMessage(MessageType.Terminate, None))
 
 
 def get_pipeline(src_mechanism="fs"):

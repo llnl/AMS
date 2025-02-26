@@ -49,7 +49,7 @@ def main():
         "--stage-nodes", help="Number of node existing in the stage allocation", required=False, type=int
     )
     parser.add_argument(
-        "--sleep-time", help="Time of nested allocations (used) for debugging", required=False, default="20"
+        "--sleep-time", help="Time of nested allocations (used) for debugging", required=False, default="240"
     )
 
     parser.add_argument("--workflow-descr", "-w", help="JSON file describing the workflow", required=True)
