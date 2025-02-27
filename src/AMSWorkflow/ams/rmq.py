@@ -893,10 +893,11 @@ class AMSRMQConfiguration:
     rabbitmq_user: str
     rabbitmq_vhost: str
     rabbitmq_cert: str
-    rabbitmq_inbound_queue: str
     rabbitmq_outbound_queue: str
-    rabbitmq_ml_submit_queue: str
-    rabbitmq_ml_status_queue: str
+    rabbitmq_ml_submit_queue: str  = ""
+    rabbitmq_ml_status_queue: str  = ""
+    rabbitmq_exchange: str  = "not-used"
+    rabbitmq_routing_key: str = ""
 
     def __post_init__(self):
         if not Path(self.rabbitmq_cert).exists():
@@ -926,7 +927,9 @@ class AMSRMQConfiguration:
                 "rabbitmq-vhost": self.rabbitmq_vhost,
                 "rabbitmq-cert": self.rabbitmq_cert,
                 "rabbitmq-outbound-queue": self.rabbitmq_outbound_queue,
-                "rabbitmq-exchange": "not-used",
-                "rabbitmq-routing-key": "",
+                "rabbitmq-exchange": self.rabbitmq_exchange,
+                "rabbitmq-routing-key": self.rabbitmq_routing_key,
+                "rabbitmq-ml-submit-queue": self.rabbitmq_ml_submit_queue,
+                "rabbitmq-ml-status-queue": self.rabbitmq_ml_status_queue,
             }
         raise

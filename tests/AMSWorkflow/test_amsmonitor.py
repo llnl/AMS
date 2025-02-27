@@ -32,6 +32,14 @@ class ExampleTask1(Task):
                 i += 1
         self.y += 100
 
+    @AMSMonitor(array=["myarray"])
+    def f(self):
+        i = 0
+        while 1:
+            myarray.append({"i":i})
+            if i == 3:
+                break
+            i += 1
 
 def read_json(path: str):
     with open(path) as f:
@@ -46,30 +54,35 @@ class TestMonitorTask1(unittest.TestCase):
     def test_populating_monitor(self):
         AMSMonitor.reset()
         self.task1()
+        self.task1.f()
 
         self.assertNotEqual(AMSMonitor.stats.copy(), {})
         self.assertIn("ExampleTask1", AMSMonitor.stats)
         self.assertIn("while_loop", AMSMonitor.stats["ExampleTask1"])
         self.assertIn("__call__", AMSMonitor.stats["ExampleTask1"])
+        self.assertIn("f", AMSMonitor.stats["ExampleTask1"])
 
-        for ts in AMSMonitor.stats["ExampleTask1"]["__call__"].keys():
-            self.assertIsInstance(datetime.datetime.strptime(ts, AMSMonitor.format_ts), datetime.datetime)
-            self.assertIn("x", AMSMonitor.stats["ExampleTask1"]["__call__"][ts])
-            self.assertIn("y", AMSMonitor.stats["ExampleTask1"]["__call__"][ts])
-            self.assertIn("amsmonitor_duration", AMSMonitor.stats["ExampleTask1"]["__call__"][ts])
-            self.assertEqual(AMSMonitor.stats["ExampleTask1"]["__call__"][ts]["x"], 6)
-            self.assertEqual(AMSMonitor.stats["ExampleTask1"]["__call__"][ts]["y"], 200)
+        for item in AMSMonitor.stats["ExampleTask1"]["__call__"]["records"]:
+            self.assertIn("x", item)
+            self.assertIn("y", item)
+            self.assertIn("amsmonitor_duration_ms", item)
+            self.assertEqual(item["x"], 6)
+            self.assertEqual(item["y"], 200)
 
-        for ts in AMSMonitor.stats["ExampleTask1"]["while_loop"].keys():
-            self.assertIsInstance(datetime.datetime.strptime(ts, AMSMonitor.format_ts), datetime.datetime)
-            self.assertIn("x", AMSMonitor.stats["ExampleTask1"]["while_loop"][ts])
-            self.assertIn("amsmonitor_duration", AMSMonitor.stats["ExampleTask1"]["while_loop"][ts])
-            self.assertEqual(AMSMonitor.stats["ExampleTask1"]["while_loop"][ts]["x"], 6)
+        for item in AMSMonitor.stats["ExampleTask1"]["while_loop"]["records"]:
+            self.assertIn("x", item)
+            self.assertNotIn("y", item)
+            self.assertIn("amsmonitor_duration_ms", item)
+            self.assertEqual(item["x"], 6)
+
+        self.assertEqual(AMSMonitor.stats["ExampleTask1"]["f"]["records"], [])
+        self.assertEqual(AMSMonitor.stats["ExampleTask1"]["f"]["myarray"], [{'i': 0}, {'i': 1}, {'i': 2}, {'i': 3}])
 
     def test_json_output(self):
         print(f"test_json_output {AMSMonitor.stats.copy()}")
         AMSMonitor.reset()
         self.task1()
+        self.task1.f()
         path = "test_amsmonitor.json"
         AMSMonitor.json(path)
         self.assertTrue(os.path.isfile(path))

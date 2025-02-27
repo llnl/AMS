@@ -350,15 +350,15 @@ class AMSJobReceiverStage(RMQDomainDataLoaderTask):
         """
         Callback to be called each time the RMQ client consumes a message.
         """
-        start_time = time.time()
+        start_time = time.time_ns()
         data = json.loads(body)
 
         self.o_queue.put(QueueMessage(MessageType.Process, data))
 
         self.num_messages += 1
-        self.total_time += time.time() - start_time
+        self.total_time_ns += time.time_ns() - start_time
 
-    @AMSMonitor(record=["total_time", "num_messages"])
+    @AMSMonitor(record=["total_time_ns", "num_messages"])
     def __call__(self):
         """
         Busy loop of consuming messages from RMQ queue
@@ -648,12 +648,12 @@ class AMSRMQMessagePrinter(RMQDomainDataLoaderTask):
         """
         Callback to be called each time the RMQ client consumes a message.
         """
-        start_time = time.time()
+        start_time = time.time_ns()
         data = json.loads(body)
         self.num_messages += 1
-        self.total_time += time.time() - start_time
+        self.total_time_ns += time.time_ns() - start_time
 
-    @AMSMonitor(record=["total_time", "num_messages"])
+    @AMSMonitor(record=["total_time_ns", "num_messages"])
     def __call__(self):
         """
         Busy loop of consuming messages from RMQ queue
