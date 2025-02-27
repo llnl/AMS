@@ -28,7 +28,7 @@ class AMSMonitor:
 
             # @AMSMonitor() would record all attributes
             # (total_bytes and total_bytes2) and the duration
-            # of the block under the name amsmonitor_duration.
+            # of the block under the name amsmonitor_duration_ms.
             # Each time the same block (function in class or
             # predefined tag) is being monitored, AMSMonitor
             # create a new record with a timestamp (see below).
@@ -37,7 +37,7 @@ class AMSMonitor:
             # attributes but does not create a new record each
             # time that block is being monitored, the first
             # timestamp is always being used and only
-            # amsmonitor_duration is being accumulated.
+            # amsmonitor_duration_ms is being accumulated.
             # The user-managed attributes (like total_bytes
             # and total_bytes2 ) are not being accumulated.
             # By default, accumulate=False.
@@ -67,13 +67,13 @@ class AMSMonitor:
                 "while_loop": {
                     "02/29/2024-19:27:53": {
                         "total_bytes2": 30,
-                        "amsmonitor_duration": 4.004607439041138
+                        "amsmonitor_duration_ms": 4.004607439041138
                     }
                 },
                 "__call__": {
                     "02/29/2024-19:29:24": {
                         "total_bytes2": 30,
-                        "amsmonitor_duration": 4.10461138
+                        "amsmonitor_duration_ms": 4.10461138
                     }
                 },
                 "f": {
@@ -92,7 +92,7 @@ class AMSMonitor:
         record: attributes to record, if None, all attributes
             will be recorded, except objects (e.g., multiprocessing.Queue)
             which can cause problem. if empty ([]), no attributes will
-            be recorded, only amsmonitor_duration will be recorded.
+            be recorded, only amsmonitor_duration_ms will be recorded.
         array: User can give a variable in which data can be accumulated over
             function calls. For example, `@AMSMonitor(array=["msg"])`
             give the possibilty to use the list `msg` within the decorated
@@ -101,7 +101,7 @@ class AMSMonitor:
             data instead of recording a new timestamp for
             any subsequent call of AMSMonitor on the same method.
             We accumulate only records managed by AMSMonitor, like
-            amsmonitor_duration. We do not accumulate records
+            amsmonitor_duration_ms. We do not accumulate records
             from the monitored class/function.
         obj: Mandatory if using `with` statement, `object` is
             the main object should be provided (i.e., self).
@@ -113,7 +113,7 @@ class AMSMonitor:
     _manager = multiprocessing.Manager()
     _stats = _manager.dict()
     _ts_format = "%m/%d/%Y-%H:%M:%S"
-    _reserved_keys = ["amsmonitor_duration"]
+    _reserved_keys = ["amsmonitor_duration_ms"]
     _lock = threading.Lock()
     _count = 0
 
@@ -235,7 +235,7 @@ class AMSMonitor:
         if self.record != []:
             new_data = self._filter(new_data, self.record)
         # We inject some data we want to record
-        new_data["amsmonitor_duration"] = end - self.start_time
+        new_data["amsmonitor_duration_ms"] = end - self.start_time
         self._update_db(new_data, class_name, func_name, self.internal_ts)
 
         # We reinitialize some variables
@@ -275,7 +275,7 @@ class AMSMonitor:
 
                 # We remove stuff we do not want (attribute of the calling class captured by vars())
                 new_data = self._filter(new_data, self.record)
-                new_data["amsmonitor_duration(ms)"] = (end - start) / 1e6
+                new_data["amsmonitor_duration_ms"] = (end - start) / 1e6
             else:
                 new_data = self.array_context
             self._update_db(new_data, class_name, func_name, ts)
