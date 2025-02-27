@@ -634,33 +634,14 @@ RMQPublisherHandler::RMQPublisherHandler(
 {
 }
 
-/**
- *  @brief  Return the messages that have NOT been acknowledged by the RabbitMQ server. 
- *  @return     A vector of AMSMessage
- */
-std::vector<AMSMessage>& RMQPublisherHandler::msgBuffer() { return _messages; }
+std::list<AMSMessage>& RMQPublisherHandler::msgBuffer() { return _messages; }
 
-/**
- *  @brief    Free AMSMessages held by the handler
- */
 void RMQPublisherHandler::cleanup() { freeAllMessages(_messages); }
 
-/**
- *  @brief    Total number of messages sent
- *  @return   Number of messages
- */
 int RMQPublisherHandler::msgSent() const { return _nb_msg; }
 
-/**
- *  @brief    Total number of messages successfully acknowledged
- *  @return   Number of messages
- */
 int RMQPublisherHandler::msgAcknowledged() const { return _nb_msg_ack; }
 
-/**
- *  @brief    Total number of messages unacknowledged
- *  @return   Number of messages unacknowledged
- */
 unsigned RMQPublisherHandler::unacknowledged() const
 {
   return _rchannel->unacknowledged();
@@ -770,15 +751,15 @@ void RMQPublisherHandler::onReady(AMQP::TcpConnection* connection)
       });
 }
 
-void RMQPublisherHandler::freeMessage(int msg_id, std::vector<AMSMessage>& buf)
+void RMQPublisherHandler::freeMessage(int msg_id, std::list<AMSMessage>& buffer)
 {
   const std::lock_guard<std::mutex> lock(_mutex);
   auto it =
-      std::find_if(buf.begin(), buf.end(), [&msg_id](const AMSMessage& obj) {
+      std::find_if(buffer.begin(), buffer.end(), [&msg_id](const AMSMessage& obj) {
         return obj.id() == msg_id;
       });
   CFATAL(RMQPublisherHandler,
-         it == buf.end(),
+         it == buffer.end(),
          "Failed to deallocate msg #%d: not found",
          msg_id)
   auto& msg = *it;
@@ -786,10 +767,10 @@ void RMQPublisherHandler::freeMessage(int msg_id, std::vector<AMSMessage>& buf)
   rm.deallocate(msg.data(), AMSResourceType::AMS_HOST);
 
   DBG(RMQPublisherHandler, "Deallocated msg #%d (%p)", msg.id(), msg.data())
-  buf.erase(it);
+  buffer.erase(it);
 }
 
-void RMQPublisherHandler::freeAllMessages(std::vector<AMSMessage>& buffer)
+void RMQPublisherHandler::freeAllMessages(std::list<AMSMessage>& buffer)
 {
   const std::lock_guard<std::mutex> lock(_mutex);
   auto& rm = ams::ResourceManager::getInstance();
@@ -822,7 +803,7 @@ RMQPublisher::RMQPublisher(uint64_t rId,
                            const AMQP::Address& address,
                            std::string cacert,
                            std::string queue,
-                           std::vector<AMSMessage>&& msgs_to_send)
+                           std::list<AMSMessage>&& msgs_to_send)
     : _rId(rId),
       _queue(queue),
       _cacert(cacert),
@@ -880,7 +861,7 @@ void RMQPublisher::publish(AMSMessage&& message)
   _handler->publish(std::move(message));
 }
 
-bool RMQPublisher::ready_publish()
+bool RMQPublisher::readyPublish()
 {
   return _connection->ready() && _connection->usable();
 }
@@ -901,7 +882,7 @@ void RMQPublisher::stop() { event_base_loopexit(_loop.get(), NULL); }
 
 bool RMQPublisher::connectionValid() { return _handler->connectionValid(); }
 
-std::vector<AMSMessage>& RMQPublisher::getMsgBuffer()
+std::list<AMSMessage>& RMQPublisher::getMsgBuffer()
 {
   return _handler->msgBuffer();
 }
@@ -991,7 +972,7 @@ void RMQInterface::restartPublisher()
   if (_publisher->connectionValid()) return;
 
   CALIPER(CALI_MARK_BEGIN("RMQ_RESTART_PUBLISHER");)
-  std::vector<AMSMessage> messages = _publisher->getMsgBuffer();  
+  auto messages = _publisher->getMsgBuffer();  
   _publisher_connected = false;
   if (messages.size() > 0) {
     AMSMessage& msg_min =

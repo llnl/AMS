@@ -65,6 +65,7 @@ namespace fs = std::experimental::filesystem;
 #include <chrono>
 #include <deque>
 #include <future>
+#include <list>
 #include <random>
 #include <thread>
 #include <tuple>
@@ -847,7 +848,7 @@ public:
 
   AMSMessage(const AMSMessage& other)
   {
-    DBG(AMSMessage, "Copy AMSMessage : %p -- %d", other._data, other._id);
+    DBG(AMSMessage, "Copy AMSMessage (%d, %p) <- (%d, %p)", _id, _data, other._id, other._data);
     swap(other);
   };
 
@@ -863,7 +864,7 @@ public:
 
   AMSMessage& operator=(AMSMessage&& other) noexcept
   {
-    // DBG(AMSMessage, "Move AMSMessage : %p -- %d", other._data, other._id);
+    DBG(AMSMessage, "Move AMSMessage (%d, %p) <- (%d, %p)", _id, _data, other._id, other._data);
     if (this != &other) {
       swap(other);
       other._data = nullptr;
@@ -1325,7 +1326,7 @@ private:
   /** @brief Mutex to protect multithread accesses to _messages */
   std::mutex _mutex;
   /** @brief Messages that have not been successfully acknowledged */
-  std::vector<AMSMessage> _messages;
+  std::list<AMSMessage> _messages;
 
 public:
   /**
@@ -1351,7 +1352,7 @@ public:
    *  @brief  Return the messages that have NOT been acknowledged by the RabbitMQ server. 
    *  @return     A vector of AMSMessage
    */
-  std::vector<AMSMessage>& msgBuffer();
+  std::list<AMSMessage>& msgBuffer();
 
   /**
    *  @brief    Free AMSMessages held by the handler
@@ -1395,13 +1396,13 @@ private:
    *  @param[in]  addr            Address of memory to free.
    *  @param[in]  buffer          The vector containing memory buffers
    */
-  void freeMessage(int msg_id, std::vector<AMSMessage>& buf);
+  void freeMessage(int msg_id, std::list<AMSMessage>& buffer);
 
   /**
    *  @brief  Free the data pointed by each pointer in a vector.
    *  @param[in]  buffer            The vector containing memory buffers
    */
-  void freeAllMessages(std::vector<AMSMessage>& buffer);
+  void freeAllMessages(std::list<AMSMessage>& buffer);
 
 };  // class RMQPublisherHandler
 
@@ -1428,7 +1429,7 @@ private:
   /** @brief The handler which contains various callbacks for the sender */
   std::shared_ptr<RMQPublisherHandler> _handler;
   /** @brief Buffer holding unacknowledged messages in case of crash */
-  std::vector<AMSMessage> _buffer_msg;
+  std::list<AMSMessage> _buffer_msg;
 
 public:
   RMQPublisher(const RMQPublisher&) = delete;
@@ -1439,13 +1440,13 @@ public:
       const AMQP::Address& address,
       std::string cacert,
       std::string queue,
-      std::vector<AMSMessage>&& msgs_to_send = std::vector<AMSMessage>());
+      std::list<AMSMessage>&& msgs_to_send = std::list<AMSMessage>());
 
   /**
    * @brief Check if the underlying RabbitMQ connection is ready and usable
    * @return True if the publisher is ready to publish
    */
-  bool ready_publish();
+  bool readyPublish();
 
   /**
    * @brief Wait that the connection is ready (blocking call)
@@ -1481,7 +1482,7 @@ public:
    * acknowledgements have not arrived yet.
    * @return A vector of AMSMessage
    */
-  std::vector<AMSMessage>& getMsgBuffer();
+  std::list<AMSMessage>& getMsgBuffer();
 
   /**
    *  @brief    Total number of messages successfully acknowledged
