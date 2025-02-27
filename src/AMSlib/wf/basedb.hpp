@@ -8,9 +8,6 @@
 #ifndef __AMS_BASE_DB__
 #define __AMS_BASE_DB__
 
-
-#include <H5Ipublic.h>
-
 #include <cstdint>
 #include <experimental/filesystem>
 #include <fstream>
@@ -38,6 +35,7 @@ namespace fs = std::experimental::filesystem;
 #endif
 
 #ifdef __ENABLE_HDF5__
+#include <H5Ipublic.h>
 #include <hdf5.h>
 #define HDF5_ERROR(Eid)                                             \
   if (Eid < 0) {                                                    \
@@ -47,6 +45,9 @@ namespace fs = std::experimental::filesystem;
   }
 #endif
 
+#ifdef __AMS_ENABLE_CALIPER__
+#include <caliper/cali_macros.h>
+#endif
 
 #ifdef __ENABLE_RMQ__
 #include <amqpcpp.h>
@@ -229,6 +230,7 @@ private:
         inputs.size(),
         outputs.size())
 
+    CALIPER(CALI_MARK_BEGIN("STORE_CSV");)
     const size_t num_in = inputs.size();
     const size_t num_out = outputs.size();
 
@@ -251,6 +253,7 @@ private:
       }
       fd << outputs[num_out - 1][i] << "\n";
     }
+    CALIPER(CALI_MARK_END("STORE_CSV");)
   }
 
 
@@ -1660,6 +1663,7 @@ public:
         inputs.size(),
         outputs.size())
 
+    CALIPER(CALI_MARK_BEGIN("STORE_RMQ");)
     AMSMessage msg(_msg_tag, _rId, domain_name, num_elements, inputs, outputs);
 
     if (!_publisher->connectionValid()) {
@@ -1676,6 +1680,7 @@ public:
     }
     _publisher->publish(std::move(msg));
     _msg_tag++;
+    CALIPER(CALI_MARK_END("STORE_RMQ");)
   }
 
   /**
