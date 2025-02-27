@@ -92,7 +92,7 @@ class AMSMonitor:
         record: attributes to record, if None, all attributes
             will be recorded, except objects (e.g., multiprocessing.Queue)
             which can cause problem. if empty ([]), no attributes will
-            be recorded, only amsmonitor_duration will be recorded.
+            be recorded, only amsmonitor_duration_ms will be recorded.
         array: User can give a variable in which data can be accumulated over
             function calls. For example, `@AMSMonitor(array=["msg"])`
             give the possibilty to use the list `msg` within the decorated
@@ -277,7 +277,7 @@ class AMSMonitor:
 
                 # We remove stuff we do not want (attribute of the calling class captured by vars())
                 new_data = self._filter(new_data, self.record)
-                new_data["amsmonitor_duration(ms)"] = (end - start) / 1e6
+                new_data["amsmonitor_duration_ms"] = (end - start) / 1e6
             else:
                 new_data = self.array_context
             self._update_db(new_data, class_name, func_name, ts)
