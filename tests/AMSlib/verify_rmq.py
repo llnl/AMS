@@ -21,7 +21,7 @@ def verify(
     port = rmq_json["service-port"]
     user = rmq_json["rabbitmq-user"]
     password = rmq_json["rabbitmq-password"]
-    queue = rmq_json["rabbitmq-outbound-queue"]
+    queue = rmq_json["rabbitmq-queue-physics"]
     cert = None
     if "rabbitmq-cert" in rmq_json:
         cert = rmq_json["rabbitmq-cert"]

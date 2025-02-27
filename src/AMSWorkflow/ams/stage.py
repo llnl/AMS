@@ -1011,8 +1011,8 @@ class RMQPipeline(Pipeline):
             config.rabbitmq_user,
             config.rabbitmq_password,
             config.rabbitmq_cert,
-            config.rabbitmq_outbound_queue,
-            config.rabbitmq_ml_status_queue if args.update_rmq_models else None,
+            config.rabbitmq_queue_physics,
+            config.rabbitmq_exchange_training if args.update_rmq_models else None
         )
 
     def requires_model_update(self):
