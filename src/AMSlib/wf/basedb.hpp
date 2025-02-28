@@ -1593,15 +1593,16 @@ private:
   std::shared_ptr<RMQConsumer> _consumer;
   /** @brief Thread in charge of the consumer */
   std::thread _consumer_thread;
-  /** @brief True if connected to RabbitMQ */
-  bool connected;
+  /** @brief True if publisher is connected to RabbitMQ */
+  bool _publisher_connected;
+  /** @brief True if consumer is connected to RabbitMQ */
+  bool _consumer_connected;
 
 public:
-  RMQInterface() : connected(false), _rId(0) {}
+  RMQInterface() : _publisher_connected(false), _consumer_connected(false), _rId(0) {}
 
   /**
    * @brief Connect to a RabbitMQ server
-   * @param[in] rmq_name The name of the RabbitMQ server
    * @param[in] rmq_name The name of the RabbitMQ server
    * @param[in] rmq_password The password
    * @param[in] rmq_user Username
@@ -1612,10 +1613,9 @@ public:
    * @param[in] outbound_queue Name of the queue on which AMSlib publishes (send) messages
    * @param[in] exchange Exchange for incoming messages
    * @param[in] routing_key Routing key for incoming messages (must match what the AMS Python side is using)
-   * @return True if connection succeeded
+   * @return True, True if connection succeeded for both publisher/consumer
    */
-  bool connect(std::string rmq_name,
-               std::string rmq_password,
+  std::pair<bool, bool> connect(std::string rmq_password,
                std::string rmq_user,
                std::string rmq_vhost,
                int service_port,
@@ -1623,13 +1623,29 @@ public:
                std::string rmq_cert,
                std::string outbound_queue,
                std::string exchange,
-               std::string routing_key);
+               std::string routing_key,
+               bool update_surrogate);
 
   /**
    * @brief Check if the RabbitMQ connection is connected.
    * @return True if connected
    */
-  bool isConnected() const { return connected; }
+  bool isPublisherConnected() const { return _publisher_connected; }
+
+  /**
+   * @brief Check if the RabbitMQ connection is connected.
+   * @return True if connected
+   */
+  bool isConsumerConnected() const { return _consumer_connected; }
+
+  /**
+   * @brief Check if at least one RabbitMQ connection is connected.
+   * @return True if connected
+   */
+  bool isConnected() const
+  {
+    return isPublisherConnected() || isConsumerConnected();
+  }
 
   /**
    * @brief Set the internal ID of the interface (usually MPI rank).
@@ -1666,18 +1682,7 @@ public:
     CALIPER(CALI_MARK_BEGIN("STORE_RMQ");)
     AMSMessage msg(_msg_tag, _rId, domain_name, num_elements, inputs, outputs);
 
-    if (!_publisher->connectionValid()) {
-      connected = false;
-      restartPublisher();
-      bool status = _publisher->waitToEstablish(100, 10);
-      if (!status) {
-        _publisher->stop();
-        _publisher_thread.join();
-        FATAL(RMQInterface,
-              "Could not establish publisher RabbitMQ connection");
-      }
-      connected = true;
-    }
+    if (!_publisher->connectionValid()) restartPublisher();
     _publisher->publish(std::move(msg));
     _msg_tag++;
     CALIPER(CALI_MARK_END("STORE_RMQ");)
@@ -1719,7 +1724,7 @@ public:
 
   ~RMQInterface()
   {
-    if (connected) close();
+    if (isConnected()) close();
   }
 };
 
@@ -2069,7 +2074,6 @@ public:
 
   void instantiate_rmq_db(int port,
                           std::string& host,
-                          std::string& rmq_name,
                           std::string& rmq_pass,
                           std::string& rmq_user,
                           std::string& rmq_vhost,
@@ -2089,8 +2093,7 @@ public:
     dbType = AMSDBType::AMS_RMQ;
     updateSurrogate = update_surrogate;
 #ifdef __ENABLE_RMQ__
-    rmq_interface.connect(rmq_name,
-                          rmq_pass,
+    rmq_interface.connect(rmq_pass,
                           rmq_user,
                           rmq_vhost,
                           port,
@@ -2098,7 +2101,8 @@ public:
                           rmq_cert,
                           outbound_queue,
                           exchange,
-                          routing_key);
+                          routing_key,
+                          update_surrogate);
 #else
     FATAL(DBManager,
           "Requsted RMQ database but AMS is not built with such support "

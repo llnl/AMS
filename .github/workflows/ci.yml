@@ -466,7 +466,6 @@ jobs:
             \"db\": {
               \"dbType\": \"rmq\",
               \"rmq_config\": {
-                \"rabbitmq-name\": \"rabbit\",
                 \"rabbitmq-user\": \"${RABBITMQ_USER}\",
                 \"rabbitmq-password\": \"${RABBITMQ_PASS}\",
                 \"service-port\": ${RABBITMQ_PORT},
