@@ -391,6 +391,17 @@ private:
     if (rmq_entry.contains("rabbitmq-cert"))
       rmq_cert = getEntry<std::string>(rmq_entry, "rabbitmq-cert");
 
+    CFATAL(AMS,
+      (exchange == "" || routing_key == "") && update_surrogate,
+      "Found empty RMQ exchange / routing-key, model update is not possible. "
+      "Please provide a RMQ exchange or deactivate surrogate model "
+      "update.")
+
+    if(exchange == "" || routing_key == "") {
+      WARNING(AMS, "Found empty RMQ exchange or routing-key, deactivating model update")
+      update_surrogate = false;
+    }
+
     auto &DB = ams::db::DBManager::getInstance();
     DB.instantiate_rmq_db(port,
                           host,
