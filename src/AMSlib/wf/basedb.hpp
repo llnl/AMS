@@ -1604,7 +1604,6 @@ public:
   /**
    * @brief Connect to a RabbitMQ server
    * @param[in] rmq_name The name of the RabbitMQ server
-   * @param[in] rmq_name The name of the RabbitMQ server
    * @param[in] rmq_password The password
    * @param[in] rmq_user Username
    * @param[in] rmq_vhost Virtual host (by default RabbitMQ vhost = '/')
@@ -1616,8 +1615,7 @@ public:
    * @param[in] routing_key Routing key for incoming messages (must match what the AMS Python side is using)
    * @return True, True if connection succeeded for both publisher/consumer
    */
-  std::pair<bool, bool> connect(std::string rmq_name,
-               std::string rmq_password,
+  std::pair<bool, bool> connect(std::string rmq_password,
                std::string rmq_user,
                std::string rmq_vhost,
                int service_port,
@@ -2076,7 +2074,6 @@ public:
 
   void instantiate_rmq_db(int port,
                           std::string& host,
-                          std::string& rmq_name,
                           std::string& rmq_pass,
                           std::string& rmq_user,
                           std::string& rmq_vhost,
@@ -2096,8 +2093,7 @@ public:
     dbType = AMSDBType::AMS_RMQ;
     updateSurrogate = update_surrogate;
 #ifdef __ENABLE_RMQ__
-    rmq_interface.connect(rmq_name,
-                          rmq_pass,
+    rmq_interface.connect(rmq_pass,
                           rmq_user,
                           rmq_vhost,
                           port,

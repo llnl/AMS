@@ -927,8 +927,7 @@ bool RMQPublisher::close(unsigned ms, int repeat)
  * RMQInterface
  */
 
- std::pair<bool, bool> RMQInterface::connect(std::string rmq_name,
-                           std::string rmq_password,
+ std::pair<bool, bool> RMQInterface::connect(std::string rmq_password,
                            std::string rmq_user,
                            std::string rmq_vhost,
                            int service_port,

@@ -5,7 +5,6 @@
       "service-port": 0,
       "service-host": "",
       "rabbitmq-erlang-cookie": "",
-      "rabbitmq-name": "",
       "rabbitmq-password": "",
       "rabbitmq-user": "",
       "rabbitmq-vhost": "",

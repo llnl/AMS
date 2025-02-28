@@ -373,7 +373,6 @@ private:
     auto rmq_entry = entry["rmq_config"];
     int port = getEntry<int>(rmq_entry, "service-port");
     std::string host = getEntry<std::string>(rmq_entry, "service-host");
-    std::string rmq_name = getEntry<std::string>(rmq_entry, "rabbitmq-name");
     std::string rmq_pass =
         getEntry<std::string>(rmq_entry, "rabbitmq-password");
     std::string rmq_user = getEntry<std::string>(rmq_entry, "rabbitmq-user");
@@ -405,7 +404,6 @@ private:
     auto &DB = ams::db::DBManager::getInstance();
     DB.instantiate_rmq_db(port,
                           host,
-                          rmq_name,
                           rmq_pass,
                           rmq_user,
                           rmq_vhost,
