@@ -213,8 +213,6 @@ class AMSJob:
             jobspec.stderr = "ams_test.err"
 
         jobspec.environment = dict(self.environ)
-        jobspec.duration = 60 * 10
-        print("DURATION is ", jobspec.duration)
         return jobspec
 
 
@@ -237,11 +235,18 @@ class AMSDomainJob(AMSJob):
         ams_object = dict()
         if rmq is None:
             if self.stage_dir is None:
-                ams_object["db"] = {"fs_path": str(store.get_candidate_path()), "dbType": "hdf5"}
+                ams_object["db"] = {
+                    "fs_path": str(store.get_candidate_path()),
+                    "dbType": "hdf5",
+                }
             else:
                 ams_object["db"] = {"fs_path": self.stage_dir, "dbType": "hdf5"}
         else:
-            ams_object["db"] = {"rmq_config": rmq.to_dict(AMSlib=True), "dbType": "rmq", "update_surrogate": False}
+            ams_object["db"] = {
+                "rmq_config": rmq.to_dict(AMSlib=True),
+                "dbType": "rmq",
+                "update_surrogate": False,
+            }
         return ams_object
 
     def _generate_ams_object(self, store: AMSDataStore, rmq: Optional[AMSRMQConfiguration] = None):
@@ -335,8 +340,9 @@ class AMSDomainJob(AMSJob):
 
         self.environ["AMS_OBJECTS"] = str(self._ams_object_fn)
         if self._ams_log:
-            print("Setting log level")
             self.environ["AMS_LOG_LEVEL"] = "debug"
+
+        print(f"JOB {self.name} uses AMS-Object at {self._ams_object_fn}")
 
 
 class AMSMLJob(AMSJob):
@@ -617,7 +623,13 @@ class AMSOrchestratorJob(AMSJob):
             environ=os.environ,
             cli_kwargs={"--ml-uri": flux_uri, "--ams-rmq-config": rmq_config},
             # NOTE: Not sure about cores_per_task
-            resources=AMSJobResources(nodes=1, tasks_per_node=1, cores_per_task=1, exclusive=False, gpus_per_task=0),
+            resources=AMSJobResources(
+                nodes=1,
+                tasks_per_node=1,
+                cores_per_task=1,
+                exclusive=False,
+                gpus_per_task=0,
+            ),
         )
 
 
@@ -650,6 +662,11 @@ def nested_instance_job_descr(num_nodes, cores_per_node, gpus_per_node, time="in
 
 def get_echo_job(message):
     jobspec = JobspecV1.from_command(
-        command=["echo", message], num_tasks=1, num_nodes=1, cores_per_task=1, gpus_per_task=0, exclusive=True
+        command=["echo", message],
+        num_tasks=1,
+        num_nodes=1,
+        cores_per_task=1,
+        gpus_per_task=0,
+        exclusive=True,
     )
     return jobspec
