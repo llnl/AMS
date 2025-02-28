@@ -379,11 +379,11 @@ private:
     std::string rmq_user = getEntry<std::string>(rmq_entry, "rabbitmq-user");
     std::string rmq_vhost = getEntry<std::string>(rmq_entry, "rabbitmq-vhost");
     std::string rmq_out_queue =
-        getEntry<std::string>(rmq_entry, "rabbitmq-outbound-queue");
+        getEntry<std::string>(rmq_entry, "rabbitmq-queue-physics");
     std::string exchange =
-        getEntry<std::string>(rmq_entry, "rabbitmq-exchange");
+        getEntry<std::string>(rmq_entry, "rabbitmq-exchange-training");
     std::string routing_key =
-        getEntry<std::string>(rmq_entry, "rabbitmq-routing-key");
+        getEntry<std::string>(rmq_entry, "rabbitmq-key-training");
     bool update_surrogate = getEntry<bool>(entry, "update_surrogate");
 
     // We allow connection to RabbitMQ without TLS certificate

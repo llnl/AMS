@@ -472,9 +472,9 @@ jobs:
                 \"service-port\": ${RABBITMQ_PORT},
                 \"service-host\": \"${RABBITMQ_HOST}\",
                 \"rabbitmq-vhost\": \"/\",
-                \"rabbitmq-outbound-queue\": \"test-ci\",
-                \"rabbitmq-exchange\": \"ams-fanout\",
-                \"rabbitmq-routing-key\": \"training\"
+                \"rabbitmq-queue-physics\": \"test-ci\",
+                \"rabbitmq-exchange-training\": \"ams-fanout\",
+                \"rabbitmq-key-training\": \"training\"
               },
               \"update_surrogate\": false
             },

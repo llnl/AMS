@@ -668,6 +668,7 @@ unsigned RMQPublisherHandler::unacknowledged() const
 
 void RMQPublisherHandler::publish(AMSMessage&& msg)
 {
+  CALIPER(CALI_MARK_BEGIN("RMQ_PUBLISH");)
   {
     const std::lock_guard<std::mutex> lock(_mutex);
     _messages.push_back(msg);
@@ -724,6 +725,7 @@ void RMQPublisherHandler::publish(AMSMessage&& msg)
             msg.id())
   }
   _nb_msg++;
+  CALIPER(CALI_MARK_END("RMQ_PUBLISH");)
 }
 
 void RMQPublisherHandler::onReady(AMQP::TcpConnection* connection)
@@ -982,6 +984,7 @@ bool RMQInterface::connect(std::string rmq_name,
 
 void RMQInterface::restartPublisher()
 {
+  CALIPER(CALI_MARK_BEGIN("RMQ_RESTART_PUBLISHER");)
   std::vector<AMSMessage> messages = _publisher->getMsgBuffer();
 
   AMSMessage& msg_min =
@@ -1008,6 +1011,7 @@ void RMQInterface::restartPublisher()
       _rId, *_address, _cacert, _queue_sender, std::move(messages));
   _publisher_thread = std::thread([&]() { _publisher->start(); });
   connected = true;
+  CALIPER(CALI_MARK_END("RMQ_RESTART_PUBLISHER");)
 }
 
 void RMQInterface::close()

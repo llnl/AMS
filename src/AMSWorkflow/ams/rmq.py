@@ -885,6 +885,30 @@ class AMSFanOutProducer(AMSSyncProducer):
 
 @dataclass
 class AMSRMQConfiguration:
+    """
+    This class parse the credentials to connect
+    to the RabbitMQ server.
+    The expected format is the same as AMSlib.
+        {
+            "db" : {
+                "dbType" : "rmq",
+                "rmq_config" : {
+                    "service-port": 0,
+                    "service-host": "",
+                    "rabbitmq-erlang-cookie": "",
+                    "rabbitmq-name": "",
+                    "rabbitmq-password": "",
+                    "rabbitmq-user": "",
+                    "rabbitmq-vhost": "",
+                    "rabbitmq-cert": "",
+                    "rabbitmq-queue-physics": "",
+                    "rabbitmq-exchange-training": "",
+                    "rabbitmq-key-training": ""
+                },
+                "update_surrogate": true|false
+            }
+        }
+    """
     service_port: int
     service_host: str
     rabbitmq_erlang_cookie: str
@@ -893,11 +917,11 @@ class AMSRMQConfiguration:
     rabbitmq_user: str
     rabbitmq_vhost: str
     rabbitmq_cert: str
-    rabbitmq_outbound_queue: str
+    rabbitmq_queue_physics: str
+    rabbitmq_exchange_training: str  = ""
+    rabbitmq_key_training: str = ""
     rabbitmq_ml_submit_queue: str  = ""
     rabbitmq_ml_status_queue: str  = ""
-    rabbitmq_exchange: str  = "not-used"
-    rabbitmq_routing_key: str = ""
 
     def __post_init__(self):
         if not Path(self.rabbitmq_cert).exists():
@@ -926,9 +950,9 @@ class AMSRMQConfiguration:
                 "rabbitmq-user": self.rabbitmq_user,
                 "rabbitmq-vhost": self.rabbitmq_vhost,
                 "rabbitmq-cert": self.rabbitmq_cert,
-                "rabbitmq-outbound-queue": self.rabbitmq_outbound_queue,
-                "rabbitmq-exchange": self.rabbitmq_exchange,
-                "rabbitmq-routing-key": self.rabbitmq_routing_key,
+                "rabbitmq-queue-physics": self.rabbitmq_queue_physics,
+                "rabbitmq-exchange-training": self.rabbitmq_exchange_training,
+                "rabbitmq-key-training": self.rabbitmq_key_training,
                 "rabbitmq-ml-submit-queue": self.rabbitmq_ml_submit_queue,
                 "rabbitmq-ml-status-queue": self.rabbitmq_ml_status_queue,
             }

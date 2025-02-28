@@ -139,6 +139,7 @@ void hdf5DB::_store(size_t num_elements,
                     std::vector<TypeValue*>& outputs,
                     bool* predicate)
 {
+  CALIPER(CALI_MARK_BEGIN("STORE_HDF5");)
   if (isDouble<TypeValue>::default_value())
     HDType = H5T_NATIVE_DOUBLE;
   else
@@ -180,6 +181,7 @@ void hdf5DB::_store(size_t num_elements,
   }
 
   totalElements += num_elements;
+  CALIPER(CALI_MARK_END("STORE_HDF5");)
 }
 
 
