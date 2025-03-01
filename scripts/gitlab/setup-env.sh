@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Need to use modules
+source /etc/profile.d/z00_lmod.sh
+
 host=$(hostname)
 host=${host//[0-9]/}
 
