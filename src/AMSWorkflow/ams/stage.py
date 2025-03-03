@@ -513,7 +513,6 @@ class FSWriteTask(Task):
             while True:
                 # This is a blocking call
                 item = self.i_queue.get(block=True)
-                print(f"{self.__class__.__name__} Received message {total_messages}")
                 total_messages += 1
                 if item.is_terminate():
                     for k, v in data_files.items():
@@ -543,7 +542,6 @@ class FSWriteTask(Task):
                     data_files[data.domain_name][1] += bytes_written
                     total_bytes_written += data.inputs.size * data.inputs.itemsize
                     total_bytes_written += data.outputs.size * data.outputs.itemsize
-                    print(f"Received Terminate {data.inputs.shape} {data.outputs.shape}")
 
                     if data_files[data.domain_name][1] >= 2 * 1024 * 1024 * 1024:
                         data_files[data.domain_name][0].close()
@@ -557,6 +555,10 @@ class FSWriteTask(Task):
                             )
                         )
                         del data_files[data.domain_name]
+                if total_messages % 100 == 0:
+                    print(
+                        f"I have processed {total_messages} in total amounting to {total_bytes_written/(1024.0*1024.0)} MB"
+                    )
 
         end = time.time()
         self.datasize_byte = total_bytes_written
@@ -611,15 +613,7 @@ class PushToStore(Task):
 
         with AMSMonitor(obj=self, tag="internal_loop", record=[]):
             while True:
-                print(
-                    f"{self.__class__.__name__} Receives messages at queue:",
-                    self.i_queue,
-                )
                 item = self.i_queue.get(block=True)
-                print(
-                    f"{self.__class__.__name__} Received messages at queue:",
-                    self.i_queue,
-                )
                 if item.is_terminate():
                     print(f"Received Terminate {self.__class__.__name__}")
                     break
@@ -836,12 +830,12 @@ class Pipeline(ABC):
                 f"Pipeline execute does not support policy: {policy}, please select from  {Pipeline.supported_policies}"
             )
 
-        # self.init_signals()
+        self.init_signals()
         # Create a pipeline of actions and link them with appropriate queues
         self._link_pipeline(policy)
         # Execute them
         self._execute_tasks(policy)
-        # self.release_signals()
+        self.release_signals()
 
     @abstractmethod
     def requires_model_update(self):
