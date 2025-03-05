@@ -6,6 +6,7 @@
 from dataclasses import dataclass
 import functools
 import logging
+import inspect
 import ssl
 import struct
 import traceback
@@ -911,8 +912,6 @@ class AMSRMQConfiguration:
     """
     service_port: int
     service_host: str
-    rabbitmq_erlang_cookie: str
-    rabbitmq_name: str
     rabbitmq_password: str
     rabbitmq_user: str
     rabbitmq_vhost: str
@@ -936,7 +935,11 @@ class AMSRMQConfiguration:
             data = json.load(fd)
         data = {key.replace("-", "_"): value for key, value in data.items()}
 
-        return cls(**data)
+        # Filter out extra fields not accepted by this class
+        return cls(**{
+                k: v for k, v in data.items()
+                if k in inspect.signature(cls).parameters
+        })
 
     def to_dict(self, AMSlib=False):
         assert AMSlib, "AMSRMQConfiguration cannot convert class to non amslib dictionary"
@@ -944,8 +947,6 @@ class AMSRMQConfiguration:
             return {
                 "service-port": self.service_port,
                 "service-host": self.service_host,
-                "rabbitmq-erlang-cookie": self.rabbitmq_erlang_cookie,
-                "rabbitmq-name": self.rabbitmq_name,
                 "rabbitmq-password": self.rabbitmq_password,
                 "rabbitmq-user": self.rabbitmq_user,
                 "rabbitmq-vhost": self.rabbitmq_vhost,
