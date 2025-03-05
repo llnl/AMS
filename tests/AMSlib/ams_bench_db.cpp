@@ -2,10 +2,6 @@
 #include <mpi.h>
 #endif
 
-#ifdef __AMS_ENABLE_ADIAK__
-#include <adiak.hpp>
-#endif
-
 #ifdef __AMS_ENABLE_CALIPER__
 #include <caliper/cali_macros.h>
 #endif
@@ -147,7 +143,6 @@ void callBackDouble(void *cls, long elements, void **inputs, void **outputs)
                                            (double **)(outputs));
 }
 
-
 void callBackSingle(void *cls, long elements, void **inputs, void **outputs)
 {
   std::cout << "  > Called the single precision model\n";
@@ -155,7 +150,6 @@ void callBackSingle(void *cls, long elements, void **inputs, void **outputs)
                                           (float **)(inputs),
                                           (float **)(outputs));
 }
-
 
 int main(int argc, char **argv)
 {
@@ -214,6 +208,7 @@ int main(int argc, char **argv)
                  "-e",
                  "--num-elems",
                  "Number of elements per iteration");
+
   args.AddOption(&num_inputs, "-di", "--dim-inputs", "Dimension of inputs");
   args.AddOption(&num_outputs, "-do", "--dim-outputs", "Dimension of outputs");
   args.AddOption(&num_iterations, "-i", "--num-iter", "Number of iterations");
@@ -251,33 +246,6 @@ int main(int argc, char **argv)
   }
 
   srand(seed + rId);
-
-  // -------------------------------------------------------------------------
-  // Adiak
-  // -------------------------------------------------------------------------
-#ifdef __AMS_ENABLE_ADIAK__
-  // add adiak init here
-  adiak::init(NULL);
-
-  // replace with adiak::collect_all(); once adiak v0.4.0
-  adiak::uid();
-  adiak::launchdate();
-  adiak::launchday();
-  adiak::executable();
-  adiak::executablepath();
-  adiak::workdir();
-  adiak::libraries();
-  adiak::cmdline();
-  adiak::hostname();
-  adiak::clustername();
-  adiak::walltime();
-  adiak::systime();
-  adiak::cputime();
-  adiak::jobsize();
-  adiak::hostlist();
-  adiak::numhosts();
-  adiak::value("compiler", std::string("@RAJAPERF_COMPILER@"));
-#endif
 
   AMSDType data_type = getDataType(precision_opt);
   AMSDBType dbType = getDBType(db_type);
@@ -359,10 +327,6 @@ int main(int argc, char **argv)
 #endif
     prob.ams_run(wf, resource, num_iterations, num_elems);
   }
-
-#ifdef __AMS_ENABLE_ADIAK__
-  adiak::fini()
-#endif
 
       MPI_CALL(MPI_Finalize());
   return 0;
