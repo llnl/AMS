@@ -198,6 +198,12 @@ endfunction()
 BUILD_TEST(ams_packing_test cpu_packing_test.cpp AMSPack)
 ADDTEST(ams_packing_test AMSPack)
 
+# AMS Database benchmark (RMQ and/or HDF5 + MPI / No ML models used)
+BUILD_TEST(ams_benchmark_db ams_bench_db.cpp)
+# The AMS DB Benchmark requires mfem
+# TODO: Remove mfem requirement from the benchmark
+target_link_libraries(ams_benchmark_db PRIVATE AMS ${AMS_EXAMPLE_LIBRARIES})
+
 if(WITH_TORCH)
   BUILD_TEST(ams_inference_test torch_model.cpp)
   ADDTEST(ams_inference_test AMSInferDouble ${CMAKE_CURRENT_SOURCE_DIR}/debug_model.pt "double")
