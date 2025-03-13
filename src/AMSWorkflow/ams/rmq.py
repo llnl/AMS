@@ -163,7 +163,7 @@ class AMSMessage(object):
 
         idim = header_info["input_dim"]
         odim = header_info["output_dim"]
-        data = data.reshape((-1, idim + odim))
+        data = data.reshape((idim + odim, -1)).transpose()
         # Return input, output
         return (domain_name, data[:, :idim], data[:, idim:])
 

@@ -814,6 +814,7 @@ public:
         _data(nullptr),
         _total_size(0)
   {
+    CALIPER(CALI_MARK_BEGIN("AMS_MESSAGE");)
     AMSMsgHeader header(_rank,
                         domain_name.size(),
                         _num_elements,
@@ -832,10 +833,11 @@ public:
                 domain_name.size());
     current_offset += domain_name.size();
     current_offset +=
-        encode_data(reinterpret_cast<TypeValue*>(_data + current_offset),
-                    inputs,
-                    outputs);
+      encode_data(_data + current_offset,
+                  inputs,
+                  outputs);
     DBG(AMSMessage, "Allocated message %d: %p", _id, _data);
+    CALIPER(CALI_MARK_END("AMS_MESSAGE");)
   }
 
   /**
@@ -881,26 +883,25 @@ public:
    * @return The number of bytes in the message or 0 if error
    */
   template <typename TypeValue>
-  size_t encode_data(TypeValue* data_blob,
+  size_t encode_data(uint8_t* data_blob,
                      const std::vector<TypeValue*>& inputs,
                      const std::vector<TypeValue*>& outputs)
   {
-    size_t x_dim = _input_dim + _output_dim;
     if (!data_blob) return 0;
-    // Creating the body part of the messages
-    for (size_t i = 0; i < _num_elements; i++) {
-      for (size_t j = 0; j < _input_dim; j++) {
-        data_blob[i * x_dim + j] = inputs[j][i];
-      }
+    size_t offset = 0;
+
+    // Creating the body part of the message
+    for (size_t i = 0; i < _input_dim; i++) {
+      std::memcpy(data_blob + offset, inputs[i], _num_elements * sizeof(TypeValue));
+      offset += (_num_elements * sizeof(TypeValue));
     }
 
-    for (size_t i = 0; i < _num_elements; i++) {
-      for (size_t j = 0; j < _output_dim; j++) {
-        data_blob[i * x_dim + _input_dim + j] = outputs[j][i];
-      }
+    for (size_t i = 0; i < _output_dim; i++) {
+      std::memcpy(data_blob + offset, outputs[i], _num_elements * sizeof(TypeValue));
+      offset += (_num_elements * sizeof(TypeValue));
     }
 
-    return (x_dim * _num_elements) * sizeof(TypeValue);
+    return ((_input_dim + _output_dim) * _num_elements) * sizeof(TypeValue);
   }
 
   /**

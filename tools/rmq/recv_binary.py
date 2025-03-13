@@ -100,7 +100,7 @@ def parse_data(body: str, header_info: dict) -> Tuple[str, np.array, np.array]:
 
     idim = header_info["input_dim"]
     odim = header_info["output_dim"]
-    data = data.reshape((-1, idim + odim))
+    data = data.reshape((idim + odim, -1)).transpose()
     # Return input, output
     return (domain_name, data[:, :idim], data[:, idim:])
 
