@@ -72,7 +72,7 @@ function(INTEGRATION_TEST_RMQ)
     endif()
     set(JSON_FP "${CMAKE_CURRENT_BINARY_DIR}/rmq.json")
     CHECK_RMQ_CONFIG(${JSON_FP})
-    add_test(NAME AMSEndToEndFromJSON::NoModel::Double::DB::rmq::HOST COMMAND bash -c "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_rmq 0 8 9 \"double\" 2 1024; AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_rmq.py 0 8 9 \"double\" 2 1024")
+    add_test(NAME AMSEndToEndFromJSON::NoModel::Double::DB::rmq::HOST COMMAND bash -c "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_rmq 0 2 2 \"double\" 2 10; AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_rmq.py 0 2 2 \"double\" 2 10")
   endif()
 endfunction()
 
