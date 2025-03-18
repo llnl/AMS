@@ -135,7 +135,9 @@ class AMSMessage(object):
             res["output_dim"],
             res["padding"],
         ) = struct.unpack(fmt, body[:hsize])
-        assert hsize == res["hsize"]
+        assert (
+            hsize == res["hsize"]
+        ), f"Hsize is {hsize} expected value is {res['hsize']}"
         assert res["datatype"] in [4, 8]
         if len(body) < hsize:
             print(
@@ -1013,10 +1015,9 @@ class AMSRMQConfiguration:
         data = {key.replace("-", "_"): value for key, value in data.items()}
 
         # Filter out extra fields not accepted by this class
-        return cls(**{
-                k: v for k, v in data.items()
-                if k in inspect.signature(cls).parameters
-        })
+        return cls(
+            **{k: v for k, v in data.items() if k in inspect.signature(cls).parameters}
+        )
 
     def to_dict(self, AMSlib=False):
         assert (
