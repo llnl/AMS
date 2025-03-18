@@ -3,6 +3,7 @@ import os
 import json
 
 from typing import Optional
+import threading
 from dataclasses import dataclass, fields
 from ams import util
 from ams.store import AMSDataStore
@@ -295,7 +296,9 @@ class AMSDomainJob(AMSJob):
         self.stage_dir = stage_dir
         self._ams_object = None
         self._ams_object_fn = None
+        self._lock = threading.Lock()
         super().__init__(*args, **kwargs)
+        self._job_id = None
 
     @property
     def domain_names(self):
@@ -343,6 +346,16 @@ class AMSDomainJob(AMSJob):
             self.environ["AMS_LOG_LEVEL"] = "debug"
 
         print(f"JOB {self.name} uses AMS-Object at {self._ams_object_fn}")
+
+    @property
+    def jobid(self):
+        """The jobid property."""
+        return self._jobid
+
+    @jobid.setter
+    def jobid(self, value):
+        with self._lock:
+            self._jobid = value
 
 
 class AMSMLJob(AMSJob):
