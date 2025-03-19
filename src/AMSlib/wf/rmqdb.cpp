@@ -254,7 +254,7 @@ bool RMQHandler::waitToClose(unsigned ms, int repeat)
 
 bool RMQHandler::connectionValid()
 {
-  return error_connection.load(std::memory_order_acquire);
+  return !error_connection.load(std::memory_order_acquire);
 }
 
 bool RMQHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
