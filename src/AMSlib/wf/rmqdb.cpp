@@ -232,7 +232,6 @@ RMQHandler::RMQHandler(uint64_t rId,
 {
   established = establish_connection.get_future();
   closed = close_connection.get_future();
-  ftr_error = error_connection.get_future();
 }
 
 bool RMQHandler::waitToEstablish(unsigned ms, int repeat)
