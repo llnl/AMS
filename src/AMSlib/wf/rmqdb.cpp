@@ -255,8 +255,7 @@ bool RMQHandler::waitToClose(unsigned ms, int repeat)
 
 bool RMQHandler::connectionValid()
 {
-  std::chrono::milliseconds span(1);
-  return ftr_error.wait_for(span) != std::future_status::ready;
+  return error_connection.load(std::memory_order_acquire);
 }
 
 bool RMQHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
@@ -304,10 +303,10 @@ void RMQHandler::onClosed(AMQP::TcpConnection* connection)
 void RMQHandler::onError(AMQP::TcpConnection* connection, const char* message)
 {
   WARNING(RMQHandler, "[r%d] fatal error on TCP connection: %s", _rId, message)
-  try {
-    error_connection.set_value(ERROR);
-  } catch (const std::future_error& e) {
-    DBG(RMQHandler, "[r%d] future already set.", _rId)
+  if (!error_connection.load(std::memory_order_acquire)) {
+    error_connection.store(true, std::memory_order_release);
+  } else {
+    DBG(RMQHandler, "[r%d] Error connection already Errored.", _rId)
   }
 }
 

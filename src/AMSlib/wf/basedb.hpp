@@ -1026,8 +1026,7 @@ protected:
   std::promise<RMQConnectionStatus> close_connection;
   std::future<RMQConnectionStatus> closed;
 
-  std::promise<RMQConnectionStatus> error_connection;
-  std::future<RMQConnectionStatus> ftr_error;
+  std::atomic<bool> error_connection{0};  // Atomic variable
 
 public:
   /**
@@ -1599,7 +1598,10 @@ private:
   bool _consumer_connected;
 
 public:
-  RMQInterface() : _publisher_connected(false), _consumer_connected(false), _rId(0) {}
+  RMQInterface()
+      : _publisher_connected(false), _consumer_connected(false), _rId(0)
+  {
+  }
 
   /**
    * @brief Connect to a RabbitMQ server
