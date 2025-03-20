@@ -1385,15 +1385,7 @@ private:
   int _nb_msg;
   /** @brief Number of messages successfully acknowledged */
   int _nb_msg_ack;
-  /** @brief Mutex to protect multithread accesses to _messages */
-  std::mutex _mutex;
-  /** @brief Messages that have not been successfully acknowledged */
-  std::list<AMSMessage> _messages;
-
-
-  std::unordered_map<int, std::pair<std::shared_ptr<uint8_t>, size_t>>
-      ams_messages;
-
+  /** @brief Bookkeeping for AMSMessage */
   std::shared_ptr<AMSMessageRecords> _ams_messages;
 
 public:
@@ -1474,8 +1466,6 @@ private:
   std::shared_ptr<struct event_base> _loop;
   /** @brief The handler which contains various callbacks for the sender */
   std::shared_ptr<RMQPublisherHandler> _handler;
-  /** @brief Buffer holding unacknowledged messages in case of crash */
-  std::list<AMSMessage> _buffer_msg;
 
 public:
   RMQPublisher(const RMQPublisher&) = delete;
@@ -1485,7 +1475,7 @@ public:
                const AMQP::Address& address,
                std::string cacert,
                std::string queue,
-               std::shared_ptr<AMSMessageRecords> buffer);
+               const std::shared_ptr<AMSMessageRecords>& buffer);
 
   /**
    * @brief Check if the underlying RabbitMQ connection is ready and usable
@@ -1521,8 +1511,13 @@ public:
    */
   bool connectionValid();
 
-  // void publish(AMSMessage&& message);
-  void publish(int, const std::pair<std::shared_ptr<uint8_t>, size_t>&);
+  /**
+   * @brief Publish a message on attached RMQ connection
+   * @param[in]  id        The ID of the message
+   * @param[in]  record    A pair of the memory content (ptr) and its size in byte
+   */
+  void publish(int id,
+               const std::pair<std::shared_ptr<uint8_t>, size_t>& record);
 
   /**
    *  @brief    Total number of messages sent

@@ -172,29 +172,32 @@ AMSMessage::AMSMessage(int id, uint64_t rId, uint8_t* data)
  * @brief AMSMessageRecords
  */
 
-void AMSMessageRecords::insert(int id, const record_t& value) {
+void AMSMessageRecords::insert(int id, const record_t& value)
+{
   std::unique_lock<std::shared_mutex> lock(_mutex);
   _map[id] = value;
 }
 
-void AMSMessageRecords::print() {
+void AMSMessageRecords::print()
+{
   std::shared_lock<std::shared_mutex> lock(_mutex);
-  for(const auto& e : _map)
+  for (const auto& e : _map)
     DBG(AMSMessageRecords,
-      "Message [%d] (addr=%p,use_count=%d, size=%d)",
-      e.first,
-      e.second.first.get(),
-      e.second.first.use_count(),
-      e.second.second
-    );
+        "Message [%d] (addr=%p,use_count=%d, size=%d)",
+        e.first,
+        e.second.first.get(),
+        e.second.first.use_count(),
+        e.second.second);
 }
 
-void AMSMessageRecords::clear() {
+void AMSMessageRecords::clear()
+{
   std::unique_lock<std::shared_mutex> lock(_mutex);
   _map.clear();
 }
 
-size_t AMSMessageRecords::size() const {
+size_t AMSMessageRecords::size() const
+{
   std::shared_lock<std::shared_mutex> lock(_mutex);
   return _map.size();
 }
@@ -214,7 +217,7 @@ AMSMessageInbound::AMSMessageInbound(uint64_t id,
       body(std::move(body)),
       exchange(std::move(exchange)),
       routing_key(std::move(routing_key)),
-      redelivered(redelivered){};
+      redelivered(redelivered) {};
 
 
 bool AMSMessageInbound::empty() { return body.empty() || routing_key.empty(); }
@@ -674,7 +677,9 @@ unsigned RMQPublisherHandler::unacknowledged() const
   return _rchannel->unacknowledged();
 }
 
-void RMQPublisherHandler::publish(int message_id, const std::pair<std::shared_ptr<uint8_t>, size_t>& message_content)
+void RMQPublisherHandler::publish(
+    int message_id,
+    const std::pair<std::shared_ptr<uint8_t>, size_t>& message_content)
 {
   CALIPER(CALI_MARK_BEGIN("RMQ_PUBLISH");)
   if (_rchannel) {
@@ -683,10 +688,11 @@ void RMQPublisherHandler::publish(int message_id, const std::pair<std::shared_pt
     //    onNack  : message has been explicitly nack'ed by RabbitMQ
     //    onError : error occurred before any ack or nack was received
     _rchannel
-        ->publish("", _queue, reinterpret_cast<char*>(std::get<0>(message_content).get()), std::get<1>(message_content))
-        .onAck([this,
-                &_nb_msg_ack = _nb_msg_ack,
-                id = message_id]() mutable {
+        ->publish("",
+                  _queue,
+                  reinterpret_cast<char*>(std::get<0>(message_content).get()),
+                  std::get<1>(message_content))
+        .onAck([this, &_nb_msg_ack = _nb_msg_ack, id = message_id]() mutable {
           DBG(RMQPublisherHandler,
               "[r%d] message #%d got acknowledged "
               "successfully "
@@ -697,36 +703,47 @@ void RMQPublisherHandler::publish(int message_id, const std::pair<std::shared_pt
               id)
           _nb_msg_ack++;
         })
-        .onNack([this, id = message_id, ptr = std::get<0>(message_content), size = std::get<1>(message_content), &_ams_messages = this->_ams_messages]() mutable {
+        .onNack([this,
+                 id = message_id,
+                 ptr = std::get<0>(message_content),
+                 size = std::get<1>(message_content),
+                 &_ams_messages = this->_ams_messages]() mutable {
           DBG(RMQPublisherHandler,
-                  "[r%d] message #%d (%p / %d) received negative "
-                  "acknowledged "
-                  "by "
-                  "RMQ "
-                  "server",
-                  _rId,
-                  id,
-                  ptr.get(),
-                  size)
+              "[r%d] message #%d (%p / %d) received negative "
+              "acknowledged "
+              "by "
+              "RMQ "
+              "server",
+              _rId,
+              id,
+              ptr.get(),
+              size)
           _ams_messages->insert(id, std::make_pair(std::move(ptr), size));
         })
-        .onError([this, id = message_id, ptr = std::get<0>(message_content), size = std::get<1>(message_content), &_ams_messages = this->_ams_messages](
-                     const char* err_message) mutable {
+        .onError([this,
+                  id = message_id,
+                  ptr = std::get<0>(message_content),
+                  size = std::get<1>(message_content),
+                  &_ams_messages =
+                      this->_ams_messages](const char* err_message) mutable {
           DBG(RMQPublisherHandler,
-            "[r%d] message #%d (%p / %d) did not get send: %s",
-            _rId,
-            id,
-            ptr.get(),
-            size,
-            err_message)
+              "[r%d] message #%d (%p / %d) did not get send: %s",
+              _rId,
+              id,
+              ptr.get(),
+              size,
+              err_message)
           _ams_messages->insert(id, std::make_pair(std::move(ptr), size));
         });
   } else {
     DBG(RMQPublisherHandler,
-            "[r%d] The reliable channel was not ready for message #%d.",
-            _rId,
-            message_id)
-    _ams_messages->insert(message_id, std::make_pair(std::move(std::get<0>(message_content)), std::get<1>(message_content)));
+        "[r%d] The reliable channel was not ready for message #%d.",
+        _rId,
+        message_id)
+    _ams_messages->insert(message_id,
+                          std::make_pair(std::move(
+                                             std::get<0>(message_content)),
+                                         std::get<1>(message_content)));
   }
   _nb_msg++;
   CALIPER(CALI_MARK_END("RMQ_PUBLISH");)
@@ -795,11 +812,8 @@ RMQPublisher::RMQPublisher(uint64_t rId,
                            const AMQP::Address& address,
                            std::string cacert,
                            std::string queue,
-                           std::shared_ptr<AMSMessageRecords> buffer)
-    : _rId(rId),
-      _queue(queue),
-      _cacert(cacert),
-      _handler(nullptr)
+                           const std::shared_ptr<AMSMessageRecords>& buffer)
+    : _rId(rId), _queue(queue), _cacert(cacert), _handler(nullptr)
 {
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
   evthread_use_pthreads();
@@ -829,14 +843,15 @@ RMQPublisher::RMQPublisher(uint64_t rId,
                                                event_base_free(event);
                                              });
 
-  _handler =
-      std::make_shared<RMQPublisherHandler>(_rId, _loop, _cacert, _queue, buffer);
+  _handler = std::make_shared<RMQPublisherHandler>(
+      _rId, _loop, _cacert, _queue, buffer);
   _connection = new AMQP::TcpConnection(_handler.get(), address);
 }
 
-void RMQPublisher::publish(int message_id, const std::pair<std::shared_ptr<uint8_t>, size_t>& message_content)
+void RMQPublisher::publish(
+    int message_id,
+    const std::pair<std::shared_ptr<uint8_t>, size_t>& message_content)
 {
-  DBG(RMQPublisher, "Publishing message %d: %p", message_id, std::get<0>(message_content).get())
   _handler->publish(message_id, message_content);
 }
 
@@ -880,16 +895,16 @@ bool RMQPublisher::close(unsigned ms, int repeat)
  * RMQInterface
  */
 
- std::pair<bool, bool> RMQInterface::connect(std::string rmq_password,
-                           std::string rmq_user,
-                           std::string rmq_vhost,
-                           int service_port,
-                           std::string service_host,
-                           std::string rmq_cert,
-                           std::string outbound_queue,
-                           std::string exchange,
-                           std::string routing_key,
-                           bool update_surrogate)
+std::pair<bool, bool> RMQInterface::connect(std::string rmq_password,
+                                            std::string rmq_user,
+                                            std::string rmq_vhost,
+                                            int service_port,
+                                            std::string service_host,
+                                            std::string rmq_cert,
+                                            std::string outbound_queue,
+                                            std::string exchange,
+                                            std::string routing_key,
+                                            bool update_surrogate)
 {
   _queue_sender = outbound_queue;
   _exchange = exchange;
@@ -911,8 +926,8 @@ bool RMQPublisher::close(unsigned ms, int repeat)
 
   _address = std::make_shared<AMQP::Address>(
       service_host, service_port, login, rmq_vhost, is_secure);
-  _publisher =
-      std::make_shared<RMQPublisher>(_rId, *_address, _cacert, _queue_sender, _ams_messages);
+  _publisher = std::make_shared<RMQPublisher>(
+      _rId, *_address, _cacert, _queue_sender, _ams_messages);
 
   _publisher_thread = std::thread([&]() { _publisher->start(); });
 
@@ -965,7 +980,8 @@ void RMQInterface::restartPublisher()
   if (!_publisher->waitToEstablish(100, 10)) {
     _publisher->stop();
     if (_publisher_thread.joinable()) _publisher_thread.join();
-    FATAL(RMQInterface, "Could not re-establish publisher connection (timeout)");
+    FATAL(RMQInterface,
+          "Could not re-establish publisher connection (timeout)");
   }
   _publisher_connected = true;
   CALIPER(CALI_MARK_END("RMQ_RESTART_PUBLISHER");)
@@ -976,8 +992,8 @@ void RMQInterface::close()
   if (isPublisherConnected()) {
     bool status = _publisher->close(100, 10);
     CWARNING(RMQInterface,
-            !status,
-            "Could not gracefully close publisher TCP connection")
+             !status,
+             "Could not gracefully close publisher TCP connection")
 
     DBG(RMQInterface, "Number of messages sent: %d", _publisher->msgSent())
     DBG(RMQInterface, "Number of messages not sent : %d", _ams_messages->size())
@@ -992,8 +1008,8 @@ void RMQInterface::close()
   if (isConsumerConnected()) {
     bool status = _consumer->close(100, 10);
     CWARNING(RabbitMQDB,
-            !status,
-            "Could not gracefully close consumer TCP connection")
+             !status,
+             "Could not gracefully close consumer TCP connection")
     _consumer->stop();
     if (_consumer_thread.joinable()) _consumer_thread.join();
     _consumer_connected = false;
