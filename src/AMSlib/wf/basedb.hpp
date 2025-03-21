@@ -659,6 +659,8 @@ public:
 #ifdef __ENABLE_RMQ__
 
 enum RMQConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
+// Forward declaration
+class RMQPublisher;
 
 /**
   * @brief AMS represents the header as follows:
@@ -962,9 +964,9 @@ class AMSMessageRecords
 
 private:
   /** @brief Internal data structure that keeps messages nack */
-  std::unordered_map<int, record_t> _map;
+  std::unordered_map<int, record_t> _msgs;
   /** @brief Shared mutex to ensure thread-safe access */
-  mutable std::shared_mutex _mutex;
+  std::shared_mutex _mutex;
 
 public:
   AMSMessageRecords() = default;
@@ -978,12 +980,12 @@ public:
   /**
   * @brief Return an iterator at the beggining of the records
   */
-  iterator_t begin() { return std::begin(_map); }
+  iterator_t begin() { return std::begin(_msgs); }
 
   /**
   * @brief Return an iterator pointing at the end of the records
   */
-  iterator_t end() { return std::end(_map); }
+  iterator_t end() { return std::end(_msgs); }
 
   /**
   * @brief Insert a new record
@@ -998,15 +1000,14 @@ public:
   void print();
 
   /**
-  * @brief Delete all records in the structure
-  */
-  void clear();
-
+   * @brief pubslishes all the messages in map 
+   */
+  void publishNAcknoledged(RMQPublisher& publisher);
   /**
   * @brief Return the number of records in the underlying structure
   * @return Return the size of the structure.
   */
-  size_t size() const;
+  size_t size();
 };
 
 /**
@@ -1722,21 +1723,12 @@ public:
     if (!_publisher->connectionValid()) restartPublisher();
 
     // if we have some messages to send first (from a potential restart)
-    if (_ams_messages->size() > 0) {
-      for (auto& item : *_ams_messages) {
-        DBG(RMQPublisher,
-            "re-publishing message %d: %p (%d)",
-            item.first,
-            item.second.first.get(),
-            item.second.second)
-        _publisher->publish(item.first, item.second);
-      }
-      _ams_messages->clear();
-    }
+
 
     std::shared_ptr<uint8_t> ptr(msg.data());
     auto record = std::make_pair(std::move(ptr), msg.size());
 
+    _ams_messages->publishNAcknoledged(*_publisher);
     _publisher->publish(msg.id(), record);
     _msg_tag++;
     CALIPER(CALI_MARK_END("STORE_RMQ");)
@@ -1952,7 +1944,7 @@ private:
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
-  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false) {};
+  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false){};
 
 protected:
   RMQInterface rmq_interface;

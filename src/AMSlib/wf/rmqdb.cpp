@@ -175,13 +175,13 @@ AMSMessage::AMSMessage(int id, uint64_t rId, uint8_t* data)
 void AMSMessageRecords::insert(int id, const record_t& value)
 {
   std::unique_lock<std::shared_mutex> lock(_mutex);
-  _map[id] = value;
+  _msgs[id] = value;
 }
 
 void AMSMessageRecords::print()
 {
   std::shared_lock<std::shared_mutex> lock(_mutex);
-  for (const auto& e : _map)
+  for (const auto& e : _msgs)
     DBG(AMSMessageRecords,
         "Message [%d] (addr=%p,use_count=%d, size=%d)",
         e.first,
@@ -190,17 +190,29 @@ void AMSMessageRecords::print()
         e.second.second);
 }
 
-void AMSMessageRecords::clear()
-{
-  std::unique_lock<std::shared_mutex> lock(_mutex);
-  _map.clear();
-}
 
-size_t AMSMessageRecords::size() const
+void AMSMessageRecords::publishNAcknoledged(RMQPublisher& publisher)
 {
   std::shared_lock<std::shared_mutex> lock(_mutex);
-  return _map.size();
+  if (_msgs.size() == 0) return;
+
+  for (auto& item : _msgs) {
+    DBG(RMQPublisher,
+        "re-publishing message %d: %p (%d)",
+        item.first,
+        item.second.first.get(),
+        item.second.second)
+    publisher.publish(item.first, item.second);
+  }
+  _msgs.clear();
 }
+
+size_t AMSMessageRecords::size()
+{
+  std::shared_lock<std::shared_mutex> lock(_mutex);
+  return _msgs.size();
+}
+
 
 /**
  * AMSMessageInbound
@@ -217,7 +229,7 @@ AMSMessageInbound::AMSMessageInbound(uint64_t id,
       body(std::move(body)),
       exchange(std::move(exchange)),
       routing_key(std::move(routing_key)),
-      redelivered(redelivered) {};
+      redelivered(redelivered){};
 
 
 bool AMSMessageInbound::empty() { return body.empty() || routing_key.empty(); }
@@ -692,7 +704,7 @@ void RMQPublisherHandler::publish(
                   _queue,
                   reinterpret_cast<char*>(std::get<0>(message_content).get()),
                   std::get<1>(message_content))
-        .onAck([this, &_nb_msg_ack = _nb_msg_ack, id = message_id]() mutable {
+        .onAck([this, &_nb_msg_ack = _nb_msg_ack, id = message_id]() {
           DBG(RMQPublisherHandler,
               "[r%d] message #%d got acknowledged "
               "successfully "
@@ -1012,6 +1024,5 @@ void RMQInterface::close()
              "Could not gracefully close consumer TCP connection")
     _consumer->stop();
     if (_consumer_thread.joinable()) _consumer_thread.join();
-    _consumer_connected = false;
   }
 }
