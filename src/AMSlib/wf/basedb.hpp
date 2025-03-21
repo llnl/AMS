@@ -968,9 +968,9 @@ private:
   /** @brief Shared mutex to ensure thread-safe access */
   std::shared_mutex _mutex;
 
-public:
   AMSMessageRecords() = default;
 
+public:
   AMSMessageRecords(AMSMessageRecords&) = delete;
   AMSMessageRecords& operator=(AMSMessageRecords&) = delete;
 
@@ -1008,6 +1008,8 @@ public:
   * @return Return the size of the structure.
   */
   size_t size();
+
+  static AMSMessageRecords& getInstance();
 };
 
 /**
@@ -1386,8 +1388,6 @@ private:
   int _nb_msg;
   /** @brief Number of messages successfully acknowledged */
   int _nb_msg_ack;
-  /** @brief Bookkeeping for AMSMessage */
-  std::shared_ptr<AMSMessageRecords> _ams_messages;
 
 public:
   /**
@@ -1399,8 +1399,7 @@ public:
   RMQPublisherHandler(uint64_t rId,
                       std::shared_ptr<struct event_base> loop,
                       std::string cacert,
-                      std::string queue,
-                      std::shared_ptr<AMSMessageRecords> buffer);
+                      std::string queue);
 
   ~RMQPublisherHandler() = default;
 
@@ -1475,8 +1474,7 @@ public:
   RMQPublisher(uint64_t rId,
                const AMQP::Address& address,
                std::string cacert,
-               std::string queue,
-               const std::shared_ptr<AMSMessageRecords>& buffer);
+               std::string queue);
 
   /**
    * @brief Check if the underlying RabbitMQ connection is ready and usable
@@ -1627,15 +1625,9 @@ private:
   /** @brief True if consumer is connected to RabbitMQ */
   bool _consumer_connected;
 
-  /** @brief Keep track of messages that have not been acknowledged */
-  std::shared_ptr<AMSMessageRecords> _ams_messages;
-
 public:
   RMQInterface()
-      : _publisher_connected(false),
-        _consumer_connected(false),
-        _rId(0),
-        _ams_messages(std::make_shared<AMSMessageRecords>())
+      : _publisher_connected(false), _consumer_connected(false), _rId(0)
   {
   }
 
@@ -1728,7 +1720,7 @@ public:
     std::shared_ptr<uint8_t> ptr(msg.data());
     auto record = std::make_pair(std::move(ptr), msg.size());
 
-    _ams_messages->publishNAcknoledged(*_publisher);
+    AMSMessageRecords::getInstance().publishNAcknoledged(*_publisher);
     _publisher->publish(msg.id(), record);
     _msg_tag++;
     CALIPER(CALI_MARK_END("STORE_RMQ");)

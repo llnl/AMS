@@ -198,7 +198,7 @@ void AMSMessageRecords::publishNAcknoledged(RMQPublisher& publisher)
 
   for (auto& item : _msgs) {
     DBG(RMQPublisher,
-        "re-publishing message %d: %p (%d)",
+        "re-publishing message %d: %p (%ld)",
         item.first,
         item.second.first.get(),
         item.second.second)
@@ -211,6 +211,12 @@ size_t AMSMessageRecords::size()
 {
   std::shared_lock<std::shared_mutex> lock(_mutex);
   return _msgs.size();
+}
+
+AMSMessageRecords& AMSMessageRecords::getInstance()
+{
+  static AMSMessageRecords instance;
+  return instance;
 }
 
 
@@ -668,15 +674,13 @@ RMQPublisherHandler::RMQPublisherHandler(
     uint64_t rId,
     std::shared_ptr<struct event_base> loop,
     std::string cacert,
-    std::string queue,
-    std::shared_ptr<AMSMessageRecords> buffer)
+    std::string queue)
     : RMQHandler(rId, loop, cacert),
       _queue(queue),
       _nb_msg_ack(0),
       _nb_msg(0),
       _channel(nullptr),
-      _rchannel(nullptr),
-      _ams_messages(buffer)
+      _rchannel(nullptr)
 {
 }
 
@@ -702,11 +706,11 @@ void RMQPublisherHandler::publish(
     _rchannel
         ->publish("",
                   _queue,
-                  reinterpret_cast<char*>(std::get<0>(message_content).get()),
-                  std::get<1>(message_content))
+                  reinterpret_cast<char*>(message_content.first.get()),
+                  message_content.second)
         .onAck([this, &_nb_msg_ack = _nb_msg_ack, id = message_id]() {
           DBG(RMQPublisherHandler,
-              "[r%d] message #%d got acknowledged "
+              "[r%ld] message #%d got acknowledged "
               "successfully "
               "by "
               "RMQ "
@@ -717,11 +721,10 @@ void RMQPublisherHandler::publish(
         })
         .onNack([this,
                  id = message_id,
-                 ptr = std::get<0>(message_content),
-                 size = std::get<1>(message_content),
-                 &_ams_messages = this->_ams_messages]() mutable {
+                 ptr = message_content.first,
+                 size = message_content.second]() {
           DBG(RMQPublisherHandler,
-              "[r%d] message #%d (%p / %d) received negative "
+              "[r%ld] message #%d (%p / %ld) received negative "
               "acknowledged "
               "by "
               "RMQ "
@@ -730,32 +733,35 @@ void RMQPublisherHandler::publish(
               id,
               ptr.get(),
               size)
-          _ams_messages->insert(id, std::make_pair(std::move(ptr), size));
+          AMSMessageRecords::getInstance().insert(id,
+                                                  std::make_pair(std::move(ptr),
+                                                                 size));
         })
         .onError([this,
                   id = message_id,
-                  ptr = std::get<0>(message_content),
-                  size = std::get<1>(message_content),
-                  &_ams_messages =
-                      this->_ams_messages](const char* err_message) mutable {
+                  ptr = message_content.first,
+                  size =
+                      message_content.second](const char* err_message) mutable {
           DBG(RMQPublisherHandler,
-              "[r%d] message #%d (%p / %d) did not get send: %s",
+              "[r%ld] message #%d (%p / %ld) did not get send: %s",
               _rId,
               id,
               ptr.get(),
               size,
               err_message)
-          _ams_messages->insert(id, std::make_pair(std::move(ptr), size));
+          AMSMessageRecords::getInstance().insert(id,
+                                                  std::make_pair(std::move(ptr),
+                                                                 size));
         });
   } else {
     DBG(RMQPublisherHandler,
-        "[r%d] The reliable channel was not ready for message #%d.",
+        "[r%ld] The reliable channel was not ready for message #%d.",
         _rId,
         message_id)
-    _ams_messages->insert(message_id,
-                          std::make_pair(std::move(
-                                             std::get<0>(message_content)),
-                                         std::get<1>(message_content)));
+    AMSMessageRecords::getInstance().insert(
+        message_id,
+        std::make_pair(std::move(message_content.first),
+                       message_content.second));
   }
   _nb_msg++;
   CALIPER(CALI_MARK_END("RMQ_PUBLISH");)
@@ -764,15 +770,18 @@ void RMQPublisherHandler::publish(
 void RMQPublisherHandler::onReady(AMQP::TcpConnection* connection)
 {
   DBG(RMQPublisherHandler,
-      "[r%d] Sucessfuly logged in (connection %p). Connection ready to "
+      "[r%ld] Sucessfuly logged in (connection %p). Connection ready to "
       "use.",
       _rId,
       connection)
 
   _channel = std::make_shared<AMQP::TcpChannel>(connection);
   _channel->onError([&](const char* message) {
-    CFATAL(
-        RMQPublisherHandler, false, "[r%d] Error on channel: %s", _rId, message)
+    CFATAL(RMQPublisherHandler,
+           false,
+           "[r%ld] Error on channel: %s",
+           _rId,
+           message)
   });
 
   _channel->declareQueue(_queue)
@@ -786,7 +795,6 @@ void RMQPublisherHandler::onReady(AMQP::TcpConnection* connection)
             _queue.c_str(),
             messagecount,
             consumercount)
-        // We can now instantiate the shared buffer between AMS and RMQ
         _rchannel =
             std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel.get());
         establish_connection.set_value(CONNECTED);
@@ -823,8 +831,7 @@ void RMQPublisherHandler::flush()
 RMQPublisher::RMQPublisher(uint64_t rId,
                            const AMQP::Address& address,
                            std::string cacert,
-                           std::string queue,
-                           const std::shared_ptr<AMSMessageRecords>& buffer)
+                           std::string queue)
     : _rId(rId), _queue(queue), _cacert(cacert), _handler(nullptr)
 {
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
@@ -855,8 +862,8 @@ RMQPublisher::RMQPublisher(uint64_t rId,
                                                event_base_free(event);
                                              });
 
-  _handler = std::make_shared<RMQPublisherHandler>(
-      _rId, _loop, _cacert, _queue, buffer);
+  _handler =
+      std::make_shared<RMQPublisherHandler>(_rId, _loop, _cacert, _queue);
   _connection = new AMQP::TcpConnection(_handler.get(), address);
 }
 
@@ -938,8 +945,8 @@ std::pair<bool, bool> RMQInterface::connect(std::string rmq_password,
 
   _address = std::make_shared<AMQP::Address>(
       service_host, service_port, login, rmq_vhost, is_secure);
-  _publisher = std::make_shared<RMQPublisher>(
-      _rId, *_address, _cacert, _queue_sender, _ams_messages);
+  _publisher =
+      std::make_shared<RMQPublisher>(_rId, *_address, _cacert, _queue_sender);
 
   _publisher_thread = std::thread([&]() { _publisher->start(); });
 
@@ -979,14 +986,14 @@ void RMQInterface::restartPublisher()
   if (_publisher_thread.joinable()) _publisher_thread.join();
   _publisher.reset();
 
-  if (_ams_messages->size() > 0)
+  if (AMSMessageRecords::getInstance().size() > 0)
     DBG(RMQInterface,
-        "[r%d] we have %lu buffered messages that will get re-send",
+        "[r%ld] we have %lu buffered messages that will get re-send",
         _rId,
-        _ams_messages->size())
+        AMSMessageRecords::getInstance().size())
 
-  _publisher = std::make_shared<RMQPublisher>(
-      _rId, *_address, _cacert, _queue_sender, _ams_messages);
+  _publisher =
+      std::make_shared<RMQPublisher>(_rId, *_address, _cacert, _queue_sender);
   _publisher_thread = std::thread([&]() { _publisher->start(); });
 
   if (!_publisher->waitToEstablish(100, 10)) {
@@ -1008,7 +1015,9 @@ void RMQInterface::close()
              "Could not gracefully close publisher TCP connection")
 
     DBG(RMQInterface, "Number of messages sent: %d", _publisher->msgSent())
-    DBG(RMQInterface, "Number of messages not sent : %d", _ams_messages->size())
+    DBG(RMQInterface,
+        "Number of messages not sent : %ld",
+        AMSMessageRecords::getInstance().size())
     DBG(RMQInterface,
         "Number of unacknowledged messages are %d",
         _publisher->unacknowledged())
