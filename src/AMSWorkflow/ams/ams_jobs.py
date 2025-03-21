@@ -56,6 +56,8 @@ class AMSJob:
         stdout: Optional[str] = None,
         stderr: Optional[str] = None,
         ams_log: bool = False,
+        ams_log_dir: str = "",
+        ams_log_prefix: str = "",
         is_mpi: bool = False,
         cli_args: Optional[List[str]] = [],
         cli_kwargs: Optional[Dict[str, str]] = {},
@@ -88,6 +90,8 @@ class AMSJob:
         self._cli_kwargs = {}
         self._is_mpi = is_mpi
         self._ams_log = ams_log
+        self._ams_log_dir = ams_log_dir
+        self._ams_log_prefix = ams_log_prefix
         if cli_args is not None:
             self._cli_args = list(cli_args)
         if cli_kwargs is not None:
@@ -298,7 +302,8 @@ class AMSDomainJob(AMSJob):
         self._ams_object_fn = None
         self._lock = threading.Lock()
         super().__init__(*args, **kwargs)
-        self._job_id = None
+        self._flux_job_id = None
+        self._ams_id = None
 
     @property
     def domain_names(self):
@@ -319,6 +324,8 @@ class AMSDomainJob(AMSJob):
             environ=os.environ,
             resources=domain_job_resources,
             ams_log=descr["ams_log"] if "ams_log" in descr else False,
+            ams_log_dir=descr["ams_log_dir"] if "ams_log_dir" in descr else "",
+            ams_log_prefix=descr["ams_log_prefix"] if "ams_log_prefix" in descr else "",
             **descr["cli"],
         )
 
@@ -344,18 +351,31 @@ class AMSDomainJob(AMSJob):
         self.environ["AMS_OBJECTS"] = str(self._ams_object_fn)
         if self._ams_log:
             self.environ["AMS_LOG_LEVEL"] = "debug"
+            if self._ams_log_dir != "":
+                self.environ["AMS_LOG_DIR"] = self._ams_log_dir
+            if self._ams_log_prefix != "":
+                self.environ["AMS_LOG_PREFIX"] = f"ams.log.{self.ams_id}.{self._ams_log_prefix}"
 
         print(f"JOB {self.name} uses AMS-Object at {self._ams_object_fn}")
 
     @property
-    def jobid(self):
-        """The jobid property."""
-        return self._jobid
+    def flux_job_id(self):
+        """The flux_job_id property."""
+        return self._flux_job_id
 
-    @jobid.setter
-    def jobid(self, value):
+    @flux_job_id.setter
+    def flux_job_id(self, value):
         with self._lock:
-            self._jobid = value
+            self._flux_job_id = value
+
+    @property
+    def ams_id(self):
+        """The ams_id property."""
+        return self._ams_id
+
+    @ams_id.setter
+    def ams_id(self, value):
+        self._ams_id = value
 
 
 class AMSMLJob(AMSJob):

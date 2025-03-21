@@ -158,7 +158,8 @@ class AMSWorkflowManager:
 
     def domain_jobid_cb(self, future):
         job_id = future.jobid()
-        self._domain_jobs[future.ams_id].job_id = job_id
+        print(f"Got domain job id of {job_id} for AMSJob {future.ams_id}")
+        self._domain_jobs[future.ams_id].flux_job_id = job_id
 
     def domain_done_cb(self, future):
         job_id = future.jobid()
@@ -174,25 +175,30 @@ class AMSWorkflowManager:
                 # This is a hook, it will update the 'AMS_OBJECTS' env variable to point
                 # to the latest model so the submitted job will pick it up.
                 # It is not great, as it requires a piped execution.
+                domain_job.ams_id = i
                 domain_job.precede_deploy(store, rmq_config)
+                print(f"Setting id to {i} '{domain_job._ams_log}' '{domain_job._ams_log_dir}'")
                 domain_future = domain_executor.submit(domain_job.to_flux_jobspec())
                 domain_future.ams_id = i
                 domain_future = domain_future.add_jobid_callback(self.domain_jobid_cb)
                 domain_future = domain_future.add_done_callback(self.domain_done_cb)
                 domain_futures.append(domain_future)
+            print("Moving to join")
 
             for i, domain_future in enumerate(domain_futures):
                 try:
                     result = domain_future.result()
-                    rpc_handle = flux.job.job_list_id(handle, self._domain_jobs[i].job_id)
+                    rpc_handle = flux.job.job_list_id(handle, self._domain_jobs[i].flux_job_id)
                     ji = rpc_handle.get_jobinfo()
                     results = ji.to_dict(False)
                     rt = results["runtime"]
                     success = results["success"]
-                    print(f"AMS Domain {i} with JobID:{self._domain_jobs[i].job_id} Success: {success} Duration: {rt}")
+                    print(
+                        f"AMS Domain {i} with JobID:{self._domain_jobs[i].flux_job_id} Success: {success} Duration: {rt}"
+                    )
                 except Exception as e:
                     print(e)
-                    rpc_handle = flux.job.job_list_id(handle, self._domain_jobs[i].job_id)
+                    rpc_handle = flux.job.job_list_id(handle, self._domain_jobs[i].flux_job_id)
                     ji = rpc_handle.get_jobinfo()
                     print("Failed JOB Info:", json.dumps(ji.to_dict(False), indent=6))
             print("Going to shutdown")
