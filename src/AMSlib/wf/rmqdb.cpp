@@ -191,7 +191,7 @@ void AMSMessageRecords::print()
 }
 
 
-void AMSMessageRecords::publishNAcknoledged(RMQPublisher& publisher)
+void AMSMessageRecords::publishUnacknowledged(RMQPublisher& publisher)
 {
   std::shared_lock<std::shared_mutex> lock(_mutex);
   if (_msgs.size() == 0) return;

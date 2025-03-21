@@ -1002,7 +1002,8 @@ public:
   /**
    * @brief pubslishes all the messages in map 
    */
-  void publishNAcknoledged(RMQPublisher& publisher);
+  void publishUnacknowledged(RMQPublisher& publisher);
+
   /**
   * @brief Return the number of records in the underlying structure
   * @return Return the size of the structure.
@@ -1714,13 +1715,11 @@ public:
 
     if (!_publisher->connectionValid()) restartPublisher();
 
-    // if we have some messages to send first (from a potential restart)
-
-
     std::shared_ptr<uint8_t> ptr(msg.data());
     auto record = std::make_pair(std::move(ptr), msg.size());
 
-    AMSMessageRecords::getInstance().publishNAcknoledged(*_publisher);
+    // if we have some messages to send first (from a potential restart)
+    AMSMessageRecords::getInstance().publishUnacknowledged(*_publisher);
     _publisher->publish(msg.id(), record);
     _msg_tag++;
     CALIPER(CALI_MARK_END("STORE_RMQ");)
