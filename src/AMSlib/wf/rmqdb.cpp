@@ -973,17 +973,17 @@ void RMQInterface::restartPublisher()
   CALIPER(CALI_MARK_BEGIN("RMQ_RESTART_PUBLISHER");)
   _publisher_connected = false;
 
-  if (_ams_messages->size() > 0)
-    DBG(RMQInterface,
-        "[r%d] we have %lu buffered messages that will get re-send",
-        _rId,
-        _ams_messages->size())
-
   // Stop the faulty publisher
   _publisher->close(100, 10);
   _publisher->stop();
   if (_publisher_thread.joinable()) _publisher_thread.join();
   _publisher.reset();
+
+  if (_ams_messages->size() > 0)
+    DBG(RMQInterface,
+        "[r%d] we have %lu buffered messages that will get re-send",
+        _rId,
+        _ams_messages->size())
 
   _publisher = std::make_shared<RMQPublisher>(
       _rId, *_address, _cacert, _queue_sender, _ams_messages);
