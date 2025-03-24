@@ -331,16 +331,9 @@ class RMQDomainDataLoaderTask(Task):
         start_time = time.time_ns()
         msg = AMSMessage(body)
         domain_name, input_data, output_data = msg.decode()
-        row_size = input_data[0, :].nbytes + output_data[0, :].nbytes
-        rows_per_batch = int(np.ceil(BATCH_SIZE / row_size))
-        num_batches = int(np.ceil(input_data.shape[0] / rows_per_batch))
-        input_batches = np.array_split(input_data, num_batches)
-        output_batches = np.array_split(output_data, num_batches)
-
         self.datasize_byte += input_data.nbytes + output_data.nbytes
 
-        for j, (i, o) in enumerate(zip(input_batches, output_batches)):
-            self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(i, o, domain_name)))
+        self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(input_data, output_data, domain_name)))
         end_time = time.time_ns()
         self.total_time_ns += end_time - start_time
         # TODO: Improve the code to manage potentially multiple messages per AMSMessage
@@ -1046,6 +1039,7 @@ class RMQPipeline(Pipeline):
             self._cert,
             self._data_queue,
             policy,
+            prefetch_count=1,
         )
         self._o_queue = o_queue
         self._gracefull_shutdown = AMSShutdown(

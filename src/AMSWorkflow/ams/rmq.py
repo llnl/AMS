@@ -394,6 +394,14 @@ class BlockingClient:
         return AMSChannel(self.connection, queue, self.callback)
 
 
+class StatusPoller(BlockingClient):
+    def getMessageCount(self, queue):
+        # Passive declare to avoid creating the queue if it doesn't exist
+        channel = self.connection.channel()
+        queue = channel.queue_declare(queue=queue)
+        return queue.method.message_count
+
+
 class AsyncConsumer(object):
     """
     Asynchronous RMQ consumer. AsyncConsumer handles unexpected interactions

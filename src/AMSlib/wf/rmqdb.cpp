@@ -235,7 +235,7 @@ AMSMessageInbound::AMSMessageInbound(uint64_t id,
       body(std::move(body)),
       exchange(std::move(exchange)),
       routing_key(std::move(routing_key)),
-      redelivered(redelivered){};
+      redelivered(redelivered) {};
 
 
 bool AMSMessageInbound::empty() { return body.empty() || routing_key.empty(); }

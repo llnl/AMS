@@ -355,6 +355,8 @@ class AMSDomainJob(AMSJob):
                 self.environ["AMS_LOG_DIR"] = self._ams_log_dir
             if self._ams_log_prefix != "":
                 self.environ["AMS_LOG_PREFIX"] = f"ams.log.{self.ams_id}.{self._ams_log_prefix}"
+        self.environ["CALI_CONFIG"] = "hatchet-region-profile(output.format=hatchet,output=out_hatchet),use.mpi"
+        self.environ["CALI_USE_OMPT"] = False
 
         print(f"JOB {self.name} uses AMS-Object at {self._ams_object_fn}")
 

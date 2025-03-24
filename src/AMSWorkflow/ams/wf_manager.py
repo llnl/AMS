@@ -9,7 +9,12 @@ import os
 import time
 from ams.ams_flux import AMSFluxExecutor
 from ams.ams_jobs import AMSJob, AMSJobResources
-from ams.rmq import AMSFanOutProducer, AMSRMQConfiguration, AMSSyncProducer
+from ams.rmq import (
+    AMSFanOutProducer,
+    AMSRMQConfiguration,
+    AMSSyncProducer,
+    StatusPoller,
+)
 from ams.store import AMSDataStore
 import flux
 import json
@@ -19,6 +24,7 @@ from concurrent.futures import wait
 from typing import Tuple, Dict, List, Optional, Set
 from dataclasses import dataclass
 from pathlib import Path
+import threading
 
 
 def get_allocation_resources(uri: str) -> Tuple[int, int, int]:
@@ -165,7 +171,28 @@ class AMSWorkflowManager:
         job_id = future.jobid()
         print(f"AMS Domain {future.ams_id} with JobID:{job_id} is done")
 
-    def start_domain(self, store, rmq_config, domain_uri):
+    def start_domain(self, store, rmq_config, domain_uri, rmq_stage_poller):
+        def worker(stop_event):
+            current_msg_count = 0
+            poll_freq = 1
+            while True:
+                is_set = stop_event.is_set()
+                prev_msg_count = current_msg_count
+                current_msg_count = rmq_stage_poller.getMessageCount(rmq_config.rabbitmq_queue_physics)
+                print(
+                    f"Server has {current_msg_count} messages in queue, {abs(current_msg_count - prev_msg_count)/poll_freq} msg/s"
+                )
+                if current_msg_count == 0 and is_set:
+                    break
+                time.sleep(poll_freq)
+            print("Done waiting")
+
+        # Create the stop event
+        stop_event = threading.Event()
+        # Start the background thread
+        thread = threading.Thread(target=worker, args=(stop_event,))
+        thread.start()
+
         print("Start Domain")
         self.jobs = {}
         with AMSFluxExecutor(False, threads=1, handle_args=(domain_uri,)) as domain_executor:
@@ -202,9 +229,20 @@ class AMSWorkflowManager:
                     ji = rpc_handle.get_jobinfo()
                     print("Failed JOB Info:", json.dumps(ji.to_dict(False), indent=6))
             print("Going to shutdown")
+            # Signal the thread to stop
+            stop_event.set()
+            thread.join()
             domain_executor.shutdown(wait=True)
 
-    def start_stagers(self, store, rmq_config, domain_uri, stage_uri, orchestrator_publisher):
+    def start_stagers(
+        self,
+        store,
+        rmq_config,
+        domain_uri,
+        stage_uri,
+        orchestrator_publisher,
+        rmq_stage_poller,
+    ):
         with AMSFluxExecutor(False, threads=1, handle_args=(stage_uri,)) as stager_executor:
             print("Connected to stager executor", stage_uri)
             # Spawn all stagers
@@ -216,9 +254,8 @@ class AMSWorkflowManager:
                 job_id = stager_future.jobid()
                 print(f"Stager JOB-ID is  {job_id}")
             print("Done scheduling stagers")
-            self.start_domain(store, rmq_config, domain_uri)
+            self.start_domain(store, rmq_config, domain_uri, rmq_stage_poller)
             # AFAIK we need this cause here we lose a message.
-            time.sleep(15)
             orchestrator_publisher.broadcast(json.dumps({"request_type": "terminate"}))
             stager_executor.shutdown(wait=True)
 
@@ -250,7 +287,22 @@ class AMSWorkflowManager:
                     print("Broadcasted specs")
                     # Then we start the stagers. Stagers need to come online
                     # after the model server is up and running.
-                    self.start_stagers(store, rmq_config, domain_uri, stage_uri, orchestrator_publisher)
+                    with StatusPoller(
+                        rmq_config.service_host,
+                        rmq_config.service_port,
+                        rmq_config.rabbitmq_vhost,
+                        rmq_config.rabbitmq_user,
+                        rmq_config.rabbitmq_password,
+                        rmq_config.rabbitmq_cert,
+                    ) as RMQPoll:
+                        self.start_stagers(
+                            store,
+                            rmq_config,
+                            domain_uri,
+                            stage_uri,
+                            orchestrator_publisher,
+                            RMQPoll,
+                        )
                 ml_executor.shutdown(wait=True)
 
     @classmethod
@@ -299,10 +351,10 @@ class AMSWorkflowManager:
         stage_type = data["stage-job"].pop("type", "rmq")
         num_instances = data["stage-job"].pop("instances", 1)
 
-        assert num_instances == 1, "We only support 1 instance at the moment"
+        # assert num_instances == 1, "We only support 1 instance at the moment"
         assert stage_type == "rmq", "We only support 'rmq' stagers"
 
-        stage_resources = AMSJobResources(nodes=1, tasks_per_node=1, cores_per_task=6, gpus_per_task=0)
+        stage_resources = AMSJobResources(nodes=1, tasks_per_node=num_instances, cores_per_task=6, gpus_per_task=0)
         stage_jobs = JobList()
         stage_job = AMSNetworkStageJob.from_descr(
             data["stage-job"],

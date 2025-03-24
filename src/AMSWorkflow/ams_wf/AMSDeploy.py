@@ -36,7 +36,9 @@ def main():
     parser = argparse.ArgumentParser(description="AMS workflow deployment")
     parser.add_argument("--root-uri", help="Flux uri of an already existing allocation", required=True)
     parser.add_argument(
-        "--ml-uri", help="Flux uri of an already existing allocation to schedule ml jobs on", required=False
+        "--ml-uri",
+        help="Flux uri of an already existing allocation to schedule ml jobs on",
+        required=False,
     )
     parser.add_argument(
         "--ml-nodes",
@@ -45,16 +47,29 @@ def main():
         type=int,
     )
     parser.add_argument(
-        "--stage-uri", help="Flux uri of an already existing allocation to schedule stage jobs on", required=False
+        "--stage-uri",
+        help="Flux uri of an already existing allocation to schedule stage jobs on",
+        required=False,
     )
     parser.add_argument(
-        "--stage-nodes", help="Number of node existing in the stage allocation", required=False, type=int
+        "--stage-nodes",
+        help="Number of node existing in the stage allocation",
+        required=False,
+        type=int,
     )
     parser.add_argument(
-        "--sleep-time", help="Time of nested allocations (used) for debugging", required=False, default="0"
+        "--sleep-time",
+        help="Time of nested allocations (used) for debugging",
+        required=False,
+        default="0",
     )
 
-    parser.add_argument("--workflow-descr", "-w", help="JSON file describing the workflow", required=True)
+    parser.add_argument(
+        "--workflow-descr",
+        "-w",
+        help="JSON file describing the workflow",
+        required=True,
+    )
     parser.add_argument("--credentials", "-c", help="JSON file describing the workflow", required=True)
 
     args = parser.parse_args()
@@ -100,9 +115,15 @@ def main():
         print("Spawning Flux executor for root took", time.time() - start)
         start = time.time()
         domain_uri, domain_future = get_partition_uri(
-            root_executor, num_domain_nodes, cores_per_node, gpus_per_node, str(sleep_time)
+            root_executor,
+            num_domain_nodes,
+            cores_per_node,
+            gpus_per_node,
+            str(sleep_time),
         )
-        print("Resolving domain uri took", time.time() - start, domain_uri)
+        print(f"Resolving domain uri took {domain_uri}", time.time() - start, domain_uri)
+        domain_res = get_allocation_resources(domain_uri)
+        print("Domain resources are ", domain_res)
         start = time.time()
         ml_future = None
         stage_future = None
@@ -111,18 +132,28 @@ def main():
             (
                 ml_uri,
                 ml_future,
-            ) = get_partition_uri(root_executor, num_ml_nodes, cores_per_node, gpus_per_node, str(sleep_time))
+            ) = get_partition_uri(
+                root_executor,
+                num_ml_nodes,
+                cores_per_node,
+                gpus_per_node,
+                str(sleep_time),
+            )
         print("Resolving ML uri  took", time.time() - start, ml_uri)
         start = time.time()
 
         if stage_uri is None:
             stage_uri, stage_future = get_partition_uri(
-                root_executor, num_stage_nodes, cores_per_node, gpus_per_node, str(sleep_time)
+                root_executor,
+                num_stage_nodes,
+                cores_per_node,
+                gpus_per_node,
+                str(sleep_time),
             )
         print("Resolving stage uri  took", time.time() - start, stage_uri)
 
         # 1) We first schedule the ML training orchestrator.
-        wf_manager.start(ml_uri, stage_uri, domain_uri)
+        wf_manager.start(domain_uri, stage_uri, ml_uri)
         # The root executor should not wait, the partitions have "infinite allocation time. So we forcefully shut them down"
         print("All internal executors are done ... moving to stopping root job")
         # TODO: When I get here I need to kill all the jobs of the partitions and exit.
