@@ -889,7 +889,34 @@ unsigned RMQPublisher::unacknowledged() const
   return _handler->unacknowledged();
 }
 
-void RMQPublisher::start() { event_base_dispatch(_loop.get()); }
+void RMQPublisher::start()
+{
+  // 'action' needs to be an atomic variable shared by this
+  // thread and the main thread.
+  // 'state' is an atomic variable only written by this thread
+  // and read by the main application thread
+  // Here we need to extend in a switch case statement:
+  while (true) {
+    if (action == ENTER_LOOP) {
+      state = IN_LOOP;
+      event_base_dispatch(_loop.get());
+    } else if (action == RESTART) {
+      state = RESTART;
+      bool restarted = instantiate_restart();
+      if (restarted) {
+        // In the next iteration I will enter the event loop.
+        // Here if succesfull I need to inform the main thread
+        // that the connection is on.
+        action = ENTER_LOOP;
+      } else if {
+      } else if {
+        // Do we restart? Or do we initiate a gracefull shutdown?
+      }
+    } else if (action == EXIT)
+      state = EXIT;
+    break;
+  }
+}
 
 void RMQPublisher::stop() { event_base_loopexit(_loop.get(), NULL); }
 
@@ -1032,6 +1059,6 @@ void RMQInterface::close()
              !status,
              "Could not gracefully close consumer TCP connection")
     _consumer->stop();
-    if (_consumer_thread.joinable()) _consumer_thread.join();
-  }
+}
+}
 }

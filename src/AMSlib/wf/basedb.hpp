@@ -1713,7 +1713,18 @@ public:
     CALIPER(CALI_MARK_BEGIN("STORE_RMQ");)
     AMSMessage msg(_msg_tag, _rId, domain_name, num_elements, inputs, outputs);
 
-    if (!_publisher->connectionValid()) restartPublisher();
+    if (!_publisher->connectionValid()&& interrupedThread = NO) {
+      // STEP 1. Set the action of the RMQ thread to RESTART.
+      // STEP 2. Recall that we restarted
+      interruptedThread = YES;
+      // STEP 3. Stop the io loop (not the thread)
+    } else if (!_publisher->connectionValid()&& interruptedThread = YES) {
+      // Here we should not publish, but instead push messages on the sigleton queue.
+    } else if (_publisher->connectionValid()&& interruptedThread = Yes) {
+      // Here we had a failed connect had interrupted the thread and now the thread
+      // restarted the publisher properly. So now we reset the interruptedThread state machine to NO.
+      interrupedThread = NO;
+    }
 
     std::shared_ptr<uint8_t> ptr(msg.data());
     auto record = std::make_pair(std::move(ptr), msg.size());
@@ -1935,7 +1946,7 @@ private:
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
-  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false){};
+  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false) {};
 
 protected:
   RMQInterface rmq_interface;
