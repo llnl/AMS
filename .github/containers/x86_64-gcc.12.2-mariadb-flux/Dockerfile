@@ -31,7 +31,7 @@ RUN uname -m > /arch.txt
 
 # Create virtualenv and activate in shell
 
-RUN python3 -m venv /venv
+RUN python3 -m venv /venv --system-site-packages
 
 # Set an entrypoint or default command (optional)
 CMD ["bash", "-c", "\
