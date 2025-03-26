@@ -9,79 +9,140 @@ import shutil
 import json
 from pathlib import Path
 
-import kosh
-
 from ams.util import get_unique_fn
 from ams.util import mkdir
-from ams.config import AMSInstance
 from ams.store_types import AMSModelDescr
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import create_engine, Column, Integer, String, Enum, Text, JSON
+from sqlalchemy.orm import declarative_base, sessionmaker
+import enum
+from typing import List
+from collections import defaultdict
+
+
+Base = declarative_base()
+
+
+class EntryType(enum.Enum):
+    candidates = "candidates"
+    models = "models"
+    data = "data"
+
+
+class Entry(Base):
+    __tablename__ = "entries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    application_name = Column(String(255), nullable=False)
+    domain_name = Column(String(255), nullable=False)
+    filename = Column(Text, nullable=False, unique=True)
+    entry_type = Column(Enum(EntryType), nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    meta_dict = Column("metadata", JSON, nullable=True)
 
 
 class AMSDataStore:
-    """A thin wrapper around a kosh store
+    """A class representing the persistent data of AMS.
 
-    The class abstract the 'view' of AMS persistent data storage through
-    a kosh store. The AMSDataStore consists of three essential pieces of information.
+    The class abstracts the 'view' of AMS persistent data storage through
+    a SQL database that stores information reqarding different files in the Fileystem.
+
+    The SQL database catecorizes files in three possible types:
         1. 'data' : A collection of files stored in some PFS directory that will train some model
-        2. 'model' : A collection of torch-scripted models.
+        2. 'models' : A collection of torch-scripted models.
         3. 'candidates' : A collection of files stored in some PFS directory that can be added as data.
-    The class will provide mechanism to add, remove, query about files in the store. It refers to the pieces
-    as entries.
 
-    Attributes:
-        delete_contents: a boolean value instructing the kosh-store to delete all contents.
-        name: The name of the data in the store
-        store_path: The path to the kosh-database file
-        store: The Kosh store
+    Every 'entry' is associated with a domainName. Providing the persistent abstraction.
+    'EOS maps to a set of files and models'
     """
 
-    data_schema = {"problem": str, "version": int}
-    valid_entries = {"data", "models", "candidates"}
     entry_suffix = {"data": "h5", "models": "pt", "candidates": "h5"}
     entry_mime_types = {"data": "hdf5", "models": "zip", "candidates": "hdf5"}
+    valid_entries = {"data", "candidates", "models"}
+    valid_dbs = {"sqlite", "mariadb"}
 
-    def __init__(self, store_path, store_name, name, delete_all_contents=False):
+    def __init__(self, application_name, root_path, url, db_type):
         """
         Initializes the AMSDataStore class. Upon init the kosh-store is closed and not connected
         """
-        print("Creating store under path", store_path)
-        create_store_directories(store_path)
-        self._root_path = Path(store_path)
-        self._delete_contents = delete_all_contents
-        self._name = name
-        self._store_path = Path(store_path).absolute() / Path(store_name)
-        self._AMS_schema = kosh.KoshSchema(required=AMSDataStore.data_schema)
-        self._store = None
-        self._entry_paths = {k: Path(store_path) / Path(k) for k in self.__class__.valid_entries}
+        if db_type not in AMSDataStore.valid_dbs:
+            raise ValueError(f"{self.__class__.name} Expets a 'db_type' to be in {AMSDataStore.valid_dbs}")
 
-        # FIXME: I don't like the fact that we have 2 representations of the information of the store
-        if not (Path(store_path) / Path("ams_config.json")).exists():
-            with open(str(Path(store_path) / Path("ams_config.json")), "w") as fd:
-                config = AMSInstance.create_config(store_path, store_name, name)
-                json.dump(config, fd, indent=6)
+        create_store_directories(root_path)
+        self._application_name = application_name
+        self._root_path = Path(root_path)
+        self._url = url
+
+        self._entry_paths = {k: Path(root_path) / Path(k) for k in self.__class__.valid_entries}
+
+        if not (Path(root_path) / Path("ams_config.json")).exists():
+            with open(str(Path(root_path) / Path("ams_config.json")), "w") as fd:
+                json.dump(self.to_json(), fd, indent=2)
+
+        self._session = None
+        self._engine = None
+
+    def to_json(self):
+        db = {}
+        db["persistent-path"] = str(self._root_path)
+        db["url"] = self._url
+        db["application_name"] = self._application_name
+        return db
 
     def is_open(self):
         """
-        Check whether the kosh store is open and accessible
+        Check whether we are connected to a database
         """
 
-        return self._store is not None
+        return self._session is not None
 
     def open(self):
         """
-        Open and connect to the kosh store
+        Open and connect to the database
         """
-
         if self.is_open():
             return self
 
-        self._store = kosh.connect(str(self._store_path), delete_all_contents=self._delete_contents)
+        self._engine = create_engine(self._url)
+        Base.metadata.create_all(self._engine)
+        self._session = sessionmaker(bind=self._engine)
 
         return self
 
-    @property
-    def store_path(self):
-        return self._store_path
+    def close(self):
+        if self._engine:
+            self._engine.dispose()
+        self._engine = None
+        self._session = None
+
+    def __enter__(self):
+        return self.open()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def find(self, domain_name=None, filename=None, entry_type=None, version=None):
+        session = self._session()
+        try:
+            query = session.query(Entry)
+            query = query.filter(Entry.application_name == self._application_name)
+            if domain_name is not None:
+                query = query.filter(Entry.domain_name == domain_name)
+            if filename is not None:
+                query = query.filter(Entry.filename == filename)
+            if entry_type is not None:
+                if isinstance(entry_type, str):
+                    entry_type = EntryType(entry_type)
+                query = query.filter(Entry.entry_type == entry_type)
+            if version is not None:
+                query = query.filter(Entry.version == version)
+
+            return query.all()
+        finally:
+            session.close()
 
     @property
     def root_path(self):
@@ -93,71 +154,65 @@ class AMSDataStore:
     def get_data_path(self):
         return self._entry_paths["data"]
 
-    def _get_or_create_dataset(self, ensemble, entry, version):
-        """
-        Getter of a kosh-dataset with the requested version.
+    def get_model_path(self):
+        return self._entry_paths["models"]
 
+    def _add_entries(self, domain_name: str, entry_type: str, filenames: List[str], version=None, metadata=None):
+        """
+        Adds files of entry_type on the designated domain_name and associates the version and the metadata to those entries.
         Args:
-            ensemble: The kosh-ensemble to create/get the dataset from.
-            entry: The 'entry' of the dataset we are looking for
-            version: The version of the dataset we are searching for.
-            If None we create a new version larger than the current maximum one.
-
-        Returns:
-            A kosh-dataset for the requested version and entry-type.
-        """
-        dsets = ensemble.find_datasets(name=entry)
-        versions = {d.version: d for d in dsets}
-
-        if version is None:
-            version = 0 if not versions else max(versions.keys()) + 1
-
-        if version in versions:
-            return versions[version]
-
-        ds = ensemble.create(name=entry, metadata={"version": version})
-        return ds
-
-    def _get_or_create_ensebmle(self, domain_name):
-        """
-        Getter of the kosh-enseble this instance is operating upon.
-
-        Returns:
-            A kosh-ensebmle.
-        """
-        ensemble = next(self._store.find_ensembles(name=domain_name), None)
-        if ensemble is None:
-            ensemble = self._store.create_ensemble(name=domain_name)
-
-        return ensemble
-
-    def _add_entry(self, domain_name, entry, mime_type, data_files=list(), version=None, metadata=dict()):
-        """
-        Adds files of mime_type in the kosh-store and associates them appropriately.
-
-        Args:
-            entry: The entry type we will add can be either 'models', 'candidates', 'data'.
-            mime_type: Indicator of the format of the document.
-            data_files: A list of files to add in the entry
+            domain_name: The domain_name of this entry
+            entry_type: Can be either 'models', 'candidates', 'data'.
+            filenames: A list of files to add in the entry
             version: The version to assign to all files
-            metadata: The metadata to associate with this file
+            meta_dict: The metadata to associate with this file
+
+        Returns:
+
+            None
         """
-        if not self.is_open():
-            raise RuntimeError("Trying to add data in a closed database")
+        if entry_type not in AMSDataStore.valid_entries:
+            raise ValueError(f"{add_entries} Expets a 'entry_type' to be in {AMSDataStore.valid_entries}")
 
-        if entry not in AMSDataStore.valid_entries:
-            raise RuntimeError("Trying to add entry that does not exist")
+        abs_path = []
+        for fn in filenames:
+            if not Path(fn).exists():
+                raise RuntimeError("Adding a non existend file to store is not supported")
+            abs_path.append(str(Path(fn).resolve()))
 
-        data_files = [str(Path(d).absolute()) for d in data_files]
+        session = self._session()
+        try:
+            if isinstance(entry_type, str):
+                entry_type = EntryType(entry_type)
 
-        ensemble = self._get_or_create_ensebmle(domain_name)
-        metadata["date"] = str(datetime.datetime.now())
-        ds = self._get_or_create_dataset(ensemble, entry, version)
+            if version is None:
+                max_version = (
+                    session.query(func.max(Entry.version))
+                    .filter_by(application_name=self._application_name, domain_name=domain_name, entry_type=entry_type)
+                    .scalar()
+                )
 
-        for f in data_files:
-            ds.associate(f, mime_type=mime_type, metadata=metadata, absolute_path=True)
+                version = (max_version or 0) + 1
 
-        return
+            entries = [
+                Entry(
+                    application_name=self._application_name,
+                    domain_name=domain_name,
+                    filename=fn,
+                    entry_type=entry_type,
+                    version=version,
+                    meta_dict=metadata,
+                )
+                for fn in abs_path
+            ]
+
+            session.add_all(entries)
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
 
     def add_data(self, domain_name, data_files=list(), version=None, metadata=dict()):
         """
@@ -170,7 +225,7 @@ class AMSDataStore:
             version: The version to assign to all files
             metadata: The metadata to associate with this file
         """
-        self._add_entry(domain_name, "data", "hdf5", data_files, version, metadata)
+        self._add_entries(domain_name, entry_type="data", filenames=data_files, version=version, metadata=metadata)
 
     def add_model(self, domain_name, model, test_error, val_error, version=None, metadata=dict()):
         """
@@ -195,9 +250,7 @@ class AMSDataStore:
                 raise RuntimeError(f"Key {k} exists in both info and metadata")
             else:
                 info[k] = str(v)
-        print("Waiting in model path", model.path)
-        print(json.dumps(info, indent=6))
-        self._add_entry(domain_name, "models", "zip", [model.path], version, info)
+        self._add_entries(domain_name, entry_type="models", filenames=[model.path], version=version, metadata=info)
 
     def add_candidates(self, domain_name, data_files=list(), version=None, metadata=dict()):
         """
@@ -210,104 +263,158 @@ class AMSDataStore:
             version: The version to assign to the model
             metadata: The metadata to associate with this model
         """
-        self._add_entry(domain_name, "candidates", "hdf5", data_files, version, metadata)
+        self._add_entries(
+            domain_name, entry_type="candidates", filenames=data_files, version=version, metadata=metadata
+        )
 
-    def _remove_entry_file(self, domain_name, entry, data_files=list(), delete_files=False):
+    def _remove_entries(
+        self, domain_name: str, entry_type: str, filenames: List[str], version=None, metadata=None, purge=True
+    ):
         """
-        Remove files from kosh-store. When delete_files is true, delete the actual file as well
+        Remove files from database and from filesystem
 
         Args:
-            entry: The entry to look for the specified files
-            data_files: A list of files to be deleted
-            delete_files: delete the file from persistent storage
+            domain_name: The domain name this files belong to
+            entry_type: The entry to look for the specified files
+            filenames: A list of files to be deleted
+            version: An integer or none if we need to filter based on version
+            metadata= Additional metadata we can query and partially delete from
         """
 
-        if not data_files:
-            return
+        abs_path = []
+        for fn in filenames:
+            if not Path(fn).exists():
+                raise RuntimeError("Deleting a non existend file to store is not supported")
+            abs_path.append(str(Path(fn).resolve()))
 
-        data_files = [str(Path(d).absolute()) for d in data_files]
-        if domain_name is None:
-            ensembles = self._store.find_ensembles()
-        else:
-            ensembles = self._store.find_ensembles(name=domain_name)
+        session = self._session()
+        try:
+            if isinstance(entry_type, str):
+                entry_type = EntryType(entry_type)
 
-        for e in ensembles:
-            for dset in e.find_datasets(name=entry):
-                dset_files = [f.uri for f in dset.find()]
-                for rd in data_files:
-                    if rd in dset_files:
-                        dset.dissociate(rd)
+            # Step 1: Query matching entries
+            query = session.query(Entry).filter(
+                Entry.application_name == self._application_name,
+                Entry.domain_name == domain_name,
+                Entry.entry_type == entry_type,
+                Entry.filename.in_(abs_path),
+            )
 
-            for dset in e.find_datasets(name=entry):
-                if not list(dset.find()):
-                    e.remove(dset)
+            if metadata:
+                for key, value in metadata.items():
+                    query = query.filter(Entry.meta_dict[key].astext == str(value))
 
-        if delete_files:
-            for d in data_files:
-                os.remove(d)
+            entries_to_delete = query.all()
+            if not entries_to_delete:
+                print("No matching entries found.")
+                return
 
-    def remove_data(self, domain_name, data_files=list(), delete_files=False):
+            # Step 2: Get list of filenames to delete
+            files_to_delete = [entry.filename for entry in entries_to_delete]
+
+            # Step 3: Delete DB entries
+            for entry in entries_to_delete:
+                session.delete(entry)
+
+            session.commit()
+            if purge:
+                for filepath in files_to_delete:
+                    try:
+                        fn = Path(filepath)
+                        if fn.exists():
+                            fn.unlink()
+                        else:
+                            print(f"File not found: {filepath}")
+                    except Exception as file_err:
+                        print(f"Error deleting file {filepath}: {file_err}")
+
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+
+    def remove_data(self, domain_name: str, filenames: List[str], version=None, metadata=None, purge=True):
         """
-        Remove data-files from kosh-store. When delete_files is true, delete the actual file as well
+        Remove files from the data database and from filesystem
 
         Args:
-            data_files: A list of files to be deleted
-            delete_files: delete the file from persistent storage
+            domain_name: The domain name this files belong to
+            entry_type: The entry to look for the specified files
+            filenames: A list of files to be deleted
+            version: An integer or none if we need to filter based on version
+            metadata: Additional metadata we can query and partially delete from
+            purge: If set to true it will delete the file from the filesystem
         """
 
-        self._remove_entry_file(domain_name, "data", data_files, delete_files)
+        self._remove_entries(domain_name, "data", filenames, version, metadata, purge)
 
-    def remove_models(self, domain_name, model=list(), delete_files=False):
+    def remove_models(self, domain_name: str, models: List[str], version=None, metadata=None, purge=True):
         """
-        Remove models from kosh-store. When delete_files is true, delete the actual file as well
+        Remove files from the data database and from filesystem
 
         Args:
-            data_files: A list of models to be deleted
-            delete_files: delete the file from persistent storage
+            domain_name: The domain name this files belong to
+            entry_type: The entry to look for the specified files
+            models: A list of files to be deleted
+            version: An integer or none if we need to filter based on version
+            metadata: Additional metadata we can query and partially delete from
+            purge: If set to true it will delete the file from the filesystem
         """
+        self._remove_entries(domain_name, "models", models, version, metadata, purge)
 
-        if not model:
-            return
-
-        self._remove_entry_file(domain_name, "models", model, delete_files)
-
-    def remove_candidates(self, domain_name, data_files=list(), delete_files=False):
+    def remove_candidates(self, domain_name: str, filenames: List[str], version=None, metadata=None, purge=True):
         """
-        Remove candidates from kosh-store. When delete_files is true, delete the actual file as well
+        Remove files from the data database and from filesystem
 
         Args:
-            data_files: A list of candidates to be deleted
-            delete_files: delete the file from persistent storage
+            domain_name: The domain name this files belong to
+            entry_type: The entry to look for the specified files
+            filenames: A list of files to be deleted
+            version: An integer or none if we need to filter based on version
+            metadata: Additional metadata we can query and partially delete from
+            purge: If set to true it will delete the file from the filesystem
         """
 
-        self._remove_entry_file(domain_name, "candidates", data_files, delete_files)
+        self._remove_entries(domain_name, "candidates", filenames, version, metadata, purge)
 
-    def _get_entry_versions(self, domain_name, entry, associate_files=False):
+    def _get_entry_versions(self, domain_name, entry_type, associate_files=False):
         """
         Returns a list of versions existing for the specified entry
 
         Args:
-            entry: The entry type we are looking for
+            domain_name: The entry type we are looking for
             associate_files: Associate files in store with the versions
 
         Returns:
-            A list of existing versions in our database or a dictionary of versions to lists associating files with the specific version
+            A list of the unique existing versions in our database or a dictionary of versions to lists associating files with the specific version
         """
-        ensembles = self._store.find_ensembles(name=domain_name)
-        if associate_files:
-            versions = dict()
-        else:
-            versions = list()
-        for e in ensembles:
-            for dset in e.find_datasets(name=entry):
-                if associate_files:
-                    if dset.version not in versions:
-                        versions[dset.version] = list()
-                    for associated in dset.find():
-                        versions[dset.version].append(associated.uri)
-                else:
-                    versions.append(dset.version)
-        return versions
+
+        session = self._session()
+        try:
+            if isinstance(entry_type, str):
+                entry_type = EntryType(entry_type)
+
+            query = session.query(Entry).filter(Entry.entry_type == entry_type)
+            query = query.filter(Entry.application_name == self._application_name)
+            query = session.query(Entry).filter(Entry.entry_type == entry_type)
+            query = query.filter(Entry.domain_name == domain_name)
+
+            entries = query.all()
+
+            if associate_files:
+                result = defaultdict(list)
+                for entry in entries:
+                    result[entry.version].append(entry.filename)
+
+                return dict(result)
+            else:
+                result = []
+                for entry in entries:
+                    result.append(entry.version)
+                return list(set(result))
+        finally:
+            session.close()
 
     def get_data_versions(self, domain_name, associate_files=False):
         """
@@ -341,7 +448,7 @@ class AMSDataStore:
 
         return self._get_entry_versions(domain_name, "candidates", associate_files)
 
-    def get_files(self, domain_name, entry, versions=None):
+    def get_files(self, domain_name: str, entry: str, versions=None):
         """
         Returns a list of paths to files for the specified version
 
@@ -416,91 +523,77 @@ class AMSDataStore:
 
         return self.get_files(domain_name, "data", versions)
 
-    def close(self):
+    def move(self, domain_name, src_type, dest_type, filenames):
         """
-        Closes the connection with Kosh-store
-        """
-
-        self._store.close()
-        self._store = None
-
-    def __enter__(self):
-        """
-        Context Manager for kosh store
-        """
-
-        return self.open()
-
-    def __exit__(self, exc_type, exc_value, exc_traceback):
-        """
-        Exit context manager
-        """
-
-        return self.close()
-
-    def get_raw_content(self, domain_name, entry):
-        """
-        Returns a dictionary with all data in our AMS store
-        """
-
-        if domain_name is None:
-            ensembles = self._store.find_ensembles()
-        else:
-            ensembles = self._store.find_ensembles(name=domain_name)
-
-        if entry is None:
-            entries = AMSDataStore.valid_entries
-        else:
-            entries = {entry}
-
-        data = {}
-        for e in ensembles:
-            data[e.name] = {}
-            for entry_type in entries:
-                data[e.name][entry_type] = {}
-                for d in e.find_datasets(name=entry_type):
-                    dset = list()
-                    for associated in d.find():
-                        dset.append(associated.listattributes(True))
-                    data[e.name][entry_type][d.version] = dset
-        return data
-
-    def move(self, domain_name, src_entry, dest_entry, files):
-        """
-        Moves files between entries in kosh-store. It follows a "safe" approach: copy, add, delete the file instead of moving the underlying file.
+        Moves files between direcories and updates the respective db. It follows a "safe" approach: copy, add, delete the file instead of moving the underlying file.
 
         Args:
-            src_entry: the ensemble name containing the original files
-            dest_entry: the ensemble name of the files
+            src_type: the ensemble name containing the original files
+            dest_type: the ensemble name of the files
             files: The files to be moved
 
         NOTE: The current implementation will lose all metadata associated with the original src files. We need to consider whether we want to "migrate"
         those to the destination entry dataset.
         """
-        if src_entry not in self.__class__.valid_entries:
-            raise RuntimeError(f"Entry: {src_entry} not a valid AMSDataStore entry")
 
-        if dest_entry not in self.__class__.valid_entries:
-            raise RuntimeError(f"Entry: {dest_entry} not a valid AMSDataStore entry")
+        session = self._session()
+        try:
+            if isinstance(src_type, str):
+                src_type = EntryType(src_type)
+            if isinstance(dst_type, str):
+                dst_type = EntryType(dst_type)
 
-        entry_files = self.get_files(domain_name, src_entry)
-        for e in files:
-            if e not in entry_files:
-                raise RuntimeError(
-                    f"Moving file {e} from {src_entry} to {dest_entry} not possible as file does not exist in kosh-entry"
+            # 1. Query all matching entries
+            entries = (
+                session.query(Entry)
+                .filter(
+                    Entry.application_name == self._application_name,
+                    Entry.domain_name == domain_name,
+                    Entry.entry_type == src_type,
+                    Entry.filename.in_(filenames),
                 )
+                .all()
+            )
 
-        dest_dir = self._entry_paths[dest_entry]
-        new_files = list()
-        for f in files:
-            dest_name = dest_dir / Path(f).name
-            shutil.copy(f, dest_name)
-            new_files.append(str(dest_name))
+            if not entries:
+                print("No matching entries found to promote.")
+                return
 
-        print(new_files)
-        print(files)
-        self._add_entry(domain_name, dest_entry, "hdf5", new_files)
-        self._remove_entry_file(domain_name, src_entry, files, True)
+            # 2. Prepare move plan
+            move_plan = []
+            for entry in entries:
+                src_path = Path(entry.filename)
+                dst_path = Path(self._entry_paths[dest_type]) / src_path.name
+                move_plan.append((entry, src_path, dst_path))
+
+            # 3. Copy files to new location first
+            for _, src_path, dst_path in move_plan:
+                if not src_path.exists():
+                    raise FileNotFoundError(f"Source file not found: {src_path}")
+                shutil.copy2(src_path, dst_path)
+
+            # 4. Update DB entries
+            for entry, _, dst_path in move_plan:
+                entry.filename = str(dst_path)
+                entry.entry_type = dst_type
+
+            session.commit()
+            print(f"Database updated. Promoted {len(entries)} entries to '{dst_type.value}'.")
+
+            # 5. After successful DB update, delete originals
+            for _, src_path, _ in move_plan:
+                try:
+                    src_path.unlink()
+                    print(f"Deleted original file: {src_path}")
+                except Exception as cleanup_err:
+                    print(f"Could not delete original file: {src_path}: {cleanup_err}")
+
+        except (SQLAlchemyError, OSError, FileNotFoundError) as e:
+            session.rollback()
+            print(f"Move failed: {e}")
+            raise e
+        finally:
+            session.close()
 
     def search(self, domain_name=None, entry=None, version=None, metadata=dict()):
         """
@@ -515,45 +608,36 @@ class AMSDataStore:
         Returns:
             A list of matching entries described as dictionaries
         """
-        all_contents = self.get_raw_content(domain_name, entry)
+        latest = False
+        if (version is not None) and (version == "latest"):
+            latest = True
+            version = None
 
-        found = []
+        res = self.find(self, domain_name, domain_name, entry_type=entry, version=version)
 
-        for d_name, contents in all_contents.items():
-            for e_name, entries in contents.items():
-                for ver, dsets in entries.items():
-                    if version is not None:
-                        if (version != "latest") and (version != ver):
-                            continue
+        result = []
 
-                    for dset in dsets:
-                        insert = True
-                        for k, v in metadata.items():
-                            if k in dset.keys():
-                                if dset[k] != v:
-                                    insert = False
-                                    break
-                            else:
-                                insert = False
-                                break
-                        if insert:
-                            value = {"domain": d_name, "entry": e_name, "version": ver, "file": dset["uri"]}
-                            value.update(dset)
-                            del value["fast_sha"]
-                            del value["mime_type"]
-                            del value["associated"]
-                            del value["id"]
-                            del value["uri"]
-                            found.append(value)
+        for entry in entries:
+            result.append(
+                {
+                    "id": entry.id,
+                    "application_name": entry.application_name,
+                    "domain_name": entry.domain_name,
+                    "filename": entry.filename,
+                    "entry_type": entry.entry_type.value,
+                    "version": entry.version,
+                    "metadata": entry.meta_dict,
+                }
+            )
 
-        if len(found) != 0 and version == "latest":
-            found = [max(found, key=lambda item: item["version"])]
+        if len(result) != 0 and latest:
+            result = [max(result, key=lambda item: item["version"])]
 
-        return found
+        return result
 
     def __str__(self):
-        return "AMS Kosh Wrapper Store(path={0}, name={1}, status={2})".format(
-            self._store_path, self._name, "Open" if self.is_open() else "Closed"
+        return "AMS Store(path={0}, name={1}, status={2})".format(
+            self._root_path, self._application_name, "Open" if self.is_open() else "Closed"
         )
 
     def _suggest_entry_file_name(self, entry, domain_name):
@@ -573,13 +657,13 @@ class AMSDataStore:
         return self._suggest_entry_file_name("data", domain_name)
 
 
-def create_store_directories(store_path):
+def create_store_directories(root_path):
     """
-    Creates the directory structure AMS prefers under the store_path.
+    Creates the directory structure AMS prefers under the root_path.
     """
-    store_path = Path(store_path)
-    if not store_path.exists():
-        store_path.mkdir(parents=True, exist_ok=True)
+    root_path = Path(root_path)
+    if not root_path.exists():
+        root_path.mkdir(parents=True, exist_ok=True)
 
     for fn in list(AMSDataStore.valid_entries):
-        mkdir(store_path, fn)
+        mkdir(root_path, fn)
