@@ -10,17 +10,19 @@ import json
 from pathlib import Path
 import shutil
 
-from ams.config import AMSInstance
 from ams.store import AMSDataStore
 from ams.store import create_store_directories
 
 
 class StoreCommand:
-    __cli_root_options__ = [["path", "p", "path of the AMS-store directory", {"required": True}]]
+    __cli_root_options__ = [
+        ["url", "u", "url to connect to AMS SQL DB", {"required": True}],
+        ["name", "n", "The application name for which we will perform queries", {"required": True}],
+    ]
 
     def __init__(self, **kwargs):
-        self._store_path = kwargs.get("path")
-        self.ams_config = AMSInstance.from_path(self._store_path)
+        self._url = kwargs.get("url")
+        self._name = kwargs.get("name")
         pass
 
     @classmethod
@@ -46,20 +48,12 @@ class StoreCommand:
 
 class CreateStore(StoreCommand):
     __cli_options__ = [
-        ["name", "n", "Name of the application to store data", {"required": True}],
-        ["sname", "sn", "Name of the underlying kosh db-store", {"default": "ams_store.sql"}],
+        ["path", "p", "path of the AMS-store directory", {"required": True}],
     ]
 
     def __init__(self, path, name, sname):
         db_path = Path(path)
-        config_path = db_path / Path("ams_config.json")
         create_store_directories(db_path)
-
-        if not config_path.exists():
-            config = AMSInstance.create_config(path, sname, name)
-
-            with open(str(config_path), "w") as fd:
-                json.dump(config, fd, indent=4)
 
         super().__init__(path=str(db_path))
 
@@ -75,9 +69,10 @@ class AddToStore(StoreCommand):
         ["domain", "d", "The ensemble to add this entry to", {"required": True}],
         ["version", "v", "Assign specific version to the file", {}],
         ["copy", "cp", "Copy data to the underlying AMS directory", {"action": "store_true"}],
+        ["path", "p", "path of the AMS-store directory", {}],
     ]
 
-    def __init__(self, entry=None, domain="", file="", metadata=None, copy=True, version=None, **kwargs):
+    def __init__(self, entry=None, domain="", file="", metadata=None, copy=True, version=None, path=None, **kwargs):
         """
         Initializes the 'AddToStore' class with the specific query
 
@@ -105,6 +100,15 @@ class AddToStore(StoreCommand):
             self._md = json.loads(metadata)
 
         self._copy = copy
+
+        if self._copy and path is None:
+            raise RuntimeError("When copying directories we need also the destination path")
+        self._path = path
+        if path is not None:
+            self._path = Path(path)
+            if not self._path.exists():
+                self._path.mkdir(parents=True, exist_ok=True)
+
         self._version = version
         self._domain = domain
 
@@ -112,14 +116,12 @@ class AddToStore(StoreCommand):
         # If move is supported we first copy the file
         fn = self._fn
         if self._copy:
-            fn = store._suggest_entry_file_name(self._entry)
+            fn = self._path / store._suggest_entry_file_name(self._entry)
             shutil.copy(self._fn, fn)
 
         metadata = self._md if self._md is not None else dict()
-
-        store._add_entry(
-            self._entry, self._domain, store.__class__.entry_mime_types[self._entry], [fn], self._version, metadata
-        )
+        print("Fn is ", fn)
+        store._add_entries(self._domain, self._entry, [str(fn)], self._version, metadata)
 
 
 class RemoveFromStore(StoreCommand):
@@ -165,9 +167,8 @@ class RemoveFromStore(StoreCommand):
 
     def __call__(self, store):
         found = store.search(domain_name=self._domain, entry=self._entry, version=self._version, metadata=self._md)
-        to_remove = [v["file"] for v in found]
-
-        store._remove_entry_file(self._domain, self._entry, to_remove, self._purge)
+        to_remove = [v["filename"] for v in found]
+        store._remove_entries(self._domain, self._entry, filenames=to_remove, purge=self._purge)
 
 
 class SearchStore(StoreCommand):
@@ -258,7 +259,7 @@ def main():
 
     action = action_cls.from_cli(args)
 
-    with AMSDataStore(action.ams_config.db_path, action.ams_config.db_store, action.ams_config.name, False) as store:
+    with AMSDataStore(action._name, action._url) as store:
         start = time.time()
         action(store)
         end = time.time()

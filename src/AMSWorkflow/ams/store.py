@@ -70,6 +70,7 @@ class AMSDataStore:
         """
         self._application_name = application_name
         self._url = url
+        print(f"url is {self._url}")
         self._session = None
         self._engine = None
 
@@ -581,7 +582,7 @@ class AMSDataStore:
             latest = True
             version = None
 
-        res = self.find(self, domain_name, domain_name, entry_type=entry, version=version)
+        entries = self.find(domain_name, entry_type=entry, version=version)
 
         result = []
 
@@ -608,10 +609,8 @@ class AMSDataStore:
 
     def _suggest_entry_file_name(self, entry, domain_name):
         if domain_name is None:
-            return str(self._entry_paths[entry] / Path(f"{get_unique_fn()}.{self.__class__.entry_suffix[entry]}"))
-        return str(
-            self._entry_paths[entry] / Path(f"{domain_name}_{get_unique_fn()}.{self.__class__.entry_suffix[entry]}")
-        )
+            return str(Path(f"{get_unique_fn()}.{self.__class__.entry_suffix[entry]}"))
+        return str(Path(f"{domain_name}_{get_unique_fn()}.{self.__class__.entry_suffix[entry]}"))
 
     def suggest_model_file_name(self, domain_name=None):
         return self._suggest_entry_file_name("models", domain_name)
@@ -621,3 +620,15 @@ class AMSDataStore:
 
     def suggest_data_file_name(self, domain_name=None):
         return self._suggest_entry_file_name("data", domain_name)
+
+
+def create_store_directories(store_path):
+    """
+    Creates the directory structure AMS prefers under the store_path.
+    """
+    store_path = Path(store_path)
+    if not store_path.exists():
+        store_path.mkdir(parents=True, exist_ok=True)
+
+    for fn in list(AMSDataStore.valid_entries):
+        mkdir(store_path, fn)
