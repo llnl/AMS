@@ -16,7 +16,6 @@ import numpy as np
 
 from ams import stage, store
 from ams.action import UserAction
-from ams.config import AMSInstance
 from ams.faccessors import get_reader, get_writer
 
 
@@ -48,12 +47,9 @@ class TestStage(unittest.TestCase):
     def setUpClass(cls):
         cls.i_dir = tempfile.mkdtemp()
         cls.o_dir = tempfile.mkdtemp()
-        config_path = cls.o_dir / Path("ams_config.json")
-        config = AMSInstance.create_config(cls.o_dir, "ams_store.sql", "test_name")
-        with open(str(config_path), "w") as fd:
-            json.dump(config, fd, indent=4)
-        # Initialize our sigleton
-        AMSInstance.from_path(cls.o_dir)
+        cls._db_path = tempfile.mkdtemp()
+        cls.application_name = "test_name"
+        cls.db_url = f"sqlite:///{cls._db_path}/test.db.sql"
 
     def setUp(self):
         self.i_dir = TestStage.i_dir
@@ -111,9 +107,8 @@ class TestStage(unittest.TestCase):
 
         i_q = Queue()
         o_q = Queue()
-        ams_config = AMSInstance()
         action = FallThroughAction()
-        fw_task = stage.ForwardTask(ams_config.db_path, ams_config.db_store, ams_config.name, i_q, o_q, action)
+        fw_task = stage.ForwardTask(self.__class__.application_name, self.__class__.db_url, i_q, o_q, action)
 
         msgs = list()
         for i in range(0, 10):
@@ -136,8 +131,7 @@ class TestStage(unittest.TestCase):
         self.assertTrue(msg.is_terminate(), "Message should had been terminate")
 
     def verify(self, data, reader):
-        ams_config = AMSInstance()
-        with store.AMSDataStore(ams_config.db_path, ams_config.db_store, ams_config.name, False) as fd:
+        with store.AMSDataStore(self.__class__.application_name, self.__class__.db_url) as fd:
             versions = fd.get_candidate_versions("unknown-domain", associate_files=True)
             r_inputs = list()
             r_outputs = list()
@@ -163,7 +157,7 @@ class TestStage(unittest.TestCase):
                 np.array_equal(pipe_out_data, origin_out_data),
                 "outputs {pipe_out_data} {r_outputs} do not match after writting them with pipeline",
             )
-            fd.remove_candidates("unknown-domain", data_files=files, delete_files=True)
+            fd.remove_candidates(domain_name="unknown-domain", filenames=files, purge=True)
 
         return
 
@@ -184,6 +178,7 @@ class TestStage(unittest.TestCase):
                 return cls()
 
         from queue import Queue
+
         data = list()
         i_q = Queue()
         o_q = Queue()
@@ -209,10 +204,9 @@ class TestStage(unittest.TestCase):
                             fd.store(i, o)
 
                     pipe = stage.FSPipeline(
+                        self.__class__.application_name,
                         self.o_dir,
-                        True,
-                        self.o_dir,
-                        None,
+                        self.__class__.db_url,
                         dest_fmt,
                         self.i_dir,
                         src_fmt,

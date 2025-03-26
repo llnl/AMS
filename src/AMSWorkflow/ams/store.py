@@ -64,33 +64,14 @@ class AMSDataStore:
     valid_entries = {"data", "candidates", "models"}
     valid_dbs = {"sqlite", "mariadb"}
 
-    def __init__(self, application_name, root_path, url, db_type):
+    def __init__(self, application_name, url):
         """
         Initializes the AMSDataStore class. Upon init the kosh-store is closed and not connected
         """
-        if db_type not in AMSDataStore.valid_dbs:
-            raise ValueError(f"{self.__class__.name} Expets a 'db_type' to be in {AMSDataStore.valid_dbs}")
-
-        create_store_directories(root_path)
         self._application_name = application_name
-        self._root_path = Path(root_path)
         self._url = url
-
-        self._entry_paths = {k: Path(root_path) / Path(k) for k in self.__class__.valid_entries}
-
-        if not (Path(root_path) / Path("ams_config.json")).exists():
-            with open(str(Path(root_path) / Path("ams_config.json")), "w") as fd:
-                json.dump(self.to_json(), fd, indent=2)
-
         self._session = None
         self._engine = None
-
-    def to_json(self):
-        db = {}
-        db["persistent-path"] = str(self._root_path)
-        db["url"] = self._url
-        db["application_name"] = self._application_name
-        return db
 
     def is_open(self):
         """
@@ -143,19 +124,6 @@ class AMSDataStore:
             return query.all()
         finally:
             session.close()
-
-    @property
-    def root_path(self):
-        return self._root_path
-
-    def get_candidate_path(self):
-        return self._entry_paths["candidates"]
-
-    def get_data_path(self):
-        return self._entry_paths["data"]
-
-    def get_model_path(self):
-        return self._entry_paths["models"]
 
     def _add_entries(self, domain_name: str, entry_type: str, filenames: List[str], version=None, metadata=None):
         """
@@ -636,9 +604,7 @@ class AMSDataStore:
         return result
 
     def __str__(self):
-        return "AMS Store(path={0}, name={1}, status={2})".format(
-            self._root_path, self._application_name, "Open" if self.is_open() else "Closed"
-        )
+        return "AMS Store(name={0}, status={2})".format(self._application_name, "Open" if self.is_open() else "Closed")
 
     def _suggest_entry_file_name(self, entry, domain_name):
         if domain_name is None:
@@ -655,15 +621,3 @@ class AMSDataStore:
 
     def suggest_data_file_name(self, domain_name=None):
         return self._suggest_entry_file_name("data", domain_name)
-
-
-def create_store_directories(root_path):
-    """
-    Creates the directory structure AMS prefers under the root_path.
-    """
-    root_path = Path(root_path)
-    if not root_path.exists():
-        root_path.mkdir(parents=True, exist_ok=True)
-
-    for fn in list(AMSDataStore.valid_entries):
-        mkdir(root_path, fn)
