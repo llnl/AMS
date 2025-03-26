@@ -49,7 +49,7 @@ class TestStage(unittest.TestCase):
         cls.o_dir = tempfile.mkdtemp()
         cls._db_path = tempfile.mkdtemp()
         cls.application_name = "test_name"
-        cls.db_url = f"sqlite:///{cls._db_path}/test.db.sql"
+        cls.db_url = os.getenv("AMS_DB_URL", f"sqlite:///{cls._db_path}/test.db.sql")
 
     def setUp(self):
         self.i_dir = TestStage.i_dir

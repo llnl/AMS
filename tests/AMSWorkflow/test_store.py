@@ -27,6 +27,7 @@ class TestStore(unittest.TestCase):
     def setUpClass(cls):
         cls.store_dir = Path("store_testing_dir")
         cls.store_dir.mkdir(parents=True, exist_ok=True)
+        cls.db_url = os.getenv("AMS_DB_URL", f"sqlite:///{cls.store_dir}/test.db.sql")
         for i in range(cls.num_files):
             cls.h5_files.append(create_file(str(cls.store_dir), f"input_{i}.h5"))
             cls.model_files.append(create_file(str(cls.store_dir), f"model_{i}.pt"))
@@ -52,7 +53,7 @@ class TestStore(unittest.TestCase):
         return getter("test")
 
     def test_store_open(self):
-        ams_store = store.AMSDataStore("test", f"sqlite:///{self.store_dir}/test.db.sql")
+        ams_store = store.AMSDataStore("test", self.__class__.db_url)
         self.assertFalse(ams_store.is_open(), "AMS Store should be close, but isn't")
         ams_store = ams_store.open()
         self.assertTrue(ams_store.is_open(), "AMS Store should be opened, but isn't")
@@ -60,7 +61,7 @@ class TestStore(unittest.TestCase):
         self.assertFalse(ams_store.is_open(), "AMS Store should be close, but isn't")
 
     def test_store_add_remove_query_data(self):
-        ams_store = store.AMSDataStore("test", f"sqlite:///{self.store_dir}/test.db.sql")
+        ams_store = store.AMSDataStore("test", self.__class__.db_url)
         ams_store = ams_store.open()
         self._add_entries(ams_store.add_data, ams_store.get_data_versions, self.__class__.h5_files)
         versions = self._remove_entries(ams_store.remove_data, ams_store.get_data_versions, self.__class__.h5_files)
@@ -69,7 +70,7 @@ class TestStore(unittest.TestCase):
         ams_store.close()
 
     def test_store_add_remove_query_candidates(self):
-        ams_store = store.AMSDataStore("test", f"sqlite:///{self.store_dir}/test.db.sql")
+        ams_store = store.AMSDataStore("test", self.__class__.db_url)
         ams_store = ams_store.open()
         self._add_entries(ams_store.add_candidates, ams_store.get_candidate_versions, self.__class__.candidate_files)
         versions = self._remove_entries(
@@ -79,7 +80,7 @@ class TestStore(unittest.TestCase):
         ams_store.close()
 
     def test_store_add_remove_query_model(self):
-        ams_store = store.AMSDataStore("test", f"sqlite:///{self.store_dir}/test.db.sql")
+        ams_store = store.AMSDataStore("test", self.__class__.db_url)
         ams_store = ams_store.open()
 
         model_descrs = []
@@ -101,7 +102,7 @@ class TestStore(unittest.TestCase):
         ams_store.close()
 
     def test_store_add_data_as_list(self):
-        ams_store = store.AMSDataStore("test", f"sqlite:///{self.store_dir}/test.db.sql")
+        ams_store = store.AMSDataStore("test", self.__class__.db_url)
         ams_store = ams_store.open()
         self._add_entries(ams_store.add_data, ams_store.get_data_versions, [self.__class__.h5_files], as_list=False)
         versions = self._remove_entries(ams_store.remove_data, ams_store.get_data_versions, self.__class__.h5_files)
@@ -109,7 +110,7 @@ class TestStore(unittest.TestCase):
         ams_store.close()
 
     def test_store_add_candidate_as_list(self):
-        ams_store = store.AMSDataStore("test", f"sqlite:///{self.store_dir}/test.db.sql")
+        ams_store = store.AMSDataStore("test", self.__class__.db_url)
 
         ams_store = ams_store.open()
         self._add_entries(
