@@ -169,7 +169,12 @@ class ForwardTask(Task):
                 elif item.is_process():
                     data = item.data()
                     inputs, outputs = self._data_cb(data)
-                    self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(inputs, outputs, data.domain_name)))
+                    self.o_queue.put(
+                        QueueMessage(
+                            MessageType.Process,
+                            DataBlob(inputs, outputs, data.domain_name),
+                        )
+                    )
                     self.datasize_byte += inputs.nbytes + outputs.nbytes
                 elif item.is_new_model():
                     data = item.data()
@@ -438,9 +443,15 @@ class FSWriteTask(Task):
         with AMSMonitor(obj=self, tag="internal_loop", accumulate=False):
             while True:
                 # This is a blocking call
-                print(f"{self.__class__.__name__} Receives messages at queue:", self.i_queue)
+                print(
+                    f"{self.__class__.__name__} Receives messages at queue:",
+                    self.i_queue,
+                )
                 item = self.i_queue.get(block=True)
-                print(f"{self.__class__.__name__} Received messages at queue:", self.i_queue)
+                print(
+                    f"{self.__class__.__name__} Received messages at queue:",
+                    self.i_queue,
+                )
                 if item.is_terminate():
                     for k, v in data_files.items():
                         v[0].close()
@@ -460,7 +471,10 @@ class FSWriteTask(Task):
                         # TODO: bytes_written should be an attribute of the file
                         # to keep track of the size of the current file. Currently we keep track of this
                         # by keeping a value in a list
-                        data_files[data.domain_name] = [self.data_writer_cls(fn).open(), 0]
+                        data_files[data.domain_name] = [
+                            self.data_writer_cls(fn).open(),
+                            0,
+                        ]
                     bytes_written = data.inputs.size * data.inputs.itemsize
                     bytes_written += data.outputs.size * data.outputs.itemsize
                     data_files[data.domain_name][0].store(data.inputs, data.outputs)
@@ -472,7 +486,11 @@ class FSWriteTask(Task):
                         data_files[data.domain_name][0].close()
                         self.o_queue.put(
                             QueueMessage(
-                                MessageType.Process, (data.domain_name, data_files[data.domain_name][0].file_name)
+                                MessageType.Process,
+                                (
+                                    data.domain_name,
+                                    data_files[data.domain_name][0].file_name,
+                                ),
                             )
                         )
                         del data_files[data.domain_name]
@@ -506,7 +524,7 @@ class PushToStore(Task):
         Args:
             i_queue: The queue to read requests from.
             application_name: The name of the running application.
-            db_path: The path to store persistend data to.
+            dest_dir: The path to store persistend data to.
             db_url: The url to a SQL DB server which will be used to register metadata associated with the files.
         """
 
@@ -530,9 +548,15 @@ class PushToStore(Task):
 
         with AMSMonitor(obj=self, tag="internal_loop", record=[]):
             while True:
-                print(f"{self.__class__.__name__} Receives messages at queue:", self.i_queue)
+                print(
+                    f"{self.__class__.__name__} Receives messages at queue:",
+                    self.i_queue,
+                )
                 item = self.i_queue.get(block=True)
-                print(f"{self.__class__.__name__} Received messages at queue:", self.i_queue)
+                print(
+                    f"{self.__class__.__name__} Received messages at queue:",
+                    self.i_queue,
+                )
                 if item.is_terminate():
                     print(f"Received Terminate {self.__class__.__name__}")
                     break
@@ -541,7 +565,11 @@ class PushToStore(Task):
                     fn = item.data()
                     Path(fn).unlink()
                 elif item.is_process():
-                    with AMSMonitor(obj=self, tag="request_block", record=["nb_requests", "total_filesize"]):
+                    with AMSMonitor(
+                        obj=self,
+                        tag="request_block",
+                        record=["nb_requests", "total_filesize"],
+                    ):
                         self.nb_requests += 1
                         domain_name, file_name = item.data()
                         if domain_name == None:
@@ -763,13 +791,25 @@ class Pipeline(ABC):
         """
         Initialize root pipeline class cli parser with the options.
         """
-        parser.add_argument("--dest", "-d", dest="dest_dir", help="Where to store the data (Directory should exist)")
-        parser.add_argument("--db-url", "-url", dest="db_url", help="The SQL url to store the metadata to")
+        parser.add_argument(
+            "--dest",
+            "-d",
+            dest="dest_dir",
+            help="Where to store the data (Directory should exist)",
+        )
+        parser.add_argument(
+            "--db-url",
+            "-url",
+            dest="db_url",
+            help="The SQL url to store the metadata to",
+            required=True,
+        )
         parser.add_argument(
             "--application-name",
             "-a",
             dest="application_name",
             help="The name of the application we will store data and metadata for",
+            required=True,
         )
         parser.add_argument(
             "--db-type",
