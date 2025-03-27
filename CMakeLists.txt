@@ -180,6 +180,16 @@ if (WITH_RMQ)
   list(APPEND AMS_APP_LIBRARIES amqpcpp event_pthreads event)
 endif() # WITH_RMQ
 
+if(NOT DEFINED UMPIRE_DIR)
+  message(FATAL_ERROR "Missing required 'UMPIRE_DIR' variable pointing to an installed Umpire ${UMPIRE_DIR}")
+endif()
+
+find_package(UMPIRE REQUIRED
+             NO_DEFAULT_PATH
+             PATHS ${UMPIRE_DIR}/share/umpire/cmake ${UMPIRE_DIR}/lib/cmake/umpire)
+list(APPEND AMS_APP_LIBRARIES umpire)
+list(APPEND AMS_APP_INCLUDES ${UMPIRE_INCLUDE_DIR})
+
 # ------------------------------------------------------------------------------
 find_package(nlohmann_json REQUIRED)
 list(APPEND AMS_APP_LIBRARIES nlohmann_json::nlohmann_json)
