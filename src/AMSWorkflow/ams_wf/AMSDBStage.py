@@ -35,7 +35,7 @@ def main():
         "--json-monitoring",
         "-jm",
         dest="output_json",
-        help="File where to output the monitoring data from the stage (JSON)",
+        help="Prefix for file to output the monitoring data from the stage (JSON), the prefix will be extended with -<PID>-<hostname>.json",
         default=None,
     )
 

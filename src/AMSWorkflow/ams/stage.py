@@ -1122,4 +1122,3 @@ def get_pipeline(src_mechanism="fs"):
     if src_mechanism not in pipe_mechanisms.keys():
         raise RuntimeError(f"Pipeline {src_mechanism} storing mechanism does not exist")
     return pipe_mechanisms[src_mechanism]
-    return pipe_mechanisms[src_mechanism]
