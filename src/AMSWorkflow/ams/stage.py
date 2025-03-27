@@ -144,7 +144,9 @@ class ForwardTask(Task):
         inputs, outputs = self.user_obj.data_cb(data.inputs, data.outputs)
         # This can be too conservative, we may want to relax it later
         if not (isinstance(inputs, np.ndarray) and isinstance(outputs, np.ndarray)):
-            raise TypeError(f"{self.user_obj.__name__}.data_cb did not return numpy arrays")
+            raise TypeError(
+                f"{self.user_obj.__name__}.data_cb did not return numpy arrays"
+            )
         return inputs, outputs
 
     def _model_update_cb(self, db, msg):
@@ -228,7 +230,9 @@ class FSLoaderTask(Task):
                 input_batches = np.array_split(input_data, num_batches)
                 output_batches = np.array_split(output_data, num_batches)
                 for j, (i, o) in enumerate(zip(input_batches, output_batches)):
-                    self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(i, o, domain_name)))
+                    self.o_queue.put(
+                        QueueMessage(MessageType.Process, DataBlob(i, o, domain_name))
+                    )
                 self.datasize_byte += input_data.nbytes + output_data.nbytes
 
                 end_time_fs = time.time_ns()
@@ -332,7 +336,11 @@ class RMQDomainDataLoaderTask(Task):
         domain_name, input_data, output_data = msg.decode()
         self.datasize_byte += input_data.nbytes + output_data.nbytes
 
-        self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(input_data, output_data, domain_name)))
+        self.o_queue.put(
+            QueueMessage(
+                MessageType.Process, DataBlob(input_data, output_data, domain_name)
+            )
+        )
         end_time = time.time_ns()
         self.total_time_ns += end_time - start_time
         # TODO: Improve the code to manage potentially multiple messages per AMSMessage
@@ -368,7 +376,9 @@ class RMQDomainDataLoaderTask(Task):
         # Installing signal callbacks only for RMQDomainDataLoaderTask
         if self.policy != "thread":
             for s in self.signals:
-                signal.signal(s, self.signal_wrapper(self.__class__.__name__, os.getpid()))
+                signal.signal(
+                    s, self.signal_wrapper(self.__class__.__name__, os.getpid())
+                )
         print(f"{self.__class__.__name__} PID is:", os.getpid())
         self.rmq_consumer.run()
         print(f"Returning from {self.__class__.__name__}")
@@ -504,7 +514,9 @@ class FSWriteTask(Task):
                 if item.is_terminate():
                     for k, v in data_files.items():
                         v[0].close()
-                        self.o_queue.put(QueueMessage(MessageType.Process, (k, v[0].file_name)))
+                        self.o_queue.put(
+                            QueueMessage(MessageType.Process, (k, v[0].file_name))
+                        )
                     del data_files
                     self.o_queue.put(QueueMessage(MessageType.Terminate, None))
                     break
@@ -689,7 +701,9 @@ class Pipeline(ABC):
         self.original_handlers = {}
         for sig in self.signals:
             self.original_handlers[sig] = signal.getsignal(sig)
-            signal.signal(sig, self.signal_wrapper(self.__class__.__name__, os.getpid()))
+            signal.signal(
+                sig, self.signal_wrapper(self.__class__.__name__, os.getpid())
+            )
 
     def release_signals(self):
         if not self.released:
@@ -710,7 +724,10 @@ class Pipeline(ABC):
         if not (hasattr(obj, "data_cb") and callable(getattr(obj, "data_cb"))):
             raise TypeError(f"User provided object {obj} does not have data_cb")
 
-        if not (hasattr(obj, "update_model_cb") and callable(getattr(obj, "update_model_cb"))):
+        if not (
+            hasattr(obj, "update_model_cb")
+            and callable(getattr(obj, "update_model_cb"))
+        ):
             raise TypeError(f"User provided object {obj} does not have data_cb")
 
         self.user_action = obj
@@ -735,15 +752,16 @@ class Pipeline(ABC):
         for a in self._tasks:
             self._executors.append(exec_vehicle_cls(target=a))
 
-        pids_to_kill = []
-        if isinstance(self._tasks[0], RMQDomainDataLoaderTask):
-            pids_to_kill.append(self._executors[0].pid)
-
-        shutdown_task = exec_vehicle_cls(target=self.shutdown, args=([pids_to_kill]))
-        shutdown_task.start()
-
         for e in self._executors:
             e.start()
+
+        pids_to_kill = []
+        if isinstance(self._tasks[0], RMQDomainDataLoaderTask):
+            print("My task is the right one, I need to kill it")
+            pids_to_kill.append(self._executors[0].pid)
+        print("Pids to kill are", pids_to_kill)
+        shutdown_task = exec_vehicle_cls(target=self.shutdown, args=([pids_to_kill]))
+        shutdown_task.start()
 
         shutdown_task.join()
         for e, t in zip(self._executors, self._tasks):
@@ -794,9 +812,15 @@ class Pipeline(ABC):
             self._tasks.append(self.get_model_update_task(self._queues[0], policy))
 
         # After user actions we store into a file
-        self._tasks.append(FSWriteTask(self._queues[1], self._queues[2], self._writer, self.dest_dir))
+        self._tasks.append(
+            FSWriteTask(self._queues[1], self._queues[2], self._writer, self.dest_dir)
+        )
         # After storing the file we make it public to the kosh store.
-        self._tasks.append(PushToStore(self._queues[2], self.application_name, self.dest_dir, self.db_url))
+        self._tasks.append(
+            PushToStore(
+                self._queues[2], self.application_name, self.dest_dir, self.db_url
+            )
+        )
 
     def execute(self, policy):
         """
@@ -900,7 +924,9 @@ class FSPipeline(Pipeline):
 
     supported_readers = ("shdf5", "dhdf5", "csv")
 
-    def __init__(self, application_name, dest_dir, db_url, db_type, src, src_type, pattern):
+    def __init__(
+        self, application_name, dest_dir, db_url, db_type, src, src_type, pattern
+    ):
         """
         Initialize a FSPipeline that will write data to the 'dest_dir' and optionally publish
         these files to the kosh-store 'store' by using the stage_dir as an intermediate directory.
@@ -920,7 +946,9 @@ class FSPipeline(Pipeline):
         Returns: An FSLoaderTask instance reading data from the filesystem and forwarding the values to the o_queue.
         """
         loader = get_reader(self._src_type)
-        return FSLoaderTask(o_queue, loader, pattern=str(self._src) + "/" + self._pattern)
+        return FSLoaderTask(
+            o_queue, loader, pattern=str(self._src) + "/" + self._pattern
+        )
 
     @staticmethod
     def add_cli_args(parser):
@@ -928,9 +956,15 @@ class FSPipeline(Pipeline):
         Add cli arguments to the parser required by this Pipeline.
         """
         Pipeline.add_cli_args(parser)
-        parser.add_argument("--src", "-s", help="Where to copy the data from", required=True)
-        parser.add_argument("--src-type", "-st", choices=FSPipeline.supported_readers, default="shdf5")
-        parser.add_argument("--pattern", "-p", help="Glob pattern to read data from", required=True)
+        parser.add_argument(
+            "--src", "-s", help="Where to copy the data from", required=True
+        )
+        parser.add_argument(
+            "--src-type", "-st", choices=FSPipeline.supported_readers, default="shdf5"
+        )
+        parser.add_argument(
+            "--pattern", "-p", help="Glob pattern to read data from", required=True
+        )
         return
 
     @classmethod
@@ -1072,8 +1106,12 @@ class RMQPipeline(Pipeline):
         Add cli arguments to the parser required by this Pipelinereturn .
         """
         Pipeline.add_cli_args(parser)
-        parser.add_argument("-c", "--creds", help="AMS credentials file (JSON)", required=True)
-        parser.add_argument("-u", "--update-rmq-models", help="Update-rmq-models", action="store_true")
+        parser.add_argument(
+            "-c", "--creds", help="AMS credentials file (JSON)", required=True
+        )
+        parser.add_argument(
+            "-u", "--update-rmq-models", help="Update-rmq-models", action="store_true"
+        )
         return
 
     @classmethod
