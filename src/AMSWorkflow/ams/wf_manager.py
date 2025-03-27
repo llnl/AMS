@@ -15,7 +15,7 @@ from ams.rmq import (
     AMSSyncProducer,
     StatusPoller,
 )
-from ams.store import AMSDataStore
+from ams.store import AMSDataStore, create_store_directories
 import flux
 import json
 from flux.job.list import get_job
@@ -83,18 +83,18 @@ class AMSWorkflowManager:
     def __init__(
         self,
         rmq_config: str,
-        kosh_path: str,
-        store_name: str,
-        db_name: str,
+        db_dir: str,
+        application_name: str,
+        url,
         domain_jobs: JobList,
         stage_jobs: JobList,
         sub_select_jobs: JobList,
         train_jobs: JobList,
     ):
         self._rmq_config = rmq_config
-        self._kosh_path = kosh_path
-        self._store_name = store_name
-        self._db_name = db_name
+        self._db_dir = db_dir
+        self._url = url
+        self._application_name = application_name
         self._domain_jobs = domain_jobs
         self._stage_jobs = stage_jobs
         self._sub_select_jobs = sub_select_jobs
@@ -178,7 +178,9 @@ class AMSWorkflowManager:
             while True:
                 is_set = stop_event.is_set()
                 prev_msg_count = current_msg_count
-                current_msg_count = rmq_stage_poller.getMessageCount(rmq_config.rabbitmq_queue_physics)
+                current_msg_count = rmq_stage_poller.getMessageCount(
+                    rmq_config.rabbitmq_queue_physics
+                )
                 print(
                     f"Server has {current_msg_count} messages in queue, {abs(current_msg_count - prev_msg_count)/poll_freq} msg/s"
                 )
@@ -195,7 +197,9 @@ class AMSWorkflowManager:
 
         print("Start Domain")
         self.jobs = {}
-        with AMSFluxExecutor(False, threads=1, handle_args=(domain_uri,)) as domain_executor:
+        with AMSFluxExecutor(
+            False, threads=1, handle_args=(domain_uri,)
+        ) as domain_executor:
             handle = flux.Flux(url=domain_uri)
             domain_futures = []
             for i, domain_job in enumerate(self._domain_jobs):
@@ -214,17 +218,21 @@ class AMSWorkflowManager:
             for i, domain_future in enumerate(domain_futures):
                 try:
                     result = domain_future.result()
-                    rpc_handle = flux.job.job_list_id(handle, self._domain_jobs[i].flux_job_id)
+                    rpc_handle = flux.job.job_list_id(
+                        handle, self._domain_jobs[i].flux_job_id
+                    )
                     ji = rpc_handle.get_jobinfo()
                     results = ji.to_dict(False)
                     rt = results.get("runtime", -1)
-                    success = results.get("success"), False)
+                    success = results.get("success", False)
                     print(
                         f"AMS Domain {i} with JobID:{self._domain_jobs[i].flux_job_id} Success: {success} Duration: {rt}"
                     )
                 except Exception as e:
                     print(e)
-                    rpc_handle = flux.job.job_list_id(handle, self._domain_jobs[i].flux_job_id)
+                    rpc_handle = flux.job.job_list_id(
+                        handle, self._domain_jobs[i].flux_job_id
+                    )
                     ji = rpc_handle.get_jobinfo()
                     print("Failed JOB Info:", json.dumps(ji.to_dict(False), indent=6))
             print("Going to shutdown")
@@ -242,7 +250,9 @@ class AMSWorkflowManager:
         orchestrator_publisher,
         rmq_stage_poller,
     ):
-        with AMSFluxExecutor(False, threads=1, handle_args=(stage_uri,)) as stager_executor:
+        with AMSFluxExecutor(
+            False, threads=1, handle_args=(stage_uri,)
+        ) as stager_executor:
             print("Connected to stager executor", stage_uri)
             # Spawn all stagers
             stager_futures = set()
@@ -262,11 +272,13 @@ class AMSWorkflowManager:
         ams_orchestartor_job = AMSOrchestratorJob(ml_uri, self.rmq_config)
         rmq_config = AMSRMQConfiguration.from_json(self.rmq_config)
         print(f"Starting ..... {ml_uri} ... {stage_uri} ... {domain_uri}")
-        with AMSDataStore(self._kosh_path, self._store_name, self._db_name) as store:
+        with AMSDataStore(self._application_name, self._url) as store:
             print("Opened the AMS Store")
             # We start first the ML as we want to terminate only
             # after we have trained all the models.
-            with AMSFluxExecutor(False, threads=1, handle_args=(ml_uri,)) as ml_executor:
+            with AMSFluxExecutor(
+                False, threads=1, handle_args=(ml_uri,)
+            ) as ml_executor:
                 print("Connected to ml executor")
                 # The AMSFanOutProducer enables us to send control message to all stagers and
                 # ml trainers. Currently
@@ -278,7 +290,9 @@ class AMSWorkflowManager:
                     rmq_config.rabbitmq_password,
                     rmq_config.rabbitmq_cert,
                 ) as orchestrator_publisher:
-                    ml_future = ml_executor.submit(ams_orchestartor_job.to_flux_jobspec())
+                    ml_future = ml_executor.submit(
+                        ams_orchestartor_job.to_flux_jobspec()
+                    )
                     job_id = ml_future.jobid()
                     print("ML JOB ID is:", job_id)
                     # We broadcast the training specification ...
@@ -330,20 +344,25 @@ class AMSWorkflowManager:
         if "db" not in data:
             raise KeyError("Workflow decsription file misses 'db' description")
 
-        if not all(key in data["db"] for key in {"kosh-path", "name", "store-name"}):
+        if not all(key in data["db"] for key in {"url", "application-name", "dir"}):
             raise KeyError("Workflow description files misses entries in 'db'")
 
-        store = AMSDataStore(data["db"]["kosh-path"], data["db"]["store-name"], data["db"]["name"]).open()
+        db_dir = data["db"]["dir"]
+        create_store_directories(db_dir)
+        store = AMSDataStore(data["db"]["application-name"], data["db"]["url"]).open()
 
         if "domain-jobs" not in data:
             raise KeyError("Workflow description files misses 'domain-jobs' entry")
 
         if len(data["domain-jobs"]) == 0:
-            raise RuntimeError("There are no jobs described in workflow description file")
+            raise RuntimeError(
+                "There are no jobs described in workflow description file"
+            )
 
         domain_jobs = create_domain_list(data["domain-jobs"])
         ams_rmq_config = AMSRMQConfiguration.from_json(rmq_config)
         for job in domain_jobs:
+            job.db_dir = db_dir
             job.precede_deploy(store, ams_rmq_config)
 
         if "stage-job" not in data:
@@ -354,12 +373,15 @@ class AMSWorkflowManager:
 
         assert stage_type == "rmq", "We only support 'rmq' stagers"
 
-        stage_resources = AMSJobResources(nodes=1, tasks_per_node=num_instances, cores_per_task=6, gpus_per_task=0)
+        stage_resources = AMSJobResources(
+            nodes=1, tasks_per_node=num_instances, cores_per_task=6, gpus_per_task=0
+        )
         stage_jobs = JobList()
         stage_job = AMSNetworkStageJob.from_descr(
             data["stage-job"],
-            store.get_candidate_path(),
-            store.root_path,
+            str(Path(db_dir).resolve() / Path("candidates")),
+            data["db"]["url"],
+            data["db"]["application-name"],
             rmq_config,
             stage_resources,
         )
@@ -392,16 +414,20 @@ class AMSWorkflowManager:
 
         for domain in wf_domain_names:
             print(domain)
-            assert domain in train_domains, f"Domain {domain} misses a train description"
-            assert domain in sub_select_domains, f"Domain {domain} misses a subselection description"
+            assert (
+                domain in train_domains
+            ), f"Domain {domain} misses a train description"
+            assert (
+                domain in sub_select_domains
+            ), f"Domain {domain} misses a subselection description"
         store.close()
-        store = AMSDataStore(data["db"]["kosh-path"], data["db"]["store-name"], data["db"]["name"])
+        store = AMSDataStore(data["db"]["application-name"], data["db"]["url"]).open()
 
         return cls(
             rmq_config,
-            data["db"]["kosh-path"],
-            data["db"]["store-name"],
-            data["db"]["name"],
+            db_dir,
+            data["db"]["application-name"],
+            data["db"]["url"],
             domain_jobs,
             stage_jobs,
             sub_select_jobs,
