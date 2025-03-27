@@ -737,7 +737,7 @@ class Pipeline(ABC):
 
         pids_to_kill = []
         if isinstance(self._tasks[0], RMQDomainDataLoaderTask):
-            pids_to_kill.append(self._executors[0].pid])
+            pids_to_kill.append(self._executors[0].pid)
 
         shutdown_task = exec_vehicle_cls(target=self.shutdown, args=([pids_to_kill]))
         shutdown_task.start()
