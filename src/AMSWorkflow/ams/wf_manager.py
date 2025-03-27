@@ -99,7 +99,6 @@ class AMSWorkflowManager:
         self._stage_jobs = stage_jobs
         self._sub_select_jobs = sub_select_jobs
         self._train_jobs = train_jobs
-        self._stager_jobs = {}
 
     @property
     def rmq_config(self):
@@ -161,6 +160,7 @@ class AMSWorkflowManager:
 
     def stager_done_cb(self, future):
         job_id = future.jobid()
+        print(f"Stager got jobid {job_id}")
 
     def domain_jobid_cb(self, future):
         job_id = future.jobid()
@@ -172,7 +172,7 @@ class AMSWorkflowManager:
         print(f"AMS Domain {future.ams_id} with JobID:{job_id} is done")
 
     def start_domain(self, store, rmq_config, domain_uri, rmq_stage_poller):
-        def worker(stop_event):
+        def RMQServerStatusReport(stop_event):
             current_msg_count = 0
             poll_freq = 1
             while True:
@@ -190,7 +190,7 @@ class AMSWorkflowManager:
         # Create the stop event
         stop_event = threading.Event()
         # Start the background thread
-        thread = threading.Thread(target=worker, args=(stop_event,))
+        thread = threading.Thread(target=RMQServerStatusReport, args=(stop_event,))
         thread.start()
 
         print("Start Domain")
@@ -204,7 +204,6 @@ class AMSWorkflowManager:
                 # It is not great, as it requires a piped execution.
                 domain_job.ams_id = i
                 domain_job.precede_deploy(store, rmq_config)
-                print(f"Setting id to {i} '{domain_job._ams_log}' '{domain_job._ams_log_dir}'")
                 domain_future = domain_executor.submit(domain_job.to_flux_jobspec())
                 domain_future.ams_id = i
                 domain_future = domain_future.add_jobid_callback(self.domain_jobid_cb)
@@ -218,8 +217,8 @@ class AMSWorkflowManager:
                     rpc_handle = flux.job.job_list_id(handle, self._domain_jobs[i].flux_job_id)
                     ji = rpc_handle.get_jobinfo()
                     results = ji.to_dict(False)
-                    rt = results["runtime"]
-                    success = results["success"]
+                    rt = results.get("runtime", -1)
+                    success = results.get("success"), False)
                     print(
                         f"AMS Domain {i} with JobID:{self._domain_jobs[i].flux_job_id} Success: {success} Duration: {rt}"
                     )
@@ -285,8 +284,8 @@ class AMSWorkflowManager:
                     # We broadcast the training specification ...
                     self.broadcast_train_specs(rmq_config)
                     print("Broadcasted specs")
-                    # Then we start the stagers. Stagers need to come online
-                    # after the model server is up and running.
+                    # We connect a status poller to the server. This will give us the load
+                    # of the rmq_stager server.
                     with StatusPoller(
                         rmq_config.service_host,
                         rmq_config.service_port,
@@ -295,6 +294,8 @@ class AMSWorkflowManager:
                         rmq_config.rabbitmq_password,
                         rmq_config.rabbitmq_cert,
                     ) as RMQPoll:
+                        # Then we start the stagers. Stagers need to come online
+                        # after the model server is up and running.
                         self.start_stagers(
                             store,
                             rmq_config,
@@ -351,7 +352,6 @@ class AMSWorkflowManager:
         stage_type = data["stage-job"].pop("type", "rmq")
         num_instances = data["stage-job"].pop("instances", 1)
 
-        # assert num_instances == 1, "We only support 1 instance at the moment"
         assert stage_type == "rmq", "We only support 'rmq' stagers"
 
         stage_resources = AMSJobResources(nodes=1, tasks_per_node=num_instances, cores_per_task=6, gpus_per_task=0)

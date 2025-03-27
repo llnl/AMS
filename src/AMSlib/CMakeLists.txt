@@ -72,7 +72,6 @@ if (${WITH_CALIPER})
 endif()
 
 if (${WITH_MPI})
-  message(FATAL "I am here")
   set(MPI_DEFINES "#define __AMS_ENABLE_MPI__")
 endif()
 

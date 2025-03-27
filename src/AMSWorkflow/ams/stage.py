@@ -319,7 +319,6 @@ class RMQDomainDataLoaderTask(Task):
         the connection (or if a problem happened with the connection).
         """
         print("Adding terminate message at queue:", self.o_queue)
-        print("Destroying")
         self.o_queue.put(QueueMessage(MessageType.Terminate, None))
 
     @AMSMonitor(array=["msgs"], record=["datasize_byte", "total_time_ns"])
@@ -439,20 +438,16 @@ class AMSShutdown(AsyncFanOutConsumer):
     def on_message_cb(self, ch, basic_deliver, properties, body):
         message = json.loads(body)
         print(f"Received Signalling {message}")
-        sys.stdout.flush()
         if "request_type" in message:
             if message["request_type"] == "terminate":
-                # I assumer here that I operate through threading. Thus, I can
-                # directly call the consumer stop method.
+                # NOTE: when my pids are empty, I consider that I am running through threading,
+                # and thus I have access to the class. Otherwise, I am executing through
+                # multiprocessing and I need to "kill" the application.
                 if len(self._signal_pid) == 0:
                     for consumer in self._consumers:
                         consumer.stop()
                 else:
-                    # When using subprocess I cannot access the consumer class but I access a
-                    # copy of that class. As such, I can kill the consumer.
                     for sig_num in self._signal_pid:
-                        print("Signalling")
-                        sys.stdout.flush()
                         os.kill(sig_num, signal.SIGINT)
                 self.stop()
 
@@ -463,7 +458,6 @@ class AMSShutdown(AsyncFanOutConsumer):
         if pids:
             print("Received PIDS: ", pids)
             self._signal_pid = pids
-        sys.stdout.flush()
         self.run()
 
 
@@ -548,7 +542,7 @@ class FSWriteTask(Task):
                             )
                         )
                         del data_files[data.domain_name]
-                if total_messages % 100 == 0:
+                if total_messages % 1000 == 0:
                     print(
                         f"I have processed {total_messages} in total amounting to {total_bytes_written/(1024.0*1024.0)} MB"
                     )
@@ -741,26 +735,14 @@ class Pipeline(ABC):
         for a in self._tasks:
             self._executors.append(exec_vehicle_cls(target=a))
 
-        pids_to_kill = []
-        for e, a in zip(self._executors, self._tasks):
-            print(f"Started executor {a}")
-            e.start()
-
-        if isinstance(self._tasks[0], RMQDomainDataLoaderTask):
-            print("Found Head RMQ Loader")
-            pids_to_kill.append(self._executors[0].pid)
-        else:
-            print("Expected 0 to be RMQ, but was", self._tasks[0].__clas__.__name__)
+        pids_to_kill = [self._executors[0].pid]
+        assert isinstance(self._tasks[0], RMQDomainDataLoaderTask), f"Expected task to be RMQ, but was {self._tasks[0].__clas__.__name__}")
 
         shutdown_task = exec_vehicle_cls(target=self.shutdown, args=([pids_to_kill]))
         shutdown_task.start()
         shutdown_task.join()
-        sys.stdout.flush()
-        print(f"{self.__class__.__name__} joining {len(self._executors)} threads")
-        sys.stdout.flush()
         for e in self._executors:
             e.join()
-        print(f"{self.__class__.__name__} Threads are done")
 
     def _execute_tasks(self, policy):
         """
@@ -1117,7 +1099,6 @@ class RMQPipeline(Pipeline):
 
     def shutdown(self, pid):
         print(f"Waiting in shutdown {self.__class__.__name__}")
-        sys.stdout.flush()
         self._gracefull_shutdown(pid)
         print(f"Received Terminate {self.__class__.__name__}")
         self._o_queue.put(QueueMessage(MessageType.Terminate, None))

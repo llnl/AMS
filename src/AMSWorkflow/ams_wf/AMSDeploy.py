@@ -121,7 +121,7 @@ def main():
             gpus_per_node,
             str(sleep_time),
         )
-        print(f"Resolving domain uri took {domain_uri}", time.time() - start, domain_uri)
+        print(f"Resolving domain uri took {domain_uri}", time.time() - start)
         domain_res = get_allocation_resources(domain_uri)
         print("Domain resources are ", domain_res)
         start = time.time()

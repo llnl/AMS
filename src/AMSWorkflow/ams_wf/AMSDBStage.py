@@ -5,10 +5,10 @@
 
 import argparse
 import time
+import sys
 
 from ams.loader import load_class
 from ams.stage import get_pipeline
-import sys
 
 
 def main():
@@ -91,7 +91,6 @@ def main():
     pipeline.execute(args.policy)
     end = time.time()
     print(f"End to End time spend : {end - start}")
-    sys.stdout.flush()
 
     if args.output_json is not None:
         # Output profiling output to JSON
