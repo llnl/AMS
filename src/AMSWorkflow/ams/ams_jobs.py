@@ -323,9 +323,9 @@ class AMSDomainJob(AMSJob):
             domain_names=descr["domain_names"],
             environ=os.environ,
             resources=domain_job_resources,
-            ams_log=descr.get("ams_log", False)
-            ams_log_dir=descr.get("ams_log_dir", "")
-            ams_log_prefix=descr.get("ams_log_prefix", "")
+            ams_log=descr.get("ams_log", False),
+            ams_log_dir=descr.get("ams_log_dir", ""),
+            ams_log_prefix=descr.get("ams_log_prefix", ""),
             **descr["cli"],
         )
 
