@@ -70,7 +70,10 @@ class AMSDataStore:
         """
         self._application_name = application_name
         self._url = url
-        print(f"url is {self._url}")
+        try:
+            print(f"DB url is {self._url.split('@')[1]}")
+        except IndexError as _:
+            print(f"Error: url seems to be malformed (missing @)")
         self._session = None
         self._engine = None
 
