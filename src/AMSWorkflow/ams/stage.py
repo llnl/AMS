@@ -741,8 +741,12 @@ class Pipeline(ABC):
 
         shutdown_task = exec_vehicle_cls(target=self.shutdown, args=([pids_to_kill]))
         shutdown_task.start()
-        shutdown_task.join()
+
         for e in self._executors:
+            e.start()
+
+        shutdown_task.join()
+        for e, t in zip(self._executors, self._tasks):
             e.join()
 
     def _execute_tasks(self, policy):
@@ -1117,5 +1121,5 @@ def get_pipeline(src_mechanism="fs"):
     pipe_mechanisms = {"fs": FSPipeline, "network": RMQPipeline}
     if src_mechanism not in pipe_mechanisms.keys():
         raise RuntimeError(f"Pipeline {src_mechanism} storing mechanism does not exist")
-
+    return pipe_mechanisms[src_mechanism]
     return pipe_mechanisms[src_mechanism]
