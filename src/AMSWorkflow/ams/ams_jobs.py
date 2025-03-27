@@ -575,7 +575,7 @@ class AMSNetworkStageJob(AMSStageJob):
             environ=environ,
             stdout=stdout,
             stderr=stderr,
-            profile_monitoring="profile.json",
+            profile_monitoring="profile-data",
             prune_module_path=prune_module_path,
             prune_class=prune_class,
             cli_args=_cli_args,
