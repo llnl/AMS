@@ -83,18 +83,23 @@ def main():
         obj = user_class.from_cli(user_args)
         pipeline.add_user_action(obj)
 
-    if args.output_json is not None:
-        print(f"Monitoring output file: {args.output_json}")
+    output_json = args.output_json
+    if output_json is not None:
+        import socket
         from ams.monitor import AMSMonitor
+
+        hostname = socket.gethostname()
+        output_json = f"{output_json}-{hostname}-{pid}.json"
+        print(f"Monitoring output file: {args.output_json}")
 
     start = time.time()
     pipeline.execute(args.policy)
     end = time.time()
     print(f"End to End time spend : {end - start}")
 
-    if args.output_json is not None:
+    if output_json is not None:
         # Output profiling output to JSON
-        AMSMonitor.json(args.output_json)
+        AMSMonitor.json(output_json)
     return 0
 
 
