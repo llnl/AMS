@@ -735,10 +735,9 @@ class Pipeline(ABC):
         for a in self._tasks:
             self._executors.append(exec_vehicle_cls(target=a))
 
-        pids_to_kill = [self._executors[0].pid]
-        assert isinstance(
-            self._tasks[0], RMQDomainDataLoaderTask
-        ), f"Expected task to be RMQ, but was {self._tasks[0].__class__.__name__}"
+        pids_to_kill = []
+        if isinstance(self._tasks[0], RMQDomainDataLoaderTask):
+            pids_to_kill.append(self._executors[0].pid])
 
         shutdown_task = exec_vehicle_cls(target=self.shutdown, args=([pids_to_kill]))
         shutdown_task.start()
