@@ -10,7 +10,8 @@ jobs:
       matrix:
         target: [
           { context: "x86_64-broadwell-gcc11.2.1", tag: "ams-ci-almalinux8" },
-          { context: "x86_64-broadwell-cuda11.6.1", tag: "ams-ci-cuda11.6.1" }
+          { context: "x86_64-broadwell-cuda11.6.1", tag: "ams-ci-cuda11.6.1" },
+          { context: "x86_64-gcc.12.2-mariadb-flux", tag: "ams-ci-flux-mariadb" }
         ]
     steps:
       - name: Set up QEMU
@@ -40,7 +41,7 @@ jobs:
           sudo docker image prune --all --force
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
-      - name: Build and push almalinux8 container
+      - name: Build and push container
         uses: docker/build-push-action@v6
         with:
           platforms: linux/amd64

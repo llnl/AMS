@@ -19,7 +19,6 @@ from queue import Queue as ser_queue
 from threading import Thread
 
 import numpy as np
-from ams.config import AMSInstance
 from ams.faccessors import get_reader, get_writer
 from ams.monitor import AMSMonitor
 from ams.rmq import AMSMessage, AsyncConsumer, AMSRMQConfiguration
@@ -112,36 +111,23 @@ class ForwardTask(Task):
     action/transformation and forwards the outcome to some output queue.
 
     Attributes:
+        application_name: The name of the application currently being used
+        db_url: url to sql server that stores metadata of files.
         i_queue: The input queue to read input message
         o_queue: The output queue to write the transformed messages
         user_obj: An object providing the update_model_cb and data_cb callbacks to be applied on the respective control messages before pushing it to the next stage.
     """
 
-    def __init__(self, db_path, db_store, name, i_queue, o_queue, user_obj):
+    def __init__(self, application_name, db_url, i_queue, o_queue, user_obj):
         """
         initializes a ForwardTask class with the queues and the callback.
         """
-
-        self._db_path = db_path
-        self._db_store = db_store
-        self._db_name = name
-
+        self.application_name = application_name
+        self.db_url = db_url
         self.i_queue = i_queue
         self.o_queue = o_queue
         self.user_obj = user_obj
         self.datasize_byte = 0
-
-    @property
-    def db_path(self):
-        return self._db_path
-
-    @property
-    def db_store(self):
-        return self._db_store
-
-    @property
-    def db_name(self):
-        return self._db_name
 
     def _data_cb(self, data):
         """
@@ -173,7 +159,7 @@ class ForwardTask(Task):
         the tasks waiting on the output queues about the terminations and returns from the function.
         """
 
-        with AMSDataStore(self.db_path, self.db_store, self.db_name) as db:
+        with AMSDataStore(self.application_name, self.db_url) as db:
             while True:
                 # This is a blocking call
                 item = self.i_queue.get(block=True)
@@ -183,7 +169,12 @@ class ForwardTask(Task):
                 elif item.is_process():
                     data = item.data()
                     inputs, outputs = self._data_cb(data)
-                    self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(inputs, outputs, data.domain_name)))
+                    self.o_queue.put(
+                        QueueMessage(
+                            MessageType.Process,
+                            DataBlob(inputs, outputs, data.domain_name),
+                        )
+                    )
                     self.datasize_byte += inputs.nbytes + outputs.nbytes
                 elif item.is_new_model():
                     data = item.data()
@@ -191,9 +182,6 @@ class ForwardTask(Task):
                 elif item.is_delete():
                     print(f"Sending Delete Message Type {self.__class__.__name__}")
                     self.o_queue.put(item)
-                elif item.is_new_model():
-                    # This is not handled yet
-                    continue
         return
 
 
@@ -259,7 +247,7 @@ class FSLoaderTask(Task):
         self.o_queue.put(QueueMessage(MessageType.Terminate, None))
 
         end = time.time_ns()
-        self.total_time_ns += (end - start)
+        self.total_time_ns += end - start
         print(f"Spend {(end - start)/1e9} at {self.__class__.__name__}")
 
 
@@ -350,7 +338,7 @@ class RMQDomainDataLoaderTask(Task):
         for j, (i, o) in enumerate(zip(input_batches, output_batches)):
             self.o_queue.put(QueueMessage(MessageType.Process, DataBlob(i, o, domain_name)))
         end_time = time.time_ns()
-        self.total_time_ns += (end_time - start_time)
+        self.total_time_ns += end_time - start_time
         # TODO: Improve the code to manage potentially multiple messages per AMSMessage
         msg = {
             "delivery_tag": basic_deliver.delivery_tag,
@@ -361,7 +349,7 @@ class RMQDomainDataLoaderTask(Task):
             "output_dim": msg.output_dim,
             "size_bytes": input_data.nbytes + output_data.nbytes,
             "ts_received": start_time,
-            "ts_processed": end_time
+            "ts_processed": end_time,
         }
         msgs.append(msg)
 
@@ -455,9 +443,15 @@ class FSWriteTask(Task):
         with AMSMonitor(obj=self, tag="internal_loop", accumulate=False):
             while True:
                 # This is a blocking call
-                print(f"{self.__class__.__name__} Receives messages at queue:", self.i_queue)
+                print(
+                    f"{self.__class__.__name__} Receives messages at queue:",
+                    self.i_queue,
+                )
                 item = self.i_queue.get(block=True)
-                print(f"{self.__class__.__name__} Received messages at queue:", self.i_queue)
+                print(
+                    f"{self.__class__.__name__} Received messages at queue:",
+                    self.i_queue,
+                )
                 if item.is_terminate():
                     for k, v in data_files.items():
                         v[0].close()
@@ -477,7 +471,10 @@ class FSWriteTask(Task):
                         # TODO: bytes_written should be an attribute of the file
                         # to keep track of the size of the current file. Currently we keep track of this
                         # by keeping a value in a list
-                        data_files[data.domain_name] = [self.data_writer_cls(fn).open(), 0]
+                        data_files[data.domain_name] = [
+                            self.data_writer_cls(fn).open(),
+                            0,
+                        ]
                     bytes_written = data.inputs.size * data.inputs.itemsize
                     bytes_written += data.outputs.size * data.outputs.itemsize
                     data_files[data.domain_name][0].store(data.inputs, data.outputs)
@@ -489,7 +486,11 @@ class FSWriteTask(Task):
                         data_files[data.domain_name][0].close()
                         self.o_queue.put(
                             QueueMessage(
-                                MessageType.Process, (data.domain_name, data_files[data.domain_name][0].file_name)
+                                MessageType.Process,
+                                (
+                                    data.domain_name,
+                                    data_files[data.domain_name][0].file_name,
+                                ),
                             )
                         )
                         del data_files[data.domain_name]
@@ -511,21 +512,30 @@ class PushToStore(Task):
         store: The Kosh Store
     """
 
-    def __init__(self, i_queue, ams_config, db_path, store):
+    def __init__(
+        self,
+        i_queue,
+        application_name,
+        dest_dir,
+        db_url=None,
+    ):
         """
-        Initializes the PushToStore Task. It reads files from i_queue, if the file
-        is not under db_path, it copies the file to this location and if store defined
-        it makes the kosh-store aware about the existence of the file.
+        Initializes the PushToStore Task.
+        Args:
+            i_queue: The queue to read requests from.
+            application_name: The name of the running application.
+            dest_dir: The path to store persistend data to.
+            db_url: The url to a SQL DB server which will be used to register metadata associated with the files.
         """
 
-        self.ams_config = ams_config
         self.i_queue = i_queue
-        self.dir = Path(db_path).absolute()
-        self._store = store
+        self.dest_dir = Path(dest_dir).absolute()
+        self.db_url = db_url
         self.nb_requests = 0
+        self.application_name = application_name
         self.total_filesize = 0
-        if not self.dir.exists():
-            self.dir.mkdir(parents=True, exist_ok=True)
+        if not self.dest_dir.exists():
+            self.dest_dir.mkdir(parents=True, exist_ok=True)
 
     @AMSMonitor(record=["nb_requests"])
     def __call__(self):
@@ -533,16 +543,20 @@ class PushToStore(Task):
         A busy loop reading messages from the i_queue publishing them to the kosh store.
         """
         start = time.time()
-        if self._store:
-            db_store = AMSDataStore(
-                self.ams_config.db_path, self.ams_config.db_store, self.ams_config.name, False
-            ).open()
+        if self.db_url is not None:
+            db_store = AMSDataStore(self.application_name, self.db_url).open()
 
         with AMSMonitor(obj=self, tag="internal_loop", record=[]):
             while True:
-                print(f"{self.__class__.__name__} Receives messages at queue:", self.i_queue)
+                print(
+                    f"{self.__class__.__name__} Receives messages at queue:",
+                    self.i_queue,
+                )
                 item = self.i_queue.get(block=True)
-                print(f"{self.__class__.__name__} Received messages at queue:", self.i_queue)
+                print(
+                    f"{self.__class__.__name__} Received messages at queue:",
+                    self.i_queue,
+                )
                 if item.is_terminate():
                     print(f"Received Terminate {self.__class__.__name__}")
                     break
@@ -551,16 +565,20 @@ class PushToStore(Task):
                     fn = item.data()
                     Path(fn).unlink()
                 elif item.is_process():
-                    with AMSMonitor(obj=self, tag="request_block", record=["nb_requests", "total_filesize"]):
+                    with AMSMonitor(
+                        obj=self,
+                        tag="request_block",
+                        record=["nb_requests", "total_filesize"],
+                    ):
                         self.nb_requests += 1
                         domain_name, file_name = item.data()
                         if domain_name == None:
                             domain_name = "unknown-domain"
                         src_fn = Path(file_name)
-                        dest_file = self.dir / src_fn.name
+                        dest_file = self.dest_dir / src_fn.name
                         if src_fn != dest_file:
                             shutil.move(src_fn, dest_file)
-                        if self._store:
+                        if self.db_url is not None:
                             db_store.add_candidates(domain_name, [str(dest_file)])
 
                         self.total_filesize += os.stat(src_fn).st_size
@@ -588,33 +606,18 @@ class Pipeline(ABC):
     supported_policies = {"sequential", "thread", "process"}
     supported_writers = {"shdf5", "dhdf5", "csv"}
 
-    def __init__(self, db_dir, store, dest_dir=None, stage_dir=None, db_type="dhdf5"):
+    def __init__(self, application_name, dest_dir, db_url, db_type="dhdf5"):
         """
         initializes the Pipeline class to write the final data in the 'dest_dir' using a file writer of type 'db_type'
         and optionally caching the data in the 'stage_dir' before making them available in the cache store.
         """
-        self.ams_config = AMSInstance.from_env()
-        if self.ams_config is None:
-            self.ams_config = AMSInstance.from_path(db_dir)
 
-        if dest_dir is not None:
-            self.dest_dir = dest_dir
-
-        if dest_dir is None and store:
-            self.dest_dir = self.ams_config.db_path
-
-        self.stage_dir = self.dest_dir
-
-        if stage_dir is not None:
-            self.stage_dir = stage_dir
-
+        self.application_name = application_name
+        self.dest_dir = dest_dir
         self.user_action = None
-
         self.db_type = db_type
-
         self._writer = get_writer(self.db_type)
-
-        self.store = store
+        self.db_url = db_url
 
         # For signal handling
         self.released = False
@@ -634,6 +637,7 @@ class Pipeline(ABC):
             for e in self._executors:
                 os.kill(e.pid, signal.SIGINT)
             self.release_signals()
+
         return handler
 
     def init_signals(self):
@@ -648,7 +652,7 @@ class Pipeline(ABC):
             # We put back all the signal handlers
             for sig in self.signals:
                 signal.signal(sig, self.original_handlers[sig])
-            
+
             self.released = True
 
     def add_user_action(self, obj):
@@ -729,9 +733,8 @@ class Pipeline(ABC):
 
         self._tasks.append(
             ForwardTask(
-                self.ams_config.db_path,
-                self.ams_config.db_store,
-                self.ams_config.name,
+                self.application_name,
+                self.db_url,
                 self._queues[0],
                 self._queues[1],
                 self.user_action,
@@ -741,9 +744,9 @@ class Pipeline(ABC):
             self._tasks.append(self.get_model_update_task(self._queues[0], policy))
 
         # After user actions we store into a file
-        self._tasks.append(FSWriteTask(self._queues[1], self._queues[2], self._writer, self.stage_dir))
+        self._tasks.append(FSWriteTask(self._queues[1], self._queues[2], self._writer, self.dest_dir))
         # After storing the file we make it public to the kosh store.
-        self._tasks.append(PushToStore(self._queues[2], self.ams_config, self.dest_dir, self.store))
+        self._tasks.append(PushToStore(self._queues[2], self.application_name, self.dest_dir, self.db_url))
 
     def execute(self, policy):
         """
@@ -788,12 +791,25 @@ class Pipeline(ABC):
         """
         Initialize root pipeline class cli parser with the options.
         """
-        parser.add_argument("--dest", "-d", dest="dest_dir", help="Where to store the data (Directory should exist)")
         parser.add_argument(
-            "--stage-dir",
-            dest="stage_dir",
-            help="Where to 'stage' data (some directory either under /dev/shm/ or under local storage (SSD)",
-            default=None,
+            "--dest",
+            "-d",
+            dest="dest_dir",
+            help="Where to store the data (Directory should exist)",
+        )
+        parser.add_argument(
+            "--db-url",
+            "-url",
+            dest="db_url",
+            help="The SQL url to store the metadata to",
+            required=True,
+        )
+        parser.add_argument(
+            "--application-name",
+            "-a",
+            dest="application_name",
+            help="The name of the application we will store data and metadata for",
+            required=True,
         )
         parser.add_argument(
             "--db-type",
@@ -802,11 +818,6 @@ class Pipeline(ABC):
             help="File format to store the data to",
             default="dhdf5",
         )
-        # parser.add_argument("--db-dir", "-d", help="path to the AMS store directory", required=True)
-        parser.add_argument("--persistent-db-path", "-db", help="The path of the AMS database", required=True)
-        parser.add_argument("--store", dest="store", action="store_true")
-        parser.add_argument("--no-store", dest="store", action="store_false")
-        parser.set_defaults(store=True)
         return
 
     @abstractmethod
@@ -835,12 +846,12 @@ class FSPipeline(Pipeline):
 
     supported_readers = ("shdf5", "dhdf5", "csv")
 
-    def __init__(self, db_dir, store, dest_dir, stage_dir, db_type, src, src_type, pattern):
+    def __init__(self, application_name, dest_dir, db_url, db_type, src, src_type, pattern):
         """
         Initialize a FSPipeline that will write data to the 'dest_dir' and optionally publish
         these files to the kosh-store 'store' by using the stage_dir as an intermediate directory.
         """
-        super().__init__(db_dir, store, dest_dir, stage_dir, db_type)
+        super().__init__(application_name, dest_dir, db_url, db_type)
         self._src = Path(src)
         self._pattern = pattern
         self._src_type = src_type
@@ -874,10 +885,9 @@ class FSPipeline(Pipeline):
         Create FSPipeline from the user provided CLI.
         """
         return cls(
-            args.persistent_db_path,
-            args.store,
+            args.application_name,
             args.dest_dir,
-            args.stage_dir,
+            args.db_url,
             args.db_type,
             args.src,
             args.src_type,
@@ -907,10 +917,9 @@ class RMQPipeline(Pipeline):
 
     def __init__(
         self,
-        db_dir,
-        store,
+        application_name,
         dest_dir,
-        stage_dir,
+        db_url,
         db_type,
         host,
         port,
@@ -925,7 +934,7 @@ class RMQPipeline(Pipeline):
         Initialize a RMQPipeline that will write data to the 'dest_dir' and optionally publish
         these files to the kosh-store 'store' by using the stage_dir as an intermediate directory.
         """
-        super().__init__(db_dir, store, dest_dir, stage_dir, db_type)
+        super().__init__(application_name, dest_dir, db_url, db_type)
         self._host = host
         self._port = port
         self._vhost = vhost
@@ -1000,10 +1009,9 @@ class RMQPipeline(Pipeline):
         config = AMSRMQConfiguration.from_json(args.creds)
 
         return cls(
-            args.persistent_db_path,
-            args.store,
+            args.application_name,
             args.dest_dir,
-            args.stage_dir,
+            args.db_url,
             args.db_type,
             config.service_host,
             config.service_port,
@@ -1012,7 +1020,7 @@ class RMQPipeline(Pipeline):
             config.rabbitmq_password,
             config.rabbitmq_cert,
             config.rabbitmq_queue_physics,
-            config.rabbitmq_exchange_training if args.update_rmq_models else None
+            config.rabbitmq_exchange_training if args.update_rmq_models else None,
         )
 
     def requires_model_update(self):

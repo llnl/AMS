@@ -32,8 +32,10 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
+  "h5py",
   "argparse",
-  "kosh>=3.0.1",
+  "SQLAlchemy",
+  "mysql-connector-python",
   "pika>=1.3.0",
   "numpy>=1.2.0"
 ]
