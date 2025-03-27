@@ -323,9 +323,9 @@ class AMSDomainJob(AMSJob):
             domain_names=descr["domain_names"],
             environ=os.environ,
             resources=domain_job_resources,
-            ams_log=descr["ams_log"] if "ams_log" in descr else False,
-            ams_log_dir=descr["ams_log_dir"] if "ams_log_dir" in descr else "",
-            ams_log_prefix=descr["ams_log_prefix"] if "ams_log_prefix" in descr else "",
+            ams_log=descr.get("ams_log", False)
+            ams_log_dir=descr.get("ams_log_dir", "")
+            ams_log_prefix=descr.get("ams_log_prefix", "")
             **descr["cli"],
         )
 
@@ -355,8 +355,6 @@ class AMSDomainJob(AMSJob):
                 self.environ["AMS_LOG_DIR"] = self._ams_log_dir
             if self._ams_log_prefix != "":
                 self.environ["AMS_LOG_PREFIX"] = f"ams.log.{self.ams_id}.{self._ams_log_prefix}"
-        self.environ["CALI_CONFIG"] = "hatchet-region-profile(output.format=hatchet,output=out_hatchet),use.mpi"
-        self.environ["CALI_USE_OMPT"] = False
 
         print(f"JOB {self.name} uses AMS-Object at {self._ams_object_fn}")
 

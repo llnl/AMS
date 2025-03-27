@@ -135,23 +135,15 @@ class AMSMessage(object):
             res["output_dim"],
             res["padding"],
         ) = struct.unpack(fmt, body[:hsize])
-        assert (
-            hsize == res["hsize"]
-        ), f"Hsize is {hsize} expected value is {res['hsize']}"
+        assert hsize == res["hsize"], f"Hsize is {hsize} expected value is {res['hsize']}"
         assert res["datatype"] in [4, 8]
         if len(body) < hsize:
-            print(
-                f"Incomplete message of size {len(body)}. Header should be of size {hsize}. skipping"
-            )
+            print(f"Incomplete message of size {len(body)}. Header should be of size {hsize}. skipping")
             return {}
 
         # Theoritical size in Bytes for the incoming message (without the header)
         # Int() is needed otherwise we might overflow here (because of uint16 / uint8)
-        res["dsize"] = (
-            int(res["datatype"])
-            * int(res["num_element"])
-            * (int(res["input_dim"]) + int(res["output_dim"]))
-        )
+        res["dsize"] = int(res["datatype"]) * int(res["num_element"]) * (int(res["input_dim"]) + int(res["output_dim"]))
         res["msg_size"] = hsize + res["dsize"]
         res["multiple_msg"] = len(body) != res["msg_size"]
 
@@ -165,9 +157,7 @@ class AMSMessage(object):
 
         return res
 
-    def _parse_data(
-        self, body: str, header_info: dict
-    ) -> Tuple[str, np.array, np.array]:
+    def _parse_data(self, body: str, header_info: dict) -> Tuple[str, np.array, np.array]:
         data = np.array([])
         if len(body) == 0:
             return data
@@ -207,9 +197,7 @@ class AMSMessage(object):
             domain_name, temp_input, temp_output = self._parse_data(body, header_info)
             # print(f"MSG: {domain_name} input shape {temp_input.shape} outpute shape {temp_output.shape}")
             # total size of byte we read for that message
-            chunk_size = (
-                header_info["hsize"] + header_info["dsize"] + header_info["domain_size"]
-            )
+            chunk_size = header_info["hsize"] + header_info["dsize"] + header_info["domain_size"]
             input.append(temp_input)
             output.append(temp_output)
             # We remove the current message and keep going
@@ -272,9 +260,7 @@ class AMSChannel:
         """
 
         if self.channel and self.channel.is_open:
-            self.logger.info(
-                f"Starting to consume messages from queue={self.q_name} ..."
-            )
+            self.logger.info(f"Starting to consume messages from queue={self.q_name} ...")
             # we will consume only n_msg and requeue all other messages
             # if there are more messages in the queue.
             # It will block as long as n_msg did not get read
@@ -282,9 +268,7 @@ class AMSChannel:
                 n_msg = max(n_msg, 0)
                 message_consumed = 0
                 # Comsume n_msg messages and break out
-                for method_frame, properties, body in self.channel.consume(
-                    self.q_name, inactivity_timeout=timeout
-                ):
+                for method_frame, properties, body in self.channel.consume(self.q_name, inactivity_timeout=timeout):
                     if (method_frame, properties, body) == (None, None, None):
                         self.logger.info(f"Timeout after {timeout} seconds")
                         self.channel.cancel()
@@ -321,9 +305,7 @@ class AMSChannel:
         @param text The text to send
         @param exchange Exchange to use
         """
-        self.channel.basic_publish(
-            exchange=exchange, routing_key=self.q_name, body=text
-        )
+        self.channel.basic_publish(exchange=exchange, routing_key=self.q_name, body=text)
         return
 
     def get_messages(self):
@@ -396,7 +378,6 @@ class BlockingClient:
 
 class StatusPoller(BlockingClient):
     def getMessageCount(self, queue):
-        # Passive declare to avoid creating the queue if it doesn't exist
         channel = self.connection.channel()
         queue = channel.queue_declare(queue=queue)
         return queue.method.message_count
@@ -646,9 +627,7 @@ class AsyncConsumer(object):
         with different prefetch values to achieve desired performance.
 
         """
-        self._channel.basic_qos(
-            prefetch_count=self._prefetch_count, callback=self.on_basic_qos_ok
-        )
+        self._channel.basic_qos(prefetch_count=self._prefetch_count, callback=self.on_basic_qos_ok)
 
     def on_basic_qos_ok(self, _unused_frame):
         """Invoked by pika when the Basic.QoS method has completed. At this
@@ -673,14 +652,10 @@ class AsyncConsumer(object):
         """
         self.logger.debug("Issuing consumer related RPC commands")
         self.add_on_cancel_callback()
-        self._consumer_tag = self._channel.basic_consume(
-            self._queue, self.on_message, auto_ack=False
-        )
+        self._consumer_tag = self._channel.basic_consume(self._queue, self.on_message, auto_ack=False)
         self.was_consuming = True
         self._consuming = True
-        self.logger.info(
-            f"Waiting for messages (tag: {self._consumer_tag}). To exit press CTRL+C"
-        )
+        self.logger.info(f"Waiting for messages (tag: {self._consumer_tag}). To exit press CTRL+C")
 
     def add_on_cancel_callback(self):
         """Add a callback that will be invoked if RabbitMQ cancels the consumer
@@ -698,9 +673,7 @@ class AsyncConsumer(object):
         :param pika.frame.Method method_frame: The Basic.Cancel frame
 
         """
-        self.logger.debug(
-            f"Consumer was cancelled remotely, shutting down: {method_frame}"
-        )
+        self.logger.debug(f"Consumer was cancelled remotely, shutting down: {method_frame}")
         if self._channel:
             self._channel.close()
 
@@ -718,9 +691,7 @@ class AsyncConsumer(object):
         :param bytes body: The message body
 
         """
-        self.logger.info(
-            f"Received message #{method_frame.delivery_tag} from {properties}"
-        )
+        self.logger.info(f"Received message #{method_frame.delivery_tag} from {properties}")
         self._on_message_cb(_unused_channel, method_frame, properties, body)
         self.acknowledge_message(method_frame.delivery_tag)
 
@@ -755,9 +726,7 @@ class AsyncConsumer(object):
 
         """
         self._consuming = False
-        self.logger.debug(
-            f"RabbitMQ acknowledged the cancellation of the consumer: {userdata}"
-        )
+        self.logger.debug(f"RabbitMQ acknowledged the cancellation of the consumer: {userdata}")
         self.close_channel()
 
     def close_channel(self):
@@ -824,7 +793,6 @@ class AsyncFanOutConsumer(AsyncConsumer):
     def on_channel_open(self, channel):
         self._channel = channel
         self.logger.debug("Channel opened")
-        sys.stdout.flush()
         self.add_on_channel_close_callback()
         self._channel.exchange_declare(
             exchange="control-panel",
@@ -834,16 +802,12 @@ class AsyncFanOutConsumer(AsyncConsumer):
 
     # Callback when the exchange is declared
     def on_exchange_declared(self, frame):
-        self._channel.queue_declare(
-            queue="", exclusive=True, callback=self.on_queue_declared
-        )
+        self._channel.queue_declare(queue="", exclusive=True, callback=self.on_queue_declared)
 
     # Callback when the queue is declared
     def on_queue_declared(self, queue_result):
         self._queue = queue_result.method.queue
-        self._channel.queue_bind(
-            exchange="control-panel", queue=self._queue, callback=self.on_queue_bound
-        )
+        self._channel.queue_bind(exchange="control-panel", queue=self._queue, callback=self.on_queue_bound)
 
     # Callback when the queue is bound to the exchange
     def on_queue_bound(self, frame):
@@ -909,9 +873,7 @@ class AMSSyncProducer:
     def send_message(self, message):
         self._num_sent_messages += 1
         try:
-            self.channel.basic_publish(
-                exchange="", routing_key=self._publish_queue, body=message
-            )
+            self.channel.basic_publish(exchange="", routing_key=self._publish_queue, body=message)
         except pika.exceptions.UnroutableError:
             print(f" [{self._num_sent_messages}] Message could not be confirmed")
         else:
@@ -929,9 +891,7 @@ class AMSFanOutProducer(AMSSyncProducer):
         cert: str,
         logger: logging.Logger = None,
     ):
-        super().__init__(
-            host, port, vhost, user, password, cert, "control-panel", logger
-        )
+        super().__init__(host, port, vhost, user, password, cert, "control-panel", logger)
 
     def open(self):
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -959,9 +919,7 @@ class AMSFanOutProducer(AMSSyncProducer):
     def broadcast(self, message):
         self._num_sent_messages += 1
         try:
-            self.channel.basic_publish(
-                exchange="control-panel", routing_key="", body=message
-            )
+            self.channel.basic_publish(exchange="control-panel", routing_key="", body=message)
             print(f" [x] Sent '{message}'")
         except pika.exceptions.UnroutableError:
             print(f" [{self._num_sent_messages}] Message could not be confirmed")
@@ -1009,9 +967,7 @@ class AMSRMQConfiguration:
 
     def __post_init__(self):
         if not Path(self.rabbitmq_cert).exists():
-            raise RuntimeError(
-                f"Certificate rmq path: {self.rabbitmq_cert} does not exist"
-            )
+            raise RuntimeError(f"Certificate rmq path: {self.rabbitmq_cert} does not exist")
 
     @classmethod
     def from_json(cls, json_file):
@@ -1023,14 +979,10 @@ class AMSRMQConfiguration:
         data = {key.replace("-", "_"): value for key, value in data.items()}
 
         # Filter out extra fields not accepted by this class
-        return cls(
-            **{k: v for k, v in data.items() if k in inspect.signature(cls).parameters}
-        )
+        return cls(**{k: v for k, v in data.items() if k in inspect.signature(cls).parameters})
 
     def to_dict(self, AMSlib=False):
-        assert (
-            AMSlib
-        ), "AMSRMQConfiguration cannot convert class to non amslib dictionary"
+        assert AMSlib, "AMSRMQConfiguration cannot convert class to non amslib dictionary"
         if AMSlib:
             return {
                 "service-port": self.service_port,
@@ -1040,7 +992,6 @@ class AMSRMQConfiguration:
                 "rabbitmq-vhost": self.rabbitmq_vhost,
                 "rabbitmq-cert": self.rabbitmq_cert,
                 "rabbitmq-queue-physics": self.rabbitmq_queue_physics,
-                "rabbitmq-exchange": "not-used",
                 "rabbitmq-exchange-training": self.rabbitmq_exchange_training,
                 "rabbitmq-key-training": self.rabbitmq_key_training,
                 "rabbitmq-ml-submit-queue": self.rabbitmq_ml_submit_queue,
