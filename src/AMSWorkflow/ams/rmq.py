@@ -12,10 +12,12 @@ import struct
 import traceback
 from pathlib import Path
 from typing import Callable, Optional, Tuple
+import sys
 
 import numpy as np
 import json
 import pika
+
 
 class AMSMessage(object):
     """
@@ -77,7 +79,14 @@ class AMSMessage(object):
         """
         return "="
 
-    def encode(self, num_elem: int, domain_name: str, input_dim: int, output_dim: int, dtype_byte: int = 4) -> bytes:
+    def encode(
+        self,
+        num_elem: int,
+        domain_name: str,
+        input_dim: int,
+        output_dim: int,
+        dtype_byte: int = 4,
+    ) -> bytes:
         """
         For debugging and testing purposes, this function encode a message identical to what AMS would send
         """
@@ -90,7 +99,16 @@ class AMSMessage(object):
         domain_name_size = len(domain_name)
         domain_name = bytes(domain_name, "utf-8")
         padding = 0
-        header_content = (hsize, dtype_byte, mpi_rank, domain_name_size, data.size, input_dim, output_dim, padding)
+        header_content = (
+            hsize,
+            dtype_byte,
+            mpi_rank,
+            domain_name_size,
+            data.size,
+            input_dim,
+            output_dim,
+            padding,
+        )
         # float or double
         msg_format = f"{header_format}{domain_name_size}s{data.size}{dt}"
         return struct.pack(msg_format, *header_content, domain_name, *data)
@@ -117,7 +135,7 @@ class AMSMessage(object):
             res["output_dim"],
             res["padding"],
         ) = struct.unpack(fmt, body[:hsize])
-        assert hsize == res["hsize"]
+        assert hsize == res["hsize"], f"Hsize is {hsize} expected value is {res['hsize']}"
         assert res["datatype"] in [4, 8]
         if len(body) < hsize:
             print(f"Incomplete message of size {len(body)}. Header should be of size {hsize}. skipping")
@@ -151,11 +169,13 @@ class AMSMessage(object):
         try:
             if header_info["datatype"] == 4:  # if datatype takes 4 bytes (float)
                 data = np.frombuffer(
-                    body[hsize + domain_name_size : hsize + domain_name_size + dsize], dtype=np.float32
+                    body[hsize + domain_name_size : hsize + domain_name_size + dsize],
+                    dtype=np.float32,
                 )
             else:
                 data = np.frombuffer(
-                    body[hsize + domain_name_size : hsize + domain_name_size + dsize], dtype=np.float64
+                    body[hsize + domain_name_size : hsize + domain_name_size + dsize],
+                    dtype=np.float64,
                 )
         except ValueError as e:
             print(f"Error: {e} => {header_info}")
@@ -188,16 +208,24 @@ class AMSMessage(object):
     def decode(self) -> Tuple[str, np.array, np.array]:
         return self._decode(self.body)
 
+
 def default_ams_callback(method, properties, body):
     """Simple callback that decode incoming message assuming they are AMS binary messages"""
     return AMSMessage(body)
+
 
 class AMSChannel:
     """
     A wrapper around Pika RabbitMQ channel
     """
 
-    def __init__(self, connection, q_name, callback: Optional[Callable] = None, logger: Optional[logging.Logger] = None):
+    def __init__(
+        self,
+        connection,
+        q_name,
+        callback: Optional[Callable] = None,
+        logger: Optional[logging.Logger] = None,
+    ):
         self.connection = connection
         self.q_name = q_name
         self.logger = logger if logger else logging.getLogger(__name__)
@@ -211,7 +239,7 @@ class AMSChannel:
         self.close()
 
     def default_callback(self, method, properties, body):
-        """ Simple callback that return the message received"""
+        """Simple callback that return the message received"""
         return body
 
     def open(self):
@@ -221,7 +249,7 @@ class AMSChannel:
     def close(self):
         self.channel.close()
 
-    def receive(self, n_msg: int = None, timeout: int = None, accum_msg = list()):
+    def receive(self, n_msg: int = None, timeout: int = None, accum_msg=list()):
         """
         Consume a message on the queue and post processing by calling the callback.
         @param n_msg The number of messages to receive.
@@ -232,9 +260,7 @@ class AMSChannel:
         """
 
         if self.channel and self.channel.is_open:
-            self.logger.info(
-                f"Starting to consume messages from queue={self.q_name} ..."
-            )
+            self.logger.info(f"Starting to consume messages from queue={self.q_name} ...")
             # we will consume only n_msg and requeue all other messages
             # if there are more messages in the queue.
             # It will block as long as n_msg did not get read
@@ -264,7 +290,7 @@ class AMSChannel:
                         self.channel.basic_ack(delivery_tag=method_frame.delivery_tag)
                         message_consumed += 1
                     self.logger.warning(
-                        f"Consumed message {message_consumed}/{method_frame.delivery_tag} (exchange=\'{method_frame.exchange}\', routing_key={method_frame.routing_key})"
+                        f"Consumed message {message_consumed}/{method_frame.delivery_tag} (exchange='{method_frame.exchange}', routing_key={method_frame.routing_key})"
                     )
                     # Escape out of the loop after nb_msg messages
                     if message_consumed == n_msg:
@@ -273,7 +299,7 @@ class AMSChannel:
                         break
         return accum_msg
 
-    def send(self, text: str, exchange : str = ""):
+    def send(self, text: str, exchange: str = ""):
         """
         Send a message
         @param text The text to send
@@ -290,6 +316,7 @@ class AMSChannel:
         if self.channel and self.channel.is_open:
             self.channel.queue_purge(self.q_name)
 
+
 class BlockingClient:
     """
     BlockingClient is a class that manages a simple blocking RMQ client lifecycle.
@@ -304,7 +331,7 @@ class BlockingClient:
         password: str,
         cert: Optional[str] = None,
         callback: Optional[Callable] = None,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         # CA Cert, can be generated with (where $REMOTE_HOST and $REMOTE_PORT can be found in the JSON file):
         # openssl s_client -connect $REMOTE_HOST:$REMOTE_PORT -showcerts < /dev/null 2>/dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' rmq-pds.crt
@@ -347,6 +374,13 @@ class BlockingClient:
     def connect(self, queue):
         """Connect to the queue"""
         return AMSChannel(self.connection, queue, self.callback)
+
+
+class StatusPoller(BlockingClient):
+    def getMessageCount(self, queue):
+        channel = self.connection.channel()
+        queue = channel.queue_declare(queue=queue)
+        return queue.method.message_count
 
 
 class AsyncConsumer(object):
@@ -742,7 +776,17 @@ class AsyncFanOutConsumer(AsyncConsumer):
         logger: Optional[logging.Logger] = None,
     ):
         super().__init__(
-            host, port, vhost, user, password, cert, queue, prefetch_count, on_message_cb, on_close_cb, logger
+            host,
+            port,
+            vhost,
+            user,
+            password,
+            cert,
+            queue,
+            prefetch_count,
+            on_message_cb,
+            on_close_cb,
+            logger,
         )
 
     # Callback when the channel is open
@@ -751,7 +795,9 @@ class AsyncFanOutConsumer(AsyncConsumer):
         self.logger.debug("Channel opened")
         self.add_on_channel_close_callback()
         self._channel.exchange_declare(
-            exchange="control-panel", exchange_type="fanout", callback=self.on_exchange_declared
+            exchange="control-panel",
+            exchange_type="fanout",
+            callback=self.on_exchange_declared,
         )
 
     # Callback when the exchange is declared
@@ -769,7 +815,6 @@ class AsyncFanOutConsumer(AsyncConsumer):
 
 
 class AMSSyncProducer:
-
     def __init__(
         self,
         host: str,
@@ -781,7 +826,6 @@ class AMSSyncProducer:
         publish_queue: str,
         logger: Optional[logging.Logger] = None,
     ):
-
         self.host = host
         self.port = port
         self.vhost = vhost
@@ -837,7 +881,6 @@ class AMSSyncProducer:
 
 
 class AMSFanOutProducer(AMSSyncProducer):
-
     def __init__(
         self,
         host: str,
@@ -897,7 +940,6 @@ class AMSRMQConfiguration:
                     "service-port": 0,
                     "service-host": "",
                     "rabbitmq-erlang-cookie": "",
-                    "rabbitmq-name": "",
                     "rabbitmq-password": "",
                     "rabbitmq-user": "",
                     "rabbitmq-vhost": "",
@@ -910,6 +952,7 @@ class AMSRMQConfiguration:
             }
         }
     """
+
     service_port: int
     service_host: str
     rabbitmq_password: str
@@ -917,10 +960,10 @@ class AMSRMQConfiguration:
     rabbitmq_vhost: str
     rabbitmq_cert: str
     rabbitmq_queue_physics: str
-    rabbitmq_exchange_training: str  = ""
+    rabbitmq_exchange_training: str = ""
     rabbitmq_key_training: str = ""
-    rabbitmq_ml_submit_queue: str  = ""
-    rabbitmq_ml_status_queue: str  = ""
+    rabbitmq_ml_submit_queue: str = ""
+    rabbitmq_ml_status_queue: str = ""
 
     def __post_init__(self):
         if not Path(self.rabbitmq_cert).exists():
@@ -936,10 +979,7 @@ class AMSRMQConfiguration:
         data = {key.replace("-", "_"): value for key, value in data.items()}
 
         # Filter out extra fields not accepted by this class
-        return cls(**{
-                k: v for k, v in data.items()
-                if k in inspect.signature(cls).parameters
-        })
+        return cls(**{k: v for k, v in data.items() if k in inspect.signature(cls).parameters})
 
     def to_dict(self, AMSlib=False):
         assert AMSlib, "AMSRMQConfiguration cannot convert class to non amslib dictionary"

@@ -32,7 +32,9 @@
 
 static int get_rank_id()
 {
-  if (const char *rid = std::getenv("SLURM_PROCID")) {
+  if (const char *flux_id = std::getenv("FLUX_TASK_RANK")) {
+    return std::stoi(flux_id);
+  } else if (const char *rid = std::getenv("SLURM_PROCID")) {
     return std::stoi(rid);
   } else if (const char *jsm = std::getenv("JSM_NAMESPACE_RANK")) {
     return std::stoi(jsm);

@@ -3,9 +3,10 @@ import os
 import json
 
 from typing import Optional
+import threading
 from dataclasses import dataclass, fields
 from ams import util
-from ams.store import AMSDataStore 
+from ams.store import AMSDataStore
 from ams.rmq import AMSRMQConfiguration
 from typing import Dict, List, Union, Optional, Mapping
 from pathlib import Path
@@ -42,35 +43,33 @@ class AMSJob:
     in the json file.
     """
 
-    @classmethod
-    def generate_formatting(cls, store):
-        return {"AMS_STORE_PATH": store.root_path}
-
     def __init__(
         self,
         name: str,
         executable: str,
         environ: Optional[Mapping[str, str]] = {},
-        resources: Optional[AMSJobResources]=None,
-        stdout: Optional[str]=None,
-        stderr: Optional[str]=None,
-        ams_log: bool=False,
-        is_mpi: bool=False,
-        cli_args: Optional[List[str]]=[],
-        cli_kwargs: Optional[Dict[str,str]]={},
+        resources: Optional[AMSJobResources] = None,
+        stdout: Optional[str] = None,
+        stderr: Optional[str] = None,
+        ams_log: bool = False,
+        ams_log_dir: str = "",
+        ams_log_prefix: str = "",
+        is_mpi: bool = False,
+        cli_args: Optional[List[str]] = [],
+        cli_kwargs: Optional[Dict[str, str]] = {},
     ):
         """Attaches a callable that will be called when the future finishes.
 
-        :param name: An arbitary name for every job. This can be an arbitary string. 
+        :param name: An arbitary name for every job. This can be an arbitary string.
         :param executable: A string pointing to the executable to be executed
-        :param environ: The environment to be used  when scheduling the job. 
+        :param environ: The environment to be used  when scheduling the job.
         :param resources: The resources dedicated to this job.
         :param stdout File to redirect the stdout.
         :param stderr File to redirect the stderr.
         :param ams_log: A boolean value to enable the logging of AMS printouts
         :param is_mpi: Whether the job is an mpi job.
-        :param cli_args: positional arguments of the cli command 
-        :param cli_kwargs: key-word arguments of the cli command 
+        :param cli_args: positional arguments of the cli command
+        :param cli_kwargs: key-word arguments of the cli command
         :return: ``self``
         """
 
@@ -87,6 +86,8 @@ class AMSJob:
         self._cli_kwargs = {}
         self._is_mpi = is_mpi
         self._ams_log = ams_log
+        self._ams_log_dir = ams_log_dir
+        self._ams_log_prefix = ams_log_prefix
         if cli_args is not None:
             self._cli_args = list(cli_args)
         if cli_kwargs is not None:
@@ -99,8 +100,8 @@ class AMSJob:
         data = {}
         data["name"] = self._name
         data["executable"] = self._executable
-        data["stdout"] = self._stdout
-        data["stderr"] = self._stderr
+        data["stdout"] = Path(self._stdout)
+        data["stderr"] = Path(self._stderr)
         data["cli_args"] = self._cli_args
         data["cli_kwargs"] = self._cli_kwargs
         data["resources"] = self._resources
@@ -108,7 +109,7 @@ class AMSJob:
 
     def precede_deploy(self, store, rmq=None):
         """
-        Will be called by the ams job scheduler just before submitting the job. If there is some modification 
+        Will be called by the ams job scheduler just before submitting the job. If there is some modification
         required to the submission environment a child class can override this method and do the modification.
         """
         pass
@@ -199,58 +200,70 @@ class AMSJob:
         )
 
         if self._is_mpi is not None:
-            print("Setting MPI and spectrum")
-            jobspec.setattr_shell_option("mpi", "spectrum")
+            if self._is_mpi == "spectrum":
+                jobspec.setattr_shell_option("mpi", "spectrum")
         if self.resources.gpus_per_task is not None:
             jobspec.setattr_shell_option("gpu-affinity", "per-task")
-        jobspec.stdout = self.stdout
-        jobspec.stderr = self.stderr
+        cwd = os.getcwd()
+        jobspec.cwd = os.getcwd()
+        jobspec.stdout = str(Path(cwd) / self.stdout)
+        jobspec.stderr = str(Path(cwd) / self.stderr)
         if self._stdout is None:
             jobspec.stdout = "ams_test.out"
         if self._stderr is None:
             jobspec.stderr = "ams_test.err"
 
         jobspec.environment = dict(self.environ)
-        jobspec.cwd = os.getcwd()
-
         return jobspec
 
 
 class AMSDomainJob(AMSJob):
     """
     The ``AMSDomainJob`` represents a job executing the original physics code that should be linked in with ``AMSlib``.
-    ``AMSDomainJob`` modifies the environment of the executing job just before submission using the ``precede_deploy`` hook. 
+    ``AMSDomainJob`` modifies the environment of the executing job just before submission using the ``precede_deploy`` hook.
     """
-    def _generate_ams_objects_store(self, store, rmq):
-        '''
-        Generates the dictionary requirements of the ``AMSlib`` database description. 
 
-        :param store: The AMSDataStore that contains all the files and directories of the AMS database. 
+    def _generate_ams_objects_store(self, store, rmq):
+        """
+        Generates the dictionary requirements of the ``AMSlib`` database description.
+
+        :param store: The AMSDataStore that contains all the files and directories of the AMS database.
         :param rmq: The AMSRMQConfiguration containing all required information to connect to the RMQ server
 
         :return: A dictionary with the correct structure
-        '''
+        """
 
         ams_object = dict()
         if rmq is None:
             if self.stage_dir is None:
-                ams_object["db"] = {"fs_path": str(store.get_candidate_path()), "dbType": "hdf5"}
+                ams_object["db"] = {
+                    "fs_path": str(
+                        Path(self.db_dir) / Path(store.get_candidate_path())
+                    ),
+                    "dbType": "hdf5",
+                }
             else:
                 ams_object["db"] = {"fs_path": self.stage_dir, "dbType": "hdf5"}
         else:
-            ams_object["db"] = {"rmq_config": rmq.to_dict(AMSlib=True), "dbType": "rmq", "update_surrogate": False}
+            ams_object["db"] = {
+                "rmq_config": rmq.to_dict(AMSlib=True),
+                "dbType": "rmq",
+                "update_surrogate": False,
+            }
         return ams_object
 
-    def _generate_ams_object(self, store: AMSDataStore, rmq: Optional[AMSRMQConfiguration]=None):
-        '''
-        Generates a ``AMS_OBJECTS`` dictionary and adding the appropriate 'database', ml_models and domain_models fields required by the application. 
+    def _generate_ams_object(
+        self, store: AMSDataStore, rmq: Optional[AMSRMQConfiguration] = None
+    ):
+        """
+        Generates a ``AMS_OBJECTS`` dictionary and adding the appropriate 'database', ml_models and domain_models fields required by the application.
 
-        :param store: The AMSDataStore that contains all the files and directories of the AMS database. 
+        :param store: The AMSDataStore that contains all the files and directories of the AMS database.
         :param rmq: The AMSRMQConfiguration containing all required information to connect to the RMQ server
 
         :return: A dictionary with the correct structure
-        '''
-        ams_object = self._generate_ams_objects_store(store, rmq) 
+        """
+        ams_object = self._generate_ams_objects_store(store, rmq)
 
         ams_object["ml_models"] = dict()
         ams_object["domain_models"] = dict()
@@ -287,7 +300,20 @@ class AMSDomainJob(AMSJob):
         self.stage_dir = stage_dir
         self._ams_object = None
         self._ams_object_fn = None
+        self._lock = threading.Lock()
         super().__init__(*args, **kwargs)
+        self._flux_job_id = None
+        self._ams_id = None
+        self._db_dir = None
+
+    @property
+    def db_dir(self):
+        """The db_dir property."""
+        return self._db_dir
+
+    @db_dir.setter
+    def db_dir(self, value):
+        self._db_dir = value
 
     @property
     def domain_names(self):
@@ -307,23 +333,25 @@ class AMSDomainJob(AMSJob):
             domain_names=descr["domain_names"],
             environ=os.environ,
             resources=domain_job_resources,
-            ams_log=descr["ams_log"] if "ams_log" in descr else False,
+            ams_log=descr.get("ams_log", False),
+            ams_log_dir=descr.get("ams_log_dir", ""),
+            ams_log_prefix=descr.get("ams_log_prefix", ""),
             **descr["cli"],
         )
 
     def precede_deploy(self, store, rmq=None):
-        '''
+        """
         Generates a ``AMS_OBJECTS`` json file and adding the appropriate 'database', ml_models and domain_models fields required by the application
         and if requested also adds the AMS verbosity level to the environment
 
-        :param store: The AMSDataStore that contains all the files and directories of the AMS database. 
+        :param store: The AMSDataStore that contains all the files and directories of the AMS database.
         :param rmq: The AMSRMQConfiguration containing all required information to connect to the RMQ server
 
         :return: A dictionary with the correct structure
-        '''
+        """
 
         self._ams_object = self._generate_ams_object(store, rmq)
-        tmp_path = util.mkdir(store.root_path, "tmp")
+        tmp_path = util.mkdir(self.db_dir, "tmp")
         # NOTE: THere is a big assumption here that the job-to be submitted has access to this tmp path
         # currently we place it under tmp_path which is under the AMSDataStore directory.
         self._ams_object_fn = f"{tmp_path}/{util.get_unique_fn()}.json"
@@ -332,17 +360,43 @@ class AMSDomainJob(AMSJob):
 
         self.environ["AMS_OBJECTS"] = str(self._ams_object_fn)
         if self._ams_log:
-            print("Setting log level")
             self.environ["AMS_LOG_LEVEL"] = "debug"
+            if self._ams_log_dir != "":
+                self.environ["AMS_LOG_DIR"] = self._ams_log_dir
+            if self._ams_log_prefix != "":
+                self.environ[
+                    "AMS_LOG_PREFIX"
+                ] = f"ams.log.{self.ams_id}.{self._ams_log_prefix}"
+
+        print(f"JOB {self.name} uses AMS-Object at {self._ams_object_fn}")
+
+    @property
+    def flux_job_id(self):
+        """The flux_job_id property."""
+        return self._flux_job_id
+
+    @flux_job_id.setter
+    def flux_job_id(self, value):
+        with self._lock:
+            self._flux_job_id = value
+
+    @property
+    def ams_id(self):
+        """The ams_id property."""
+        return self._ams_id
+
+    @ams_id.setter
+    def ams_id(self, value):
+        self._ams_id = value
 
 
 class AMSMLJob(AMSJob):
     def __init__(self, domain, *args, **kwargs):
-        '''
-        A AMSJob training or performing sub-selection. This is a class mainly representing a team 
+        """
+        A AMSJob training or performing sub-selection. This is a class mainly representing a team
         of ML experts which will provide to the infrastructure the appropriate models. ML jobs are
         associcated with a ``domain`` pointing which domain those will train.
-        '''
+        """
         self._domain = domain
         super().__init__(*args, **kwargs)
 
@@ -357,17 +411,9 @@ class AMSMLJob(AMSJob):
 
     @classmethod
     def from_descr(cls, store, descr):
-        formatting = AMSJob.generate_formatting(store)
         resources = AMSJobResources(**descr["resources"])
         cli_kwargs = descr["cli"].get("cli_kwargs", None)
-        if cli_kwargs is not None:
-            for k, v in cli_kwargs.items():
-                if isinstance(v, str):
-                    cli_kwargs[k] = v.format(**formatting)
         cli_args = descr["cli"].get("cli_args", None)
-        if cli_args is not None:
-            for i, v in enumerate(cli_args):
-                cli_args[i] = v.format(**formatting)
 
         return cls(
             descr["domain_name"],
@@ -398,12 +444,12 @@ class AMSStageJob(AMSJob):
     A Job description for stating data from the application to the database. This class is internal
     and should be either inheritted by ``AMSFSTempStageJob`` or ``AMSNetworkStageJob``
     """
+
     def __init__(
         self,
         resources: Union[Dict[str, Union[str, int]], AMSJobResources],
         dest: str,
-        persistent_db_path: str,
-        store: bool = True,
+        url: str,
         db_type: str = "dhdf5",
         policy: str = "process",
         prune_module_path: Optional[str] = None,
@@ -411,24 +457,27 @@ class AMSStageJob(AMSJob):
         environ: Optional[Mapping[str, str]] = None,
         stdout: Optional[str] = None,
         stderr: Optional[str] = None,
+        profile_monitoring: Optional[str] = None,
         cli_args: List[str] = [],
         cli_kwargs: Mapping[str, str] = {},
     ):
         _cli_args = list(cli_args)
-        if store:
-            _cli_args.append("--store")
-        else:
-            _cli_args.append("--no-store")
 
         _cli_kwargs = dict(cli_kwargs)
         _cli_kwargs["--dest"] = dest
-        _cli_kwargs["--persistent-db-path"] = persistent_db_path
+        _cli_kwargs["--db-url"] = url
         _cli_kwargs["--db-type"] = db_type
         _cli_kwargs["--policy"] = policy
+        if profile_monitoring:
+            _cli_kwargs["--json-monitoring"] = profile_monitoring
 
         if prune_module_path is not None:
-            assert Path(prune_module_path).exists(), "Module path to user pruner does not exist"
-            assert prune_class is not None, "When defining a pruning module please define the class"
+            assert Path(
+                prune_module_path
+            ).exists(), "Module path to user pruner does not exist"
+            assert (
+                prune_class is not None
+            ), "When defining a pruning module please define the class"
             _cli_kwargs["--load"] = prune_module_path
             _cli_kwargs["--class"] = prune_class
 
@@ -453,9 +502,8 @@ class AMSFSStageJob(AMSStageJob):
         self,
         resources: Union[Dict[str, Union[str, int]], AMSJobResources],
         dest: str,
-        persistent_db_path: str,
+        url: str,
         src: str,
-        store: bool = True,
         db_type="dhf5",
         pattern="*.h5",
         src_type: str = "shdf5",
@@ -467,7 +515,6 @@ class AMSFSStageJob(AMSStageJob):
         cli_args: List[str] = [],
         cli_kwargs: Mapping[str, str] = {},
     ):
-
         _cli_args = list(cli_args)
         _cli_kwargs = dict(cli_kwargs)
         _cli_kwargs["--src"] = src
@@ -478,8 +525,7 @@ class AMSFSStageJob(AMSStageJob):
         super().__init__(
             resources,
             dest,
-            persistent_db_path,
-            store,
+            url,
             db_type,
             environ=environ,
             stdout=stdout,
@@ -496,13 +542,14 @@ class AMSNetworkStageJob(AMSStageJob):
     A job description for transfering data from the application to the database reading using rmq server-client protocol.
     This class represents the consumer part of the transactions.
     """
+
     def __init__(
         self,
         resources: Union[Dict[str, Union[str, int]], AMSJobResources],
         dest: str,
-        persistent_db_path: str,
+        url: str,
+        application_name: str,
         creds: str,
-        store: bool = True,
         db_type: str = "dhdf5",
         update_models: bool = False,
         prune_module_path: Optional[str] = None,
@@ -519,16 +566,17 @@ class AMSNetworkStageJob(AMSStageJob):
         _cli_kwargs = dict(cli_kwargs)
         _cli_kwargs["--creds"] = creds
         _cli_kwargs["--mechanism"] = "network"
+        _cli_kwargs["--application-name"] = application_name
 
         super().__init__(
             resources,
             dest,
-            persistent_db_path,
-            store,
+            url,
             db_type,
             environ=environ,
             stdout=stdout,
             stderr=stderr,
+            profile_monitoring="profile-data",
             prune_module_path=prune_module_path,
             prune_class=prune_class,
             cli_args=_cli_args,
@@ -536,14 +584,13 @@ class AMSNetworkStageJob(AMSStageJob):
         )
 
     @classmethod
-    def from_descr(cls, descr, dest, persistent_db_path, creds, resources):
-        return cls(resources, dest, persistent_db_path, creds, **descr)
+    def from_descr(cls, descr, dest, url, application_name, creds, resources):
+        return cls(resources, dest, url, application_name, creds, **descr)
 
 
 class AMSFSTempStageJob(AMSJob):
     def __init__(
         self,
-        store_dir,
         src_dir,
         dest_dir,
         resources,
@@ -555,8 +602,11 @@ class AMSFSTempStageJob(AMSJob):
         cli_args=[],
         cli_kwargs={},
     ):
+        raise NotImplementedError(
+            "Currently we do not support FS Jobs as part of the workflow"
+        )
+
         _cli_args = list(cli_args)
-        _cli_args.append("--store")
         _cli_kwargs = dict(cli_kwargs)
         _cli_kwargs["--dest"] = dest_dir
         _cli_kwargs["--src"] = src_dir
@@ -564,11 +614,12 @@ class AMSFSTempStageJob(AMSJob):
         _cli_kwargs["--db-type"] = "dhdf5"
         _cli_kwargs["--mechanism"] = "fs"
         _cli_kwargs["--policy"] = "process"
-        _cli_kwargs["--persistent-db-path"] = store_dir
         _cli_kwargs["--src"] = src_dir
 
         if prune_module_path is not None:
-            assert Path(prune_module_path).exists(), "Module path to user pruner does not exist"
+            assert Path(
+                prune_module_path
+            ).exists(), "Module path to user pruner does not exist"
             _cli_kwargs["--load"] = prune_module_path
             _cli_kwargs["--class"] = prune_class
 
@@ -596,9 +647,10 @@ class AMSFSTempStageJob(AMSJob):
 
 class AMSOrchestratorJob(AMSJob):
     """
-    A JOB to be scheduled "somewhere" that can schedule jobs "somewhere" else. Currently this is tested only when 
+    A JOB to be scheduled "somewhere" that can schedule jobs "somewhere" else. Currently this is tested only when
     the orchestrator schedules jobs within the same job-allocation
     """
+
     def __init__(self, flux_uri, rmq_config):
         super().__init__(
             name="AMSOrchestrator",
@@ -608,11 +660,19 @@ class AMSOrchestratorJob(AMSJob):
             environ=os.environ,
             cli_kwargs={"--ml-uri": flux_uri, "--ams-rmq-config": rmq_config},
             # NOTE: Not sure about cores_per_task
-            resources=AMSJobResources(nodes=1, tasks_per_node=1, cores_per_task=1, exclusive=False, gpus_per_task=0),
+            resources=AMSJobResources(
+                nodes=1,
+                tasks_per_node=1,
+                cores_per_task=1,
+                exclusive=False,
+                gpus_per_task=0,
+            ),
         )
 
 
-def nested_instance_job_descr(num_nodes, cores_per_node, gpus_per_node, time="inf", stdout=None, stderr=None):
+def nested_instance_job_descr(
+    num_nodes, cores_per_node, gpus_per_node, time="inf", stdout=None, stderr=None
+):
     """
     Create a nested job partion. This is useful to split resources among dedicated parts of an initial root allocation.
     Effectively the command creates a partition that sleeps indefinetely.
@@ -641,6 +701,11 @@ def nested_instance_job_descr(num_nodes, cores_per_node, gpus_per_node, time="in
 
 def get_echo_job(message):
     jobspec = JobspecV1.from_command(
-        command=["echo", message], num_tasks=1, num_nodes=1, cores_per_task=1, gpus_per_task=0, exclusive=True
+        command=["echo", message],
+        num_tasks=1,
+        num_nodes=1,
+        cores_per_task=1,
+        gpus_per_task=0,
+        exclusive=True,
     )
     return jobspec

@@ -5,6 +5,7 @@
 
 import argparse
 import time
+import sys
 
 from ams.loader import load_class
 from ams.stage import get_pipeline
@@ -17,10 +18,17 @@ def main():
     )
 
     parser.add_argument(
-        "--load", "-l", dest="user_module", help="Path implementing a custom pipeline stage module", default=None
+        "--load",
+        "-l",
+        dest="user_module",
+        help="Path implementing a custom pipeline stage module",
+        default=None,
     )
     parser.add_argument(
-        "--class", dest="user_class", help="Class implementing the 'Action' performed on data", default=None
+        "--class",
+        dest="user_class",
+        help="Class implementing the 'Action' performed on data",
+        default=None,
     )
     parser.add_argument(
         "--policy",
@@ -34,16 +42,20 @@ def main():
         "--json-monitoring",
         "-jm",
         dest="output_json",
-        help="File where to output the monitoring data from the stage (JSON)",
+        help="Prefix for file to output the monitoring data from the stage (JSON), the prefix will be extended with -<PID>-<hostname>.json",
         default=None,
     )
 
-    parser.add_argument("--mechanism", "-m", dest="mechanism", choices=["fs", "network"], default="fs")
+    parser.add_argument(
+        "--mechanism", "-m", dest="mechanism", choices=["fs", "network"], default="fs"
+    )
 
     args, extras = parser.parse_known_args()
 
     if (args.user_module is not None) and args.user_class is None:
-        raise argparse.ArgumentTypeError("User custom module was specified but the 'class' was not defined")
+        raise argparse.ArgumentTypeError(
+            "User custom module was specified but the 'class' was not defined"
+        )
 
     user_class = None
     user_args = None
@@ -82,18 +94,27 @@ def main():
         obj = user_class.from_cli(user_args)
         pipeline.add_user_action(obj)
 
-    if args.output_json is not None:
-        print(f"Monitoring output file: {args.output_json}")
+    output_json = args.output_json
+    if output_json is not None:
+        import socket
+        import os
         from ams.monitor import AMSMonitor
+
+        hostname = socket.gethostname()
+        pid = os.getpid()
+        output_json = f"{output_json}-{hostname}-{pid}.json"
+        print(f"Monitoring output file: {args.output_json}")
 
     start = time.time()
     pipeline.execute(args.policy)
     end = time.time()
     print(f"End to End time spend : {end - start}")
 
-    if args.output_json is not None:
+    if output_json is not None:
         # Output profiling output to JSON
-        AMSMonitor.json(args.output_json)
+        AMSMonitor.json(output_json)
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

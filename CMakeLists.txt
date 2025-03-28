@@ -138,10 +138,12 @@ if (WITH_HDF5)
   find_package(HDF5 NAMES hdf5 COMPONENTS C static NO_DEFAULT_PATH PATHS ${AMS_HDF5_DIR} ${AMS_HDF5_DIR}/share/cmake)
   list(APPEND AMS_APP_LIBRARIES ${HDF5_C_STATIC_LIBRARY})
   message(STATUS "HDF5 Static Library : ${HDF5_C_STATIC_LIBRARY}")
+  set(AMS_HDF5_LIB_TYPE "static")
 else()
   find_package(HDF5 NAMES hdf5 COMPONENTS C shared NO_DEFAULT_PATH PATHS ${AMS_HDF5_DIR} ${AMS_HDF5_DIR}/share/cmake)
   list(APPEND AMS_APP_LIBRARIES ${HDF5_C_SHARED_LIBRARY})
   message(STATUS "HDF5 Shared Library : ${HDF5_C_SHARED_LIBRARY}")
+  set(AMS_HDF5_LIB_TYPE "shared")
 endif()
   list(APPEND AMS_APP_INCLUDES ${HDF5_INCLUDE_DIR})
   list(APPEND AMS_APP_DEFINES "-D__ENABLE_HDF5__")
@@ -159,10 +161,13 @@ if (WITH_RMQ)
   list(APPEND AMS_APP_INCLUDES ${amqpcpp_INCLUDE_DIR})
 
   find_package(OpenSSL REQUIRED)
+  set(AMS_OPENSSL_FOUND_ROOT "")
   if (OPENSSL_FOUND)
     list(APPEND AMS_APP_INCLUDES ${OPENSSL_INCLUDE_DIR})
     list(APPEND AMS_APP_LIBRARIES "${OPENSSL_LIBRARIES}")
     list(APPEND AMS_APP_LIBRARIES ssl)
+    get_filename_component(AMS_OPENSSL_FOUND_ROOT "${OPENSSL_SSL_LIBRARY}" DIRECTORY)
+    get_filename_component(AMS_OPENSSL_FOUND_ROOT "${AMS_OPENSSL_FOUND_ROOT}" DIRECTORY)
     message(STATUS "OpenSSL includes found: " ${OPENSSL_INCLUDE_DIR})
     message(STATUS "OpenSSL libraries found: " ${OPENSSL_LIBRARIES})
   else()
@@ -175,7 +180,6 @@ if (WITH_RMQ)
   list(APPEND AMS_APP_LIBRARIES amqpcpp event_pthreads event)
 endif() # WITH_RMQ
 
-# ------------------------------------------------------------------------------
 if(NOT DEFINED UMPIRE_DIR)
   message(FATAL_ERROR "Missing required 'UMPIRE_DIR' variable pointing to an installed Umpire ${UMPIRE_DIR}")
 endif()
@@ -186,6 +190,7 @@ find_package(UMPIRE REQUIRED
 list(APPEND AMS_APP_LIBRARIES umpire)
 list(APPEND AMS_APP_INCLUDES ${UMPIRE_INCLUDE_DIR})
 
+# ------------------------------------------------------------------------------
 find_package(nlohmann_json REQUIRED)
 list(APPEND AMS_APP_LIBRARIES nlohmann_json::nlohmann_json)
 

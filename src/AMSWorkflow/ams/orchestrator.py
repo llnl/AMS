@@ -16,8 +16,8 @@ from typing import Optional, List
 import flux
 from ams.monitor import AMSMonitor
 from ams.stage import RMQDomainDataLoaderTask
-from ams.rmq import AMSSyncProducer, AMSRMQConfiguration, AsyncConsumer, AsyncFanOutConsumer
-from ams.stage import MessageType, QueueMessage
+from ams.rmq import AMSSyncProducer, AMSRMQConfiguration, AsyncConsumer
+from ams.stage import MessageType, QueueMessage, AMSShutdown
 from ams.ams_jobs import AMSJob
 from ams.ams_flux import AMSFluxOrchestratorExecutor, AMSFluxExecutorFuture, AMSFakeFluxOrchestatorExecutor
 from functools import wraps
@@ -424,21 +424,21 @@ class RequestProcessor:
     def __call__(self):
         while True:
             request = self.i_queue.get(block=True)
-
+            pending_messages = []
             if request.is_process():
                 data = request.data()
                 for v in data:
                     if v["request_type"] == "terminate":
-                        self.o_queue.put(QueueMessage(MessageType.Terminate, None))
-                        return
+                        pending_messages.append(QueueMessage(MessageType.Terminate, None))
+                        continue
 
                     if "domain_name" not in v:
                         raise ValueError("Expected a domain name specification")
                     self.process_request(v["domain_name"], v)
             elif request.is_terminate():
-                self.o_queue.put(QueueMessage(MessageType.Terminate, None))
-                return
+                pending_messages.append(QueueMessage(MessageType.Terminate, None))
 
+            # Iterate over all available train jobs and schedule the available ones.
             for i, (k, v) in enumerate(self._domains.items()):
                 # TODO: We should not submit a job if size of candidates is 0 <-- be careful this can lead to edge cases
                 #       of receiving candidate size 0 and rescheduling some work.
@@ -456,6 +456,14 @@ class RequestProcessor:
                     self.o_queue.put(QueueMessage(MessageType.Process, {"request_type": "schedule", "domain": k}))
                 else:
                     print("Skip cause job is running")
+
+            # We are pushing all pending messages
+            for message in pending_messages:
+                self.o_queue.put(message)
+            # If any of those messages are terminate we exit.
+            for message in pending_messages:
+                if message.is_terminate():
+                    return
 
 
 class TrainJobScheduler:
@@ -538,7 +546,6 @@ class RMQStatusUpdate:
         publish_queue: str,
         signals=[signal.SIGTERM, signal.SIGINT, signal.SIGUSR1],
     ):
-
         # NOTE: The producer now sends messages to a single instance of the RMQ. It would be 'better'
         # if we send the messages to a fanout rmq exchange to guarantee all stagers receiving the message
         self.producer = AMSSyncProducer(host, port, vhost, user, password, cert, publish_queue)
@@ -550,7 +557,6 @@ class RMQStatusUpdate:
             while True:
                 request = self.i_queue.get(block=True)
                 if request.is_terminate():
-                    fd.send_message(json.dumps({"request_type": "terminate"}))
                     return
                 elif request.is_process():
                     fd.send_message(json.dumps(request.data()))
@@ -591,7 +597,6 @@ class AMSFakeRMQUpdate:
         publish_queue: str,
         signals=[signal.SIGTERM, signal.SIGINT, signal.SIGUSR1],
     ):
-
         self.producer = AMSSyncProducer(host, port, vhost, user, password, cert, publish_queue)
         self.publish_queue = publish_queue
         self.json_file = json_file
@@ -659,52 +664,6 @@ class AMSRMQMessagePrinter(RMQDomainDataLoaderTask):
         Busy loop of consuming messages from RMQ queue
         """
         self.rmq_consumer.run()
-
-
-class AMSShutdown(AsyncFanOutConsumer):
-    """
-    A RMQ consumer client that listens to control messages from the AMS Deployment tool. When it receives a 'terminate' message
-    it shutdown the rest of the connections/threads to the RMQ server and gracefully terminates.
-    """
-
-    def __init__(
-        self,
-        consumers: List[RMQDomainDataLoaderTask],
-        host: str,
-        port: int,
-        vhost: str,
-        user: str,
-        password: str,
-        cert: str,
-        prefetch_count: int = 1,
-    ):
-        self._consumers = consumers
-        super().__init__(
-            host,
-            port,
-            vhost,
-            user,
-            password,
-            cert,
-            "",
-            prefetch_count,
-            on_message_cb=self.on_message_cb,
-            on_close_cb=self.on_close_cb,
-        )
-
-    def on_message_cb(self, ch, basic_deliver, properties, body):
-        message = json.loads(body)
-        if "request_type" in message:
-            if message["request_type"] == "terminate":
-                for consumer in self._consumers:
-                    consumer.rmq_consumer.stop()
-                self.stop()
-
-    def on_close_cb(self):
-        print("Closing")
-
-    def __call__(self):
-        self.run()
 
 
 def run(flux_uri, rmq_config, file=None, fake_flux=False, fake_rmq_update=False, fake_rmq_publish=False):
@@ -789,6 +748,6 @@ def run(flux_uri, rmq_config, file=None, fake_flux=False, fake_rmq_update=False,
 
     # We assign the main thread to wait for a terminate message.
     gracefull_shutdown()
-
-    for e in threads:
-        e.join()
+    # We shutdown now everything that is connected to the RMQ sheduler.
+    rmq_o_queue.put(QueueMessage(MessageType.Terminate, None))
+    e.join()
