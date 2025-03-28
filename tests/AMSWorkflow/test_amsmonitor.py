@@ -65,14 +65,14 @@ class TestMonitorTask1(unittest.TestCase):
         for item in AMSMonitor.stats["ExampleTask1"]["__call__"]["records"]:
             self.assertIn("x", item)
             self.assertIn("y", item)
-            self.assertIn("amsmonitor_duration_ms", item)
+            self.assertIn("amsmonitor_duration_ns", item)
             self.assertEqual(item["x"], 6)
             self.assertEqual(item["y"], 200)
 
         for item in AMSMonitor.stats["ExampleTask1"]["while_loop"]["records"]:
             self.assertIn("x", item)
             self.assertNotIn("y", item)
-            self.assertIn("amsmonitor_duration_ms", item)
+            self.assertIn("amsmonitor_duration_ns", item)
             self.assertEqual(item["x"], 6)
 
         self.assertEqual(AMSMonitor.stats["ExampleTask1"]["f"]["records"], [])

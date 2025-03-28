@@ -610,7 +610,7 @@ class PushToStore(Task):
         if self.db_url is not None:
             db_store = AMSDataStore(self.application_name, self.db_url).open()
 
-        with AMSMonitor(obj=self, tag="internal_loop", record=[]):
+        with AMSMonitor(obj=self, tag="internal_loop", record=["nb_requests", "application_name", "total_filesize"]):
             while True:
                 item = self.i_queue.get(block=True)
                 if item.is_terminate():
