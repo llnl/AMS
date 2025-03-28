@@ -7,6 +7,8 @@ import argparse
 import time
 import sys
 
+from pathlib import Path
+
 from ams.loader import load_class
 from ams.stage import get_pipeline
 
@@ -102,8 +104,9 @@ def main():
 
         hostname = socket.gethostname()
         pid = os.getpid()
+        output_json = Path(output_json).stem
         output_json = f"{output_json}-{hostname}-{pid}.json"
-        print(f"Monitoring output file: {args.output_json}")
+        print(f"Monitoring output file: {output_json}")
 
     start = time.time()
     pipeline.execute(args.policy)
