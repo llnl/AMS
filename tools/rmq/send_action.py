@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+# Copyright 2021-2025 Lawrence Livermore National Security, LLC and other
+# AMSLib Project Developers
+#
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+import pika
+import sys
+import ssl
+import json
+import argparse
+
+def get_rmq_connection(json_file):
+    data = {}
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+    return data
+
+def main(args):
+    conn = get_rmq_connection(args.creds)
+    cacert = conn.get("rabbitmq-cert", None)
+    if cacert is None:
+        ssl_options = None
+    else:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.check_hostname = False
+        context.load_verify_locations(cacert)
+        ssl_options = pika.SSLOptions(context)
+
+    print(f"[shutdown.py] Connecting to {conn['service-host']} ...")
+
+    credentials = pika.PlainCredentials(conn["rabbitmq-user"], conn["rabbitmq-password"])
+    cp = pika.ConnectionParameters(
+        host=conn["service-host"],
+        port=conn["service-port"],
+        virtual_host=conn["rabbitmq-vhost"],
+        credentials=credentials,
+        ssl_options=ssl_options
+    )
+
+    routing_key = ""
+
+    connection = pika.BlockingConnection(cp)
+    channel = connection.channel()
+
+    # Turn on delivery confirmations
+    channel.confirm_delivery()
+
+    result = channel.queue_declare(queue='', exclusive=False)
+
+    msg = {"request_type": str(args.action)}
+
+    queue_name = result.method.queue
+    try:
+        channel.basic_publish(exchange=args.exchange, routing_key=routing_key, body=json.dumps(msg))
+        print(f"Sent {msg} on exchange='{args.exchange}'/routing_key='{routing_key}'")
+    except pika.exceptions.UnroutableError:
+        print(f"Message could not be confirmed")
+    connection.close()
+
+def parse_args():
+
+    parser = argparse.ArgumentParser(description="Tool that sends actions to the AMS Stager (terminate, done-training etc)")
+    parser.add_argument('-c', '--creds', help="Credentials file (JSON)", required=True)
+    parser.add_argument('-e', '--exchange', help="On which exchange to send actions (default = control-panel)", default="control-panel", required=False)
+    parser.add_argument('-a', '--action', help="action to send to the stager", required=True)
+
+    args = parser.parse_args()
+
+    return args
+
+if __name__ == "__main__":
+    args = parse_args()
+    main(args)
