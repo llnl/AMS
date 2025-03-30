@@ -493,11 +493,10 @@ class FSWriteTask(Task):
         self.o_queue = o_queue
         self.suffix = writer_cls.get_file_format_suffix()
 
-        # TODO: we should not hardcod these values
         # Max size in byte before writing a new file
-        self.max_size_file = 2 * 1024 * 1024 * 1024
+        self.max_size_file = os.getenv("AMS_MAX_FILE_SIZE", 2*1024*1024*1024)
         # We print something everything X messages processed
-        self.refresh_print_messages = 1000
+        self.print_message = os.getenv("AMS_MAX_PRINT_MESSAGE", 1000)
 
     @AMSMonitor(array=["requests"])
     def process_request(self, data_files, item):
@@ -582,7 +581,7 @@ class FSWriteTask(Task):
                 elif item.is_process():
                     self.process_request(data_files, item)
 
-                if self.total_messages % self.refresh_print_messages == 0:
+                if self.total_messages % self.print_message == 0:
                     print(
                         f"I have processed {self.total_messages} in total amounting to {self.total_bytes_written/(1024.0*1024.0)} MB"
                     )
