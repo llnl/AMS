@@ -10,6 +10,8 @@ import ssl
 import json
 import argparse
 
+from pika.exchange_type import ExchangeType
+
 def get_rmq_connection(json_file):
     data = {}
     with open(json_file, 'r') as f:
@@ -47,7 +49,13 @@ def main(args):
     # Turn on delivery confirmations
     channel.confirm_delivery()
 
-    result = channel.queue_declare(queue='', exclusive=False)
+    channel.exchange_declare(
+        exchange = args.exchange,
+        exchange_type = ExchangeType.fanout,
+        auto_delete = False
+    )
+
+    result = channel.queue_declare(queue='', exclusive = False)
 
     msg = {"request_type": str(args.action)}
 
