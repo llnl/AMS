@@ -493,6 +493,62 @@ class FSWriteTask(Task):
         self.o_queue = o_queue
         self.suffix = writer_cls.get_file_format_suffix()
 
+        # Max size in byte before writing a new file
+        self.max_size_file = os.getenv("AMS_MAX_FILE_SIZE", 2*1024*1024*1024)
+        # We print something everything X messages processed
+        self.print_message = os.getenv("AMS_MAX_PRINT_MESSAGE", 1000)
+
+    @AMSMonitor(array=["requests"])
+    def process_request(self, data_files, item):
+        """
+        Function that process a request for FSwriteTask and write the file on disk
+        """
+        start_time_req = time.time_ns()
+        data = item.data()
+        if data.domain_name not in data_files:
+            fn = get_unique_fn()
+            fn = f"{self.out_dir}/{data.domain_name}_{fn}.{self.suffix}"
+            # TODO: bytes_written should be an attribute of the file
+            # to keep track of the size of the current file. Currently we keep track of this
+            # by keeping a value in a list
+            data_files[data.domain_name] = [
+                self.data_writer_cls(fn).open(),
+                0,
+            ]
+        bytes_written = data.inputs.size * data.inputs.itemsize
+        bytes_written += data.outputs.size * data.outputs.itemsize
+
+        data_files[data.domain_name][0].store(data.inputs, data.outputs)
+        data_files[data.domain_name][1] += bytes_written
+
+        self.total_bytes_written += data.inputs.size * data.inputs.itemsize
+        self.total_bytes_written += data.outputs.size * data.outputs.itemsize
+
+        if data_files[data.domain_name][1] >= self.max_size_file:
+            data_files[data.domain_name][0].close()
+            self.o_queue.put(
+                QueueMessage(
+                    MessageType.Process,
+                    (
+                        data.domain_name,
+                        data_files[data.domain_name][0].file_name,
+                    ),
+                )
+            )
+            del data_files[data.domain_name]
+
+        end_time_req = time.time_ns()
+        req = {
+            "request_id": self.total_messages,
+            "domain_name": data.domain_name,
+            "file_size": bytes_written,
+            "total_bytes_written": self.total_bytes_written,
+            "max_size_file": self.max_size_file,
+            "timestamp": start_time_req,
+            "process_time_ns": end_time_req - start_time_req,
+        }
+        requests.append(req)
+
     @AMSMonitor(record=["datasize_byte"])
     def __call__(self):
         """
@@ -502,15 +558,14 @@ class FSWriteTask(Task):
         """
 
         start = time.time()
-        total_bytes_written = 0
+        self.total_bytes_written = 0
         data_files = dict()
-        total_messages = 0
-        # with self.data_writer_cls(fn) as fd:
+        self.total_messages = 0
         with AMSMonitor(obj=self, tag="internal_loop", accumulate=False):
             while True:
                 # This is a blocking call
                 item = self.i_queue.get(block=True)
-                total_messages += 1
+                self.total_messages += 1
                 if item.is_terminate():
                     for k, v in data_files.items():
                         v[0].close()
@@ -524,44 +579,16 @@ class FSWriteTask(Task):
                     print(f"Sending Delete Message Type {self.__class__.__name__}")
                     self.o_queue.put(item)
                 elif item.is_process():
-                    data = item.data()
-                    if data.domain_name not in data_files:
-                        fn = get_unique_fn()
-                        fn = f"{self.out_dir}/{data.domain_name}_{fn}.{self.suffix}"
-                        # TODO: bytes_written should be an attribute of the file
-                        # to keep track of the size of the current file. Currently we keep track of this
-                        # by keeping a value in a list
-                        data_files[data.domain_name] = [
-                            self.data_writer_cls(fn).open(),
-                            0,
-                        ]
-                    bytes_written = data.inputs.size * data.inputs.itemsize
-                    bytes_written += data.outputs.size * data.outputs.itemsize
-                    data_files[data.domain_name][0].store(data.inputs, data.outputs)
-                    data_files[data.domain_name][1] += bytes_written
-                    total_bytes_written += data.inputs.size * data.inputs.itemsize
-                    total_bytes_written += data.outputs.size * data.outputs.itemsize
+                    self.process_request(data_files, item)
 
-                    if data_files[data.domain_name][1] >= 2 * 1024 * 1024 * 1024:
-                        data_files[data.domain_name][0].close()
-                        self.o_queue.put(
-                            QueueMessage(
-                                MessageType.Process,
-                                (
-                                    data.domain_name,
-                                    data_files[data.domain_name][0].file_name,
-                                ),
-                            )
-                        )
-                        del data_files[data.domain_name]
-                if total_messages % 1000 == 0:
+                if self.total_messages % self.print_message == 0:
                     print(
-                        f"I have processed {total_messages} in total amounting to {total_bytes_written/(1024.0*1024.0)} MB"
+                        f"I have processed {self.total_messages} in total amounting to {self.total_bytes_written/(1024.0*1024.0)} MB"
                     )
 
         end = time.time()
-        self.datasize_byte = total_bytes_written
-        print(f"Spend {end - start} {total_bytes_written} at {self.__class__.__name__}")
+        self.datasize_byte = self.total_bytes_written
+        print(f"Spend {end - start} {self.total_bytes_written} at {self.__class__.__name__}")
 
 
 class PushToStore(Task):
@@ -601,10 +628,41 @@ class PushToStore(Task):
         if not self.dest_dir.exists():
             self.dest_dir.mkdir(parents=True, exist_ok=True)
 
+    @AMSMonitor(record=["nb_requests", "total_filesize"], array=["requests"])
+    def process_request(self, db_store, item):
+        """
+        Function that process a request to push the data to the DB
+        """
+        start_time_req = time.time_ns()
+        self.nb_requests += 1
+        domain_name, file_name = item.data()
+        if domain_name == None:
+            domain_name = "unknown-domain"
+        src_fn = Path(file_name)
+        dest_file = self.dest_dir / src_fn.name
+        if src_fn != dest_file:
+            shutil.move(src_fn, dest_file)
+        if self.db_url is not None:
+            db_store.add_candidates(domain_name, [str(dest_file)])
+
+        self.total_filesize += os.stat(src_fn).st_size
+        end_time_req = time.time_ns()
+
+        req = {
+            "request_id": self.nb_requests,
+            "domain_name": domain_name,
+            "file_name": file_name,
+            "file_size": os.stat(src_fn).st_size,
+            "total_size": self.total_filesize,
+            "timestamp": start_time_req,
+            "process_time_ns": end_time_req - start_time_req,
+        }
+        requests.append(req)
+
     @AMSMonitor(record=["nb_requests"])
     def __call__(self):
         """
-        A busy loop reading messages from the i_queue publishing them to the kosh store.
+        A busy loop reading messages from the i_queue publishing them to the underlying store.
         """
         start = time.time()
         if self.db_url is not None:
@@ -621,23 +679,8 @@ class PushToStore(Task):
                     fn = item.data()
                     Path(fn).unlink()
                 elif item.is_process():
-                    with AMSMonitor(
-                        obj=self,
-                        tag="request_block",
-                        record=["nb_requests", "total_filesize"],
-                    ):
-                        self.nb_requests += 1
-                        domain_name, file_name = item.data()
-                        if domain_name == None:
-                            domain_name = "unknown-domain"
-                        src_fn = Path(file_name)
-                        dest_file = self.dest_dir / src_fn.name
-                        if src_fn != dest_file:
-                            shutil.move(src_fn, dest_file)
-                        if self.db_url is not None:
-                            db_store.add_candidates(domain_name, [str(dest_file)])
-
-                        self.total_filesize += os.stat(src_fn).st_size
+                    print(f"Got message to store in DB {item}")
+                    self.process_request(db_store, item)
 
         end = time.time()
         print(f"Spend {end - start} at {self.__class__.__name__}")
@@ -815,7 +858,7 @@ class Pipeline(ABC):
         self._tasks.append(
             FSWriteTask(self._queues[1], self._queues[2], self._writer, self.dest_dir)
         )
-        # After storing the file we make it public to the kosh store.
+        # After storing the file we make it public to the store.
         self._tasks.append(
             PushToStore(
                 self._queues[2], self.application_name, self.dest_dir, self.db_url
