@@ -959,10 +959,10 @@ public:
  */
 class AMSMessageRecords
 {
+private:
   using record_t = std::pair<std::shared_ptr<uint8_t>, size_t>;
   using iterator_t = std::unordered_map<int, record_t>::iterator;
 
-private:
   /** @brief Internal data structure that keeps messages nack */
   std::unordered_map<int, record_t> _msgs;
   /** @brief Shared mutex to ensure thread-safe access */
@@ -976,6 +976,22 @@ public:
 
   AMSMessageRecords(AMSMessageRecords&&) = delete;
   AMSMessageRecords& operator=(AMSMessageRecords&&) = delete;
+
+  /**
+  * @brief Custom destructor for our shared_ptr
+  */
+  struct AMSMessageDeleter
+  {
+      void operator()(void* x) {
+        DBG(AMSMessageDeleter, "Freeing %p", x)
+        free(x);
+        x = nullptr;
+      }
+  };
+
+  static AMSMessageDeleter getDeleter() {
+    return AMSMessageDeleter();
+  }
 
   /**
   * @brief Return an iterator at the beggining of the records
@@ -1715,7 +1731,7 @@ public:
 
     if (!_publisher->connectionValid()) restartPublisher();
 
-    std::shared_ptr<uint8_t> ptr(msg.data());
+    std::shared_ptr<uint8_t> ptr(msg.data(), AMSMessageRecords::getDeleter());
     auto record = std::make_pair(std::move(ptr), msg.size());
 
     // if we have some messages to send first (from a potential restart)
