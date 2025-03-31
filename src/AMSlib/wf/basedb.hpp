@@ -1112,6 +1112,9 @@ protected:
 
   std::atomic<bool> error_connection{0};  // Atomic variable
 
+  // FIXME: TEMPORARY for debug: removed after bug is fixed
+  bool _make_broker_crash = false;
+
 public:
   /**
    *  @brief Constructor

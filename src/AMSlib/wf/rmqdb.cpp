@@ -306,7 +306,9 @@ bool RMQHandler::waitToClose(unsigned ms, int repeat)
 
 bool RMQHandler::connectionValid()
 {
-  return !error_connection.load(std::memory_order_acquire);
+  auto status = !error_connection.load(std::memory_order_acquire);
+  // FIXME: TEMPORARY for debug: removed after bug is fixed
+  return status && !_make_broker_crash;
 }
 
 bool RMQHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
@@ -708,19 +710,19 @@ void RMQPublisherHandler::publish(
                   _queue,
                   reinterpret_cast<char*>(message_content.first.get()),
                   message_content.second)
-        .onAck([this, &_nb_msg_ack = _nb_msg_ack, id = message_id]() {
+        .onAck([_rId = _rId, &_nb_msg_ack = _nb_msg_ack, id = message_id, ptr = message_content.first]() {
           DBG(RMQPublisherHandler,
-              "[r%ld] message #%d got acknowledged "
+              "[r%ld] message #%d (%p) got acknowledged "
               "successfully "
               "by "
               "RMQ "
               "server",
               _rId,
-              id)
+              id,
+              ptr.get())
           _nb_msg_ack++;
         })
-        .onNack([this,
-                 id = message_id,
+        .onNack([_rId = _rId, id = message_id,
                  ptr = message_content.first,
                  size = message_content.second]() {
           DBG(RMQPublisherHandler,
@@ -737,7 +739,7 @@ void RMQPublisherHandler::publish(
                                                   std::make_pair(std::move(ptr),
                                                                  size));
         })
-        .onError([this,
+        .onError([_rId = _rId,
                   id = message_id,
                   ptr = message_content.first,
                   size =
@@ -764,6 +766,13 @@ void RMQPublisherHandler::publish(
                        message_content.second));
   }
   _nb_msg++;
+
+  // FIXME: TEMPORARY for debug: removed after bug is fixed
+  if (_nb_msg >= 3) {
+    printf("Crashing broker\n");
+    _make_broker_crash = true;
+  }
+
   CALIPER(CALI_MARK_END("RMQ_PUBLISH");)
 }
 
@@ -981,7 +990,7 @@ void RMQInterface::restartPublisher()
   _publisher_connected = false;
 
   // Stop the faulty publisher
-  _publisher->close(100, 10);
+  _publisher->close(100, 50);
   _publisher->stop();
   if (_publisher_thread.joinable()) _publisher_thread.join();
   _publisher.reset();
@@ -996,7 +1005,7 @@ void RMQInterface::restartPublisher()
       std::make_shared<RMQPublisher>(_rId, *_address, _cacert, _queue_sender);
   _publisher_thread = std::thread([&]() { _publisher->start(); });
 
-  if (!_publisher->waitToEstablish(100, 10)) {
+  if (!_publisher->waitToEstablish(100, 50)) {
     _publisher->stop();
     if (_publisher_thread.joinable()) _publisher_thread.join();
     FATAL(RMQInterface,
@@ -1009,7 +1018,7 @@ void RMQInterface::restartPublisher()
 void RMQInterface::close()
 {
   if (isPublisherConnected()) {
-    bool status = _publisher->close(100, 10);
+    bool status = _publisher->close(100, 30);
     CWARNING(RMQInterface,
              !status,
              "Could not gracefully close publisher TCP connection")
