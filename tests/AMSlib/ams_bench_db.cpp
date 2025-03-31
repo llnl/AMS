@@ -14,10 +14,39 @@
 #include <limits>
 #include <mfem.hpp>
 #include <thread>
+
+#include <csignal>
+#include <cstdio>
+#include <execinfo.h>
+
 #include <umpire/Umpire.hpp>
 #include <umpire/strategy/QuickPool.hpp>
 
 #include "AMS.h"
+
+
+// Signal handler to print the stack trace
+void signalHandler(int signum) {
+  // Print the signal
+  printf("Caught signal %d\n", signum);
+
+  // Obtain the backtrace
+  const int maxFrames = 128;
+  void *addrlist[maxFrames];
+
+  // Get void*'s for all entries on the stack
+  int addrlen = backtrace(addrlist, maxFrames);
+
+  if (addrlen == 0) {
+    printf("No stack trace available\n");
+    exit(1);
+  }
+
+  // Print out all the frames to stderr
+  backtrace_symbols_fd(addrlist, addrlen, STDERR_FILENO);
+  exit(1);
+}
+
 
 void createUmpirePool(const std::string &parent_name,
                       const std::string &pool_name)
@@ -159,6 +188,14 @@ int main(int argc, char **argv)
   int rId = 0;
   // Level of Threading provided by MPI
   int provided = 0;
+
+  signal(SIGSEGV, signalHandler); // segmentation fault
+  signal(SIGABRT, signalHandler); // abort()
+  signal(SIGFPE, signalHandler);  // floating-point exception
+  signal(SIGILL, signalHandler);  // illegal instruction
+  signal(SIGINT, signalHandler);  // interrupt (e.g., Ctrl+C)
+  signal(SIGTERM, signalHandler); // termination request
+
 
   MPI_CALL(MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided));
   MPI_CALL(MPI_Comm_size(MPI_COMM_WORLD, &wS));
