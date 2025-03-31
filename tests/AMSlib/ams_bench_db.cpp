@@ -6,21 +6,17 @@
 #include <caliper/cali_macros.h>
 #endif
 
+#include <cassert>
+#include <csignal>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <execinfo.h>
+#include <limits>
+#include <thread>
 #include <unistd.h>
 
-#include <cassert>
-#include <cstdlib>
-#include <cstring>
-#include <limits>
 #include <mfem.hpp>
-#include <thread>
-
-#include <csignal>
-#include <cstdio>
-#include <execinfo.h>
-
-#include <umpire/Umpire.hpp>
-#include <umpire/strategy/QuickPool.hpp>
 
 #include "AMS.h"
 
@@ -45,15 +41,6 @@ void signalHandler(int signum) {
   // Print out all the frames to stderr
   backtrace_symbols_fd(addrlist, addrlen, STDERR_FILENO);
   exit(1);
-}
-
-
-void createUmpirePool(const std::string &parent_name,
-                      const std::string &pool_name)
-{
-  auto &rm = umpire::ResourceManager::getInstance();
-  auto alloc_resource = rm.makeAllocator<umpire::strategy::QuickPool, true>(
-      pool_name, rm.getAllocator(parent_name));
 }
 
 AMSDType getDataType(const char *d_type)
@@ -121,7 +108,6 @@ struct Problem {
                int num_elements)
   {
     CALIPER(CALI_CXX_MARK_FUNCTION;)
-    auto &rm = umpire::ResourceManager::getInstance();
 
     CALIPER(CALI_CXX_MARK_LOOP_BEGIN(mainloop_id, "mainloop");)
 
