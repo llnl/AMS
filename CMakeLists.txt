@@ -50,6 +50,11 @@ option(WITH_AMS_LIB        "Install C++ library to support scientific applicatio
 option(WITH_ADIAK          "Use Adiak for recording metadata" OFF)
 option(BUILD_SHARED_LIBS   "Build using shared libraries" ON)
 
+#if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+#  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
+#  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=thread")
+#endif()
+
 if (WITH_MPI)
   #  SET(CMAKE_CXX_COMPILER "${MPI_CXX_COMPILER}" CACHE FILEPATH "CXX compiler overridden with MPI C++ wrapper")
   #SET(CMAKE_C_COMPILER "${MPI_C_COMPILER}" CACHE FILEPATH "CXX compiler overridden with MPI C++ wrapper")
