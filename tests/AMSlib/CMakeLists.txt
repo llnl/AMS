@@ -200,6 +200,7 @@ ADDTEST(ams_packing_test AMSPack)
 
 # AMS Database benchmark (RMQ and/or HDF5 + MPI / No ML models used)
 BUILD_TEST(ams_benchmark_db ams_bench_db.cpp)
+BUILD_TEST(ams_new_rmq_interface rmq_redesign.cpp)
 # The AMS DB Benchmark requires mfem
 # TODO: Remove mfem requirement from the benchmark
 target_link_libraries(ams_benchmark_db PRIVATE AMS ${AMS_EXAMPLE_LIBRARIES})
