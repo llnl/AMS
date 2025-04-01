@@ -190,10 +190,9 @@ void AMSMessageRecords::print()
         e.second.second);
 }
 
-
 void AMSMessageRecords::publishUnacknowledged(RMQPublisher& publisher)
 {
-  std::shared_lock<std::shared_mutex> lock(_mutex);
+  std::unique_lock<std::shared_mutex> lock(_mutex);
   if (_msgs.size() == 0) return;
 
   for (auto& item : _msgs) {
@@ -961,7 +960,7 @@ std::pair<bool, bool> RMQInterface::connect(std::string rmq_password,
 
   _publisher_thread = std::thread([&]() { _publisher->start(); });
 
-  if (!_publisher->waitToEstablish(100, 10)) {
+  if (!_publisher->waitToEstablish(100, 30)) {
     _publisher->stop();
     _publisher_thread.join();
     FATAL(RMQInterface, "Could not establish publisher connection");
@@ -973,7 +972,7 @@ std::pair<bool, bool> RMQInterface::connect(std::string rmq_password,
         _rId, *_address, _cacert, _exchange, _routing_key);
     _consumer_thread = std::thread([&]() { _consumer->start(); });
 
-    if (!_consumer->waitToEstablish(100, 10)) {
+    if (!_consumer->waitToEstablish(100, 30)) {
       _consumer->stop();
       _consumer_thread.join();
       FATAL(RabbitMQDB, "Could not establish consumer connection");
@@ -1038,7 +1037,7 @@ void RMQInterface::close()
   }
 
   if (isConsumerConnected()) {
-    bool status = _consumer->close(100, 10);
+    bool status = _consumer->close(100, 30);
     CWARNING(RabbitMQDB,
              !status,
              "Could not gracefully close consumer TCP connection")
