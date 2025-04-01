@@ -868,7 +868,9 @@ RMQPublisher::RMQPublisher(uint64_t rId,
 
   _loop = std::shared_ptr<struct event_base>(event_base_new(),
                                              [](struct event_base* event) {
+                                               DBG(event_base, "In ~event_base(%p)", event);
                                                event_base_free(event);
+                                               DBG(event_base, "freed (%p)", event);
                                              });
 
   _handler =

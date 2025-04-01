@@ -1126,7 +1126,9 @@ public:
              std::shared_ptr<struct event_base> loop,
              std::string cacert = "");
 
-  ~RMQHandler() = default;
+  ~RMQHandler() {
+    DBG(RMQHandler, "In ~RMQHandler()");
+  };
 
   /**
    *  @brief  Wait (blocking call) until connection has been established or that ms * repeat is over.
@@ -1421,7 +1423,9 @@ public:
                       std::string cacert,
                       std::string queue);
 
-  ~RMQPublisherHandler() = default;
+  ~RMQPublisherHandler() {
+    DBG(RMQPublisherHandler, "In ~RMQPublisherHandler()");
+  }
 
   /**
    *  @brief  Publish data on RMQ queue.
@@ -1496,6 +1500,12 @@ public:
                std::string cacert,
                std::string queue);
 
+  ~RMQPublisher() {
+    DBG(RMQPublisher, "In ~RMQPublisher(%p)", _connection)
+    // delete _connection; // this leads to double free segfault
+    // _connection = nullptr;
+  };
+
   /**
    * @brief Check if the underlying RabbitMQ connection is ready and usable
    * @return True if the publisher is ready to publish
@@ -1555,9 +1565,6 @@ public:
    *  @return   Number of messages
    */
   bool close(unsigned ms, int repeat = 1);
-
-  ~RMQPublisher() = default;
-
 };  // class RMQPublisher
 
 /**
