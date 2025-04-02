@@ -24,6 +24,8 @@
 #include <nlohmann/json.hpp>
 #include <queue>
 #include <thread>
+#include <unordered_map>
+
 
 #include "wf/basedb.hpp"
 using json = nlohmann::json;
@@ -38,7 +40,11 @@ struct PublishMessage {
       : dPtr(dPtr), size(size), id(id)
   {
   }
+
+  // TODO: implement some move semantics to avoid copying shared_ptr (expensive)
 };
+
+class MessagesBuffer;
 
 // A simple thread-safe queue for publish messages.
 class MessageQueue
@@ -48,8 +54,6 @@ public:
   {
     std::lock_guard<std::mutex> lock(_mutex);
     _queue.push(msg);
-    // Notify the send event externally.
-    if (notifyCallback) notifyCallback();
   }
 
   // Returns true if a message was popped.
@@ -62,12 +66,77 @@ public:
     return true;
   }
 
-  // Optionally, let the ConnectionManager set a callback to notify new work.
-  std::function<void()> notifyCallback;
+  // Returns size of the queue
+  size_t size()
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _queue.size();
+  }
 
 private:
   std::queue<PublishMessage> _queue;
   std::mutex _mutex;
+};
+
+
+
+class MessagesBuffer {
+private:
+  using iterator_t = std::unordered_map<int, PublishMessage>::iterator;
+  // Note: we could remove the id from PublishMessage struct
+  std::unordered_map<int, PublishMessage> _msgs;
+  std::shared_mutex _mutex;
+
+  friend class ConnectionManager;
+
+  MessagesBuffer() = default;
+
+public:
+  MessagesBuffer(MessagesBuffer&) = delete;
+  MessagesBuffer& operator=(MessagesBuffer&) = delete;
+
+  MessagesBuffer(MessagesBuffer&&) = delete;
+  MessagesBuffer& operator=(MessagesBuffer&&) = delete;
+
+  iterator_t begin() { return std::begin(_msgs); }
+
+  iterator_t end() { return std::end(_msgs); }
+
+  void insert(const PublishMessage& msg) {
+    std::unique_lock<std::shared_mutex> lock(_mutex);
+    _msgs[msg.id] = msg;
+  }
+
+  void erase(int id) {
+    std::unique_lock<std::shared_mutex> lock(_mutex);
+    iterator_t it = _msgs.find(id);
+    if (it != end()) {
+      std::cout << "Erasing msg " << id << std::endl;
+      _msgs.erase(it);
+    }
+  }
+
+  void print()
+  {
+    std::shared_lock<std::shared_mutex> lock(_mutex);
+    for (const auto& e : _msgs)
+      fprintf(stdout,
+          "Message [%d] (addr=%p,use_count=%d, size=%d)\n",
+          e.second.id,
+          e.second.dPtr.get(),
+          e.second.dPtr.use_count(),
+          e.second.size);
+  }
+
+  size_t size() {
+      std::shared_lock<std::shared_mutex> lock(_mutex);
+      return _msgs.size();
+  }
+
+  static MessagesBuffer& getInstance() {
+    static MessagesBuffer instance;
+    return instance;
+  }
 };
 
 // Custom handler for AMQP events.
@@ -165,6 +234,7 @@ public:
   {
     std::cout << _address << "\n";
     evthread_use_pthreads();
+
     _base = event_base_new();
     _handler = std::make_shared<MyAMQPHandler>(_base, rmq_cert);
     // Set up the reconnection callback.
@@ -176,18 +246,12 @@ public:
     // Add the event (without a timeout, since we trigger it manually).
     event_add(_sendEvent, nullptr);
     std::cout << "Event callback " << _sendEvent << "\n";
-    // Set the queue's notify callback to activate the send event.
-    _msgQueue.notifyCallback = [this]() {
-      // Trigger the send event.
-      std::cout << "Setting send event callback " << _sendEvent << "\n";
-      event_active(this->_sendEvent, EV_WRITE, 0);
-    };
 
-    // 500ms timer to simulate connection drops
-    struct timeval tv = {1, 0};  // Every second
-    event* dropConnectionEvent = event_new(
+    // 2000ms timer to simulate connection drops
+    struct timeval tv = {2, 0};  // Every 2 seconds
+    _dropConnectionEvent = event_new(
         _base, -1, EV_PERSIST, ConnectionManager::simulateConnectionDrop, this);
-    event_add(dropConnectionEvent, &tv);  // Add the event to the event loop
+    event_add(_dropConnectionEvent, &tv);  // Add the event to the event loop
 
     // Start the worker thread.
     createConnection();
@@ -200,16 +264,21 @@ public:
 
   ~ConnectionManager()
   {
-    stop();
+    if (!_stop) stop();
     std::cout << "Stopped\n";
     if (_workerThread.joinable()) _workerThread.join();
     std::cout << "Joined \n";
+    if (_dropConnectionEvent) event_free(_dropConnectionEvent);
+    if (_sendEvent) event_free(_sendEvent);
     if (_base) event_base_free(_base);
   }
 
-  // Called from the main thread to enqueue a message.
-  void publish(const PublishMessage& msg) { _msgQueue.push(msg); }
 
+  void publish(const PublishMessage& msg) {
+    std::cout << "Setting send event callback " << _sendEvent << "\n";
+    _msgQueue.push(msg);
+    event_active(this->_sendEvent, EV_WRITE, 0);
+  }
 
   void closeConnection()
   {
@@ -231,20 +300,34 @@ public:
   // Signal shutdown.
   void stop()
   {
+    std::cerr << "we have " << MessagesBuffer::getInstance().size() << " messages not acked\n";
+
+    // We want to have a chance to send the messages that could not be sent before
+    auto bsize = MessagesBuffer::getInstance().size();
+    if (bsize > 0) {
+      std::cout << "We try to resend messages before stopping\n";
+      // Here if we call directly processQueue(), we get a deadlock from libevent (waiting on lock in event_del_)
+      // I assume that by calling processQueue(), we bypass the activate of _sendEvent and it somehow leads to a deadlock
+      for (auto& item : MessagesBuffer::getInstance())
+        _msgQueue.push(item.second);
+
+      int iters = 0;
+      int repeat = 10;
+      while ((bsize != 0) && (iters++ < repeat)) {
+        std::cerr << "Message queued = " << bsize << " - Waiting " << iters << "/" << repeat << "\n";
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        bsize = MessagesBuffer::getInstance().size();
+      }
+    }
+
     _stop = true;
     event_base_loopexit(_base, nullptr);
-  }
-
-
-  void queue_publish(const PublishMessage& msg)
-  {
-    std::cout << "Called push\n";
-    _msgQueue.push(msg);
   }
 
 private:
   struct event_base* _base;
   struct event* _sendEvent;
+  struct event* _dropConnectionEvent;
   std::shared_ptr<MyAMQPHandler> _handler;
   AMQP::Address _address;
   std::unique_ptr<AMQP::TcpConnection> _connection;
@@ -259,34 +342,50 @@ private:
   std::string _exchange;
   std::string _routing_key;
 
+  void internalPublish(const PublishMessage& msg) {
+    // Publish using the reliable channel if available.
+    if (_reliableChannel) {
+      _reliableChannel
+          ->publish("",
+                    _queue_sender,
+                    reinterpret_cast<char*>(msg.dPtr.get()),
+                    msg.size)
+          .onAck([msg]() {
+            std::cout << "Ok: Message acked: " << msg.id << std::endl;
+            // If msg is in the MessagesBuffer, we erase it
+            MessagesBuffer::getInstance().erase(msg.id);
+          })
+          .onNack([this, msg]() {
+            std::cerr << "Warning: Message nack'ed, requeueing: " << msg.id
+                      << std::endl;
+            MessagesBuffer::getInstance().insert(msg);
+          })
+          .onError([this, msg](const char* errMsg) {
+            std::cerr << "Error: Publish error for message (" << msg.id
+                      << "): " << errMsg << std::endl;
+            MessagesBuffer::getInstance().insert(msg);
+          });
+    } else {
+      std::cerr << "No valid channel for publishing." << std::endl;
+      MessagesBuffer::getInstance().insert(msg);
+    }
+  }
+
   void processQueue()
   {
+    // Publishing the current msgs buffered
     PublishMessage msg;
-    if (_msgQueue.pop(msg)) {
-      std::cout << "Processing message: " << msg.id << std::endl;
-      // Publish using the reliable channel if available.
-      if (_reliableChannel) {
-        _reliableChannel
-            ->publish("",
-                      _queue_sender,
-                      reinterpret_cast<char*>(msg.dPtr.get()),
-                      msg.size)
-            .onAck([msg]() {
-              std::cout << "Message acked: " << msg.id << std::endl;
-            })
-            .onNack([this, msg]() {
-              std::cerr << "Message nack'ed, requeueing: " << msg.id
-                        << std::endl;
-              _msgQueue.push(msg);
-            })
-            .onError([this, msg](const char* errMsg) {
-              std::cerr << "Publish error for message (" << msg.id
-                        << "): " << errMsg << std::endl;
-              _msgQueue.push(msg);
-            });
-      } else {
-        std::cerr << "No valid channel for publishing." << std::endl;
+    while (_msgQueue.size() > 0) {
+      if (_msgQueue.pop(msg)) {
+        std::cout << "Processing message: " << msg.id << std::endl;
+        internalPublish(msg);
       }
+    }
+
+    // Re-publishing messages that have not been ack-ed
+    for (auto& item : MessagesBuffer::getInstance()) {
+      std::cout << "re-processing message: " << item.first << std::endl;
+      internalPublish(item.second);
     }
   }
 
@@ -446,14 +545,16 @@ int main(int argc, char* argv[])
     std::shared_ptr<uint8_t> ptr(msg.data(),
                                  ams::db::AMSMessageRecords::getDeleter());
     PublishMessage record(ptr, msg.size(), i);
-    connManager.queue_publish(record);
+    connManager.publish(record);
     for (auto& I : Inputs)
       free(I);
     for (auto& O : Outputs)
       free(O);
+    if (i % 3) // to slow down the process enough to let the simulated failures be impactul
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   }
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   connManager.stop();
   return 0;
 }
