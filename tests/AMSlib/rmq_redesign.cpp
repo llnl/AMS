@@ -87,8 +87,6 @@ private:
   std::unordered_map<int, PublishMessage> _msgs;
   std::shared_mutex _mutex;
 
-  friend class ConnectionManager;
-
   MessagesBuffer() = default;
 
 public:
@@ -303,8 +301,7 @@ public:
     std::cerr << "we have " << MessagesBuffer::getInstance().size() << " messages not acked\n";
 
     // We want to have a chance to send the messages that could not be sent before
-    auto bsize = MessagesBuffer::getInstance().size();
-    if (bsize > 0) {
+    if (MessagesBuffer::getInstance().size() > 0) {
       std::cout << "We try to resend messages before stopping\n";
       // Here if we call directly processQueue(), we get a deadlock from libevent (waiting on lock in event_del_)
       // I assume that by calling processQueue(), we bypass the activate of _sendEvent and it somehow leads to a deadlock
@@ -313,10 +310,9 @@ public:
 
       int iters = 0;
       int repeat = 10;
-      while ((bsize != 0) && (iters++ < repeat)) {
-        std::cerr << "Message queued = " << bsize << " - Waiting " << iters << "/" << repeat << "\n";
+      while ((MessagesBuffer::getInstance().size() != 0) && (iters++ < repeat)) {
+        std::cerr << "Waiting " << iters << "/" << repeat << "\n";
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        bsize = MessagesBuffer::getInstance().size();
       }
     }
 
