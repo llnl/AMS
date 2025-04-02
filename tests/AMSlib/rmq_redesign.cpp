@@ -30,7 +30,6 @@
 #include <thread>
 #include <unordered_map>
 
-
 #include "wf/basedb.hpp"
 using json = nlohmann::json;
 
@@ -47,8 +46,6 @@ struct PublishMessage {
 
   // TODO: implement some move semantics to avoid copying shared_ptr (expensive)
 };
-
-class MessagesBuffer;
 
 // A simple thread-safe queue for publish messages.
 class MessageQueue
@@ -82,14 +79,13 @@ private:
   std::mutex _mutex;
 };
 
-
-
-class MessagesBuffer {
+class MessagesBuffer
+{
 private:
   using iterator_t = std::unordered_map<int, PublishMessage>::iterator;
   // Note: we could remove the id from PublishMessage struct
   std::unordered_map<int, PublishMessage> _msgs;
-  std::shared_mutex _mutex;
+  std::mutex _mutex;
 
   MessagesBuffer() = default;
 
@@ -104,38 +100,38 @@ public:
 
   iterator_t end() { return std::end(_msgs); }
 
-  void insert(const PublishMessage& msg) {
-    std::unique_lock<std::shared_mutex> lock(_mutex);
+  void insert(const PublishMessage& msg)
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
     _msgs[msg.id] = msg;
   }
 
-  void erase(int id) {
-    std::unique_lock<std::shared_mutex> lock(_mutex);
-    iterator_t it = _msgs.find(id);
-    if (it != end()) {
-      std::cout << "Erasing msg " << id << std::endl;
-      _msgs.erase(it);
-    }
+  void erase(int id)
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    _msgs.erase(id);
   }
 
   void print()
   {
-    std::shared_lock<std::shared_mutex> lock(_mutex);
+    std::lock_guard<std::mutex> lock(_mutex);
     for (const auto& e : _msgs)
       fprintf(stdout,
-          "Message [%d] (addr=%p,use_count=%d, size=%d)\n",
-          e.second.id,
-          e.second.dPtr.get(),
-          e.second.dPtr.use_count(),
-          e.second.size);
+              "Message [%d] (addr=%p,use_count=%d, size=%d)\n",
+              e.second.id,
+              e.second.dPtr.get(),
+              e.second.dPtr.use_count(),
+              e.second.size);
   }
 
-  size_t size() {
-      std::shared_lock<std::shared_mutex> lock(_mutex);
-      return _msgs.size();
+  size_t size()
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _msgs.size();
   }
 
-  static MessagesBuffer& getInstance() {
+  static MessagesBuffer& getInstance()
+  {
     static MessagesBuffer instance;
     return instance;
   }
@@ -243,14 +239,25 @@ public:
     _handler->reconnectCallback =
         std::bind(&ConnectionManager::scheduleReconnect, this);
 
+    // The main threads uses the 'sendEvent' mechanism to pick messages
+    // from the main-application queue and publish them
+    // to the rmq broker.
     _sendEvent = event_new(
         _base, -1, EV_PERSIST, ConnectionManager::sendMessageCallback, this);
-    // Add the event (without a timeout, since we trigger it manually).
     event_add(_sendEvent, nullptr);
-    std::cout << "Event callback " << _sendEvent << "\n";
+
+    // The main thread uses the '_flushEvent' event to notify the event thread to send 'nack' messages
+    // to the rmq broker.
+
+    _flushEvent = event_new(_base,
+                            -1,
+                            EV_PERSIST,
+                            ConnectionManager::flushNAckMessageCallback,
+                            this);
+    event_add(_flushEvent, nullptr);
 
     // 2000ms timer to simulate connection drops
-    struct timeval tv = {2, 0};  // Every 2 seconds
+    struct timeval tv = {4, 0};  // Every 2 seconds
     _dropConnectionEvent = event_new(
         _base, -1, EV_PERSIST, ConnectionManager::simulateConnectionDrop, this);
     event_add(_dropConnectionEvent, &tv);  // Add the event to the event loop
@@ -270,16 +277,31 @@ public:
     std::cout << "Stopped\n";
     if (_workerThread.joinable()) _workerThread.join();
     std::cout << "Joined \n";
-    if (_dropConnectionEvent) event_free(_dropConnectionEvent);
-    if (_sendEvent) event_free(_sendEvent);
-    if (_base) event_base_free(_base);
+    if (_dropConnectionEvent) {
+      event_free(_dropConnectionEvent);
+      _dropConnectionEvent = nullptr;
+    }
+    if (_sendEvent) {
+      event_free(_sendEvent);
+      _sendEvent = nullptr;
+    }
+    if (_flushEvent) {
+      event_free(_flushEvent);
+      _flushEvent = nullptr;
+    }
+    if (_base) {
+      event_base_free(_base);
+      _base = nullptr;
+    }
   }
 
 
-  void publish(const PublishMessage& msg) {
+  void publish(const PublishMessage& msg)
+  {
     std::cout << "Setting send event callback " << _sendEvent << "\n";
     _msgQueue.push(msg);
     event_active(this->_sendEvent, EV_WRITE, 0);
+    flush();
   }
 
   void closeConnection()
@@ -299,33 +321,32 @@ public:
     mgr->closeConnection();
   }
 
-  // Signal shutdown.
-  void stop()
+  void flush()
   {
-    std::cerr << "we have " << MessagesBuffer::getInstance().size() << " messages not acked\n";
-
-    // We want to have a chance to send the messages that could not be sent before
-    if (MessagesBuffer::getInstance().size() > 0) {
-      std::cout << "We try to resend messages before stopping\n";
-      // Here if we cannot call directly processQueue() as it will deadlock (waiting on lock in event_del_)
-      for (auto& item : MessagesBuffer::getInstance())
-        _msgQueue.push(item.second);
-
-      int iters = 0;
-      int repeat = 10;
-      while ((MessagesBuffer::getInstance().size() != 0) && (iters++ < repeat)) {
-        std::cerr << "Waiting " << iters << "/" << repeat << "\n";
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    auto reconnecting = this->_reconnecting.load();
+    if (!reconnecting) {
+      if (MessagesBuffer::getInstance().size() > 0) {
+        event_active(this->_flushEvent, EV_WRITE, 0);
       }
     }
+  }
+
+
+  /* Stops the event loop, and closes the TCP connection. */
+  void stop()
+  {
+    std::cerr << "we have " << MessagesBuffer::getInstance().size()
+              << " messages not acked\n";
 
     _stop = true;
+    _connection->close();
     event_base_loopexit(_base, nullptr);
   }
 
 private:
   struct event_base* _base;
   struct event* _sendEvent;
+  struct event* _flushEvent;
   struct event* _dropConnectionEvent;
   std::shared_ptr<MyAMQPHandler> _handler;
   AMQP::Address _address;
@@ -341,7 +362,8 @@ private:
   std::string _exchange;
   std::string _routing_key;
 
-  void internalPublish(const PublishMessage& msg) {
+  void internalPublish(const PublishMessage& msg)
+  {
     // Publish using the reliable channel if available.
     if (_reliableChannel) {
       _reliableChannel
@@ -380,10 +402,13 @@ private:
         internalPublish(msg);
       }
     }
+  }
 
-    // Re-publishing messages that have not been ack-ed
+  void flushNAckMessages()
+  {
+
+    std::cout << "Flushing messages" << std::endl;
     for (auto& item : MessagesBuffer::getInstance()) {
-      std::cout << "re-processing message: " << item.first << std::endl;
       internalPublish(item.second);
     }
   }
@@ -394,6 +419,13 @@ private:
     std::cout << "Sending message callback\n";
     ConnectionManager* mgr = reinterpret_cast<ConnectionManager*>(arg);
     mgr->processQueue();
+  }
+
+  static void flushNAckMessageCallback(evutil_socket_t, short, void* arg)
+  {
+    std::cout << "Sending message callback\n";
+    ConnectionManager* mgr = reinterpret_cast<ConnectionManager*>(arg);
+    mgr->flushNAckMessages();
   }
 
   // Create connection, channel, and wrap the channel in a reliable channel.
@@ -413,7 +445,10 @@ private:
   {
     if (_stop) return;
     if (_reconnecting.exchange(true)) return;  // Already reconnecting.
-    struct timeval tv = {0, 0};                // 1 second delay.
+    // TODO: Currently we have no delay. We may at some point implement a back off policy here,
+    // in which we increase the wait time by some exponential factor... and once we connect
+    // we reset the delay
+    struct timeval tv = {0, 0};
     event_base_once(_base,
                     -1,
                     EV_TIMEOUT,
@@ -454,7 +489,6 @@ T getEntry(json& entry, std::string field)
   }
   return entry[field].get<T>();
 }
-
 
 //
 // Example usage:
@@ -529,7 +563,6 @@ int main(int argc, char* argv[])
                                 exchange,
                                 routing_key);
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
   // Simulate publishing messages from the main thread.
   int num_inputs = 5;
   int num_outputs = 10;
@@ -545,12 +578,7 @@ int main(int argc, char* argv[])
       Outputs.push_back((double*)malloc(sizeof(double) * size));
     }
 
-    ams::db::AMSMessage msg(i,
-                            rId,
-                            domain_name,
-                            1000,
-                            Inputs,
-                            Outputs);
+    ams::db::AMSMessage msg(i, rId, domain_name, 1000, Inputs, Outputs);
 
     std::shared_ptr<uint8_t> ptr(msg.data(),
                                  ams::db::AMSMessageRecords::getDeleter());
@@ -560,31 +588,38 @@ int main(int argc, char* argv[])
       free(I);
     for (auto& O : Outputs)
       free(O);
-    if (i % 5) // to slow down the process enough to let the simulated failures be impactul
-      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    if (i %
+        5)  // to slow down the process enough to let the simulated failures be impactul
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  connManager.flush();
+  int iters = 0;
+  int repeat = 10;
+  while ((MessagesBuffer::getInstance().size() != 0) && (iters++ < repeat)) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
   connManager.stop();
+  if (MessagesBuffer::getInstance().size() != 0) {
+    std::cout << "Rank : " << rId << " did not ack "
+              << MessagesBuffer::getInstance().size() << "messages\n";
+  }
 
   int global_sum = 0;
   int local_sum = MessagesBuffer::getInstance().size();
-  #ifdef __AMS_ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
   MPI_Reduce(&local_sum, &global_sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-  #else
+#else
   global_sum = local_sum;
-  #endif
+#endif
 
   if (rId == 0) {
-    std::cout << "Total number of messages that should have been sent : " << wS * num_messages << "\n";
-    std::cout << "Total number of messages acked : " << (wS*num_messages-global_sum) << "\n";
+    std::cout << "Total number of messages that should have been sent : "
+              << wS * num_messages << "\n";
+    std::cout << "Total number of messages acked : "
+              << (wS * num_messages - global_sum) << "\n";
     std::cout << "Total number of messages non-acked : " << global_sum << "\n";
-  } else {
-    std::cout << "Rank = " << rId << " number of messages that should have been sent : " << num_messages << "\n";
-    std::cout << "Rank = " << rId << " number of messages acked : " << (num_messages-local_sum) << "\n";
-    std::cout << "Rank = " << rId << " number of messages non-acked : " << local_sum << "\n";
   }
-  
   MPI_CALL(MPI_Finalize());
 
   return 0;
