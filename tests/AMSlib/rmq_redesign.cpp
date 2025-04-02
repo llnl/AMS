@@ -307,8 +307,7 @@ public:
     // We want to have a chance to send the messages that could not be sent before
     if (MessagesBuffer::getInstance().size() > 0) {
       std::cout << "We try to resend messages before stopping\n";
-      // Here if we call directly processQueue(), we get a deadlock from libevent (waiting on lock in event_del_)
-      // I assume that by calling processQueue(), we bypass the activate of _sendEvent and it somehow leads to a deadlock
+      // Here if we cannot call directly processQueue() as it will deadlock (waiting on lock in event_del_)
       for (auto& item : MessagesBuffer::getInstance())
         _msgQueue.push(item.second);
 
