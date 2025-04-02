@@ -512,6 +512,9 @@ private:
 public:
   AMSWrap() : memManager(ams::ResourceManager::getInstance())
   {
+  }
+
+  void init() {
     auto log_stats = setup_loggers();
     DBG(AMS,
         "Enable Log %d stored under %s",
@@ -596,6 +599,7 @@ public:
 };
 
 static AMSWrap _amsWrap;
+static std::once_flag _AMSInit;
 
 void _AMSExecute(AMSExecutor executor,
                  void *probDescr,
@@ -605,6 +609,10 @@ void _AMSExecute(AMSExecutor executor,
                  int inputDim,
                  int outputDim)
 {
+  std::call_once(_AMSInit, [&]() {
+    _amsWrap.init();
+  });
+
   int64_t index = static_cast<int64_t>(executor);
   if (index >= _amsWrap.executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
@@ -648,6 +656,10 @@ ams::AMSWorkflow<FPTypeValue> *_AMSCreateExecutor(AMSCAbstrModel model,
     rm.init();
   });
 
+  std::call_once(_AMSInit, [&]() {
+    _amsWrap.init();
+  });
+
   auto &model_descr = _amsWrap.get_model(model);
 
   ams::AMSWorkflow<FPTypeValue> *WF =
@@ -670,6 +682,10 @@ template <typename FPTypeValue>
 AMSExecutor _AMSRegisterExecutor(AMSDType data_type,
                                  ams::AMSWorkflow<FPTypeValue> *workflow)
 {
+  std::call_once(_AMSInit, [&]() {
+    _amsWrap.init();
+  });
+
   _amsWrap.executors.push_back(
       std::make_pair(data_type, static_cast<void *>(workflow)));
   return static_cast<AMSExecutor>(_amsWrap.executors.size()) - 1L;
@@ -748,6 +764,10 @@ void AMSExecute(AMSExecutor executor,
 
 void AMSDestroyExecutor(AMSExecutor executor)
 {
+  std::call_once(_AMSInit, [&]() {
+    _amsWrap.init();
+  });
+
   int64_t index = static_cast<int64_t>(executor);
   if (index >= _amsWrap.executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
@@ -785,6 +805,10 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         const char *db_label,
                                         int num_clusters)
 {
+  std::call_once(_AMSInit, [&]() {
+    _amsWrap.init();
+  });
+
   auto id = _amsWrap.get_model_index(domain_name);
   if (id == -1) {
     id = _amsWrap.register_model(domain_name,
@@ -802,6 +826,10 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
 
 AMSCAbstrModel AMSQueryModel(const char *domain_model)
 {
+  std::call_once(_AMSInit, [&]() {
+    _amsWrap.init();
+  });
+
   return _amsWrap.get_model_index(domain_model);
 }
 

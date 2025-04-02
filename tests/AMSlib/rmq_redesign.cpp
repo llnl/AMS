@@ -1,3 +1,7 @@
+#ifdef __AMS_ENABLE_MPI__
+#include <mpi.h>
+#endif
+
 #include <AMS.h>
 #include <amqpcpp.h>
 #include <amqpcpp/libevent.h>
@@ -463,6 +467,17 @@ int main(int argc, char* argv[])
     std::cout << argv[0] << " <json-ams-config> <num-messages>\n";
     return -1;
   }
+
+  // Number of ranks
+  int wS = 1;
+  // My Local Id
+  int rId = 0;
+  // Level of Threading provided by MPI
+  int provided = 0;
+  MPI_CALL(MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided));
+  MPI_CALL(MPI_Comm_size(MPI_COMM_WORLD, &wS));
+  MPI_CALL(MPI_Comm_rank(MPI_COMM_WORLD, &rId));
+
   auto& mg = ams::ResourceManager::getInstance();
   mg.init();
   auto json_file = std::string(argv[1]);
@@ -522,7 +537,7 @@ int main(int argc, char* argv[])
   size_t size = 1000;
   std::string domain_name("test");
   for (int i = 0; i < num_messages; i++) {
-    std::cout << "Pushing message " << i << "\n";
+    std::cout << "[" << rId << " / " << wS << "] Pushing message " << i << "\n";
     std::vector<double*> Inputs;
     std::vector<double*> Outputs;
     for (int i = 0; i < num_inputs; i++)
@@ -532,7 +547,7 @@ int main(int argc, char* argv[])
     }
 
     ams::db::AMSMessage msg(i,
-                            0,  // To be made as rank id
+                            rId,
                             domain_name,
                             1000,
                             Inputs,
@@ -546,11 +561,32 @@ int main(int argc, char* argv[])
       free(I);
     for (auto& O : Outputs)
       free(O);
-    if (i % 3) // to slow down the process enough to let the simulated failures be impactul
+    if (i % 5) // to slow down the process enough to let the simulated failures be impactul
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   }
 
   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   connManager.stop();
+
+  int global_sum = 0;
+  int local_sum = MessagesBuffer::getInstance().size();
+  #ifdef __AMS_ENABLE_MPI__
+  MPI_Reduce(&local_sum, &global_sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+  #else
+  global_sum = local_sum;
+  #endif
+
+  if (rId == 0) {
+    std::cout << "Total number of messages that should have been sent : " << wS * num_messages << "\n";
+    std::cout << "Total number of messages acked : " << (wS*num_messages-global_sum) << "\n";
+    std::cout << "Total number of messages non-acked : " << global_sum << "\n";
+  } else {
+    std::cout << "Rank = " << rId << " number of messages that should have been sent : " << num_messages << "\n";
+    std::cout << "Rank = " << rId << " number of messages acked : " << (num_messages-local_sum) << "\n";
+    std::cout << "Rank = " << rId << " number of messages non-acked : " << local_sum << "\n";
+  }
+  
+  MPI_CALL(MPI_Finalize());
+
   return 0;
 }
