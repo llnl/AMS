@@ -213,12 +213,12 @@ void MessagesBuffer::print()
 {
   std::lock_guard<std::mutex> lock(_mutex);
   for (const auto& e : _msgs)
-      DBG(MessagesBuffer,
-            "Message [%d] (addr=%p,use_count=%d, size=%d)\n",
-            e.second.id,
-            e.second.dPtr.get(),
-            e.second.dPtr.use_count(),
-            e.second.size);
+    DBG(MessagesBuffer,
+        "Message [%d] (addr=%p,use_count=%d, size=%d)\n",
+        e.second.id,
+        e.second.dPtr.get(),
+        e.second.dPtr.use_count(),
+        e.second.size);
 }
 
 size_t MessagesBuffer::size()
@@ -231,9 +231,12 @@ size_t MessagesBuffer::size()
  * AMQPHandler
  */
 
-bool AMQPHandler::waitToConnect(const std::chrono::milliseconds& duration) {
+bool AMQPHandler::waitToConnect(const std::chrono::milliseconds& duration)
+{
   auto lock = std::unique_lock<std::mutex>(_mutex);
-  return _cv.wait_for(lock, duration, [&]() { return _status == ConnectionStatus::CONNECTED;});
+  return _cv.wait_for(lock, duration, [&]() {
+    return _status == ConnectionStatus::CONNECTED;
+  });
 }
 
 void AMQPHandler::onDetached(AMQP::TcpConnection* connection)
@@ -243,8 +246,7 @@ void AMQPHandler::onDetached(AMQP::TcpConnection* connection)
   if (reconnectCallback) reconnectCallback();
 }
 
-void AMQPHandler::onError(AMQP::TcpConnection* connection,
-                      const char* message)
+void AMQPHandler::onError(AMQP::TcpConnection* connection, const char* message)
 {
   WARNING(AMQPHandler, "Connection error: \"%s\"", message)
   if (reconnectCallback) reconnectCallback();
@@ -280,8 +282,7 @@ bool AMQPHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
   }
 }
 
-bool AMQPHandler::onSecured(AMQP::TcpConnection* connection,
-                        const SSL* ssl)
+bool AMQPHandler::onSecured(AMQP::TcpConnection* connection, const SSL* ssl)
 {
   DBG(AMQPHandler, "Secured TLS connection has been established")
   return true;
