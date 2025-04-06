@@ -65,11 +65,14 @@ namespace fs = std::experimental::filesystem;
 #include <algorithm>
 #include <chrono>
 #include <deque>
+#include <queue>
 #include <future>
 #include <list>
 #include <random>
 #include <thread>
 #include <tuple>
+
+#include <unistd.h>
 
 #endif  // __ENABLE_RMQ__
 
@@ -658,9 +661,9 @@ public:
 
 #ifdef __ENABLE_RMQ__
 
-enum RMQConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
-// Forward declaration
-class RMQPublisher;
+enum ConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
+// // Forward declaration
+// class RMQPublisher;
 
 /**
   * @brief AMS represents the header as follows:
@@ -860,6 +863,23 @@ public:
   };
 
   /**
+  * @brief Custom destructor for a shared ptr
+  *        (useful for debugging)
+  */
+  struct AMSMessageDeleter
+  {
+      void operator()(void* x) {
+        DBG(AMSMessageDeleter, "Freeing %p", x)
+        free(x);
+        x = nullptr;
+      }
+  };
+
+  static AMSMessageDeleter getDeleter() {
+    return AMSMessageDeleter();
+  }
+
+  /**
    * @brief Internal Method swapping for AMSMessage
    * @param[in]  other         Message to swap
    */
@@ -952,66 +972,181 @@ public:
   size_t size() const { return _total_size; }
 };  // class AMSMessage
 
+
+/**
+ * @brief Structure to hold a publish request.
+ * 
+ * @note PublishMessage should be a templated class (not needed right now)
+ */
+struct PublishMessage {
+  std::shared_ptr<uint8_t> dPtr;
+  size_t size;
+  int id;
+  PublishMessage() : dPtr(nullptr), size(-1), id(-1) {}
+  PublishMessage(std::shared_ptr<uint8_t>& dPtr, size_t size, int id)
+      : dPtr(dPtr), size(size), id(id)
+  {
+  }
+
+  // TODO: implement some move semantics to avoid copying shared_ptr (expensive)
+}; // struct PublishMessage
+
+/**
+ * @brief A simple thread-safe queue for publish messages.
+ */
+class MessageQueue
+{
+public:
+  void push(const PublishMessage& msg)
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    _queue.push(msg);
+  }
+
+  // Returns true if a message was popped.
+  bool pop(PublishMessage& msg)
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (_queue.empty()) return false;
+    msg = _queue.front();
+    _queue.pop();
+    return true;
+  }
+
+  // Returns size of the queue
+  size_t size()
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _queue.size();
+  }
+
+private:
+  std::queue<PublishMessage> _queue;
+  std::mutex _mutex;
+}; // class MessageQueue
+
+/**
+ * @brief A thread safe dictionary to store unacknowledged messages.
+ * 
+ * @note This class is meant to be used as a singleton.
+ */
+class MessagesBuffer
+{
+private:
+  using iterator_t = std::unordered_map<int, PublishMessage>::iterator;
+  std::unordered_map<int, PublishMessage> _msgs;
+  std::mutex _mutex;
+
+  MessagesBuffer() = default;
+
+public:
+  MessagesBuffer(MessagesBuffer&) = delete;
+  MessagesBuffer& operator=(MessagesBuffer&) = delete;
+
+  MessagesBuffer(MessagesBuffer&&) = delete;
+  MessagesBuffer& operator=(MessagesBuffer&&) = delete;
+
+  iterator_t begin() { return std::begin(_msgs); }
+
+  iterator_t end() { return std::end(_msgs); }
+
+  void insert(const PublishMessage& msg)
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    _msgs[msg.id] = msg;
+  }
+
+  void erase(int id)
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    _msgs.erase(id);
+  }
+
+  void print()
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    for (const auto& e : _msgs)
+      fprintf(stdout,
+              "Message [%d] (addr=%p,use_count=%d, size=%d)\n",
+              e.second.id,
+              e.second.dPtr.get(),
+              e.second.dPtr.use_count(),
+              e.second.size);
+  }
+
+  size_t size()
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _msgs.size();
+  }
+
+  static MessagesBuffer& getInstance()
+  {
+    static MessagesBuffer instance;
+    return instance;
+  }
+}; // class MessagesBuffer
+
 /**
  * @brief Class responsible to keep track of which AMSMessage has been not correctly
  *        acknowledged. If a given message has not been acked then it is stored in
  *        an internal hashmap to be re-send later.
  */
-class AMSMessageRecords
-{
-  using record_t = std::pair<std::shared_ptr<uint8_t>, size_t>;
-  using iterator_t = std::unordered_map<int, record_t>::iterator;
+// class AMSMessageRecords
+// {
+//   using record_t = std::pair<std::shared_ptr<uint8_t>, size_t>;
+//   using iterator_t = std::unordered_map<int, record_t>::iterator;
 
-private:
-  /** @brief Internal data structure that keeps messages nack */
-  std::unordered_map<int, record_t> _msgs;
-  /** @brief Shared mutex to ensure thread-safe access */
-  std::shared_mutex _mutex;
+// private:
+//   /** @brief Internal data structure that keeps messages nack */
+//   std::unordered_map<int, record_t> _msgs;
+//   /** @brief Shared mutex to ensure thread-safe access */
+//   std::shared_mutex _mutex;
 
-  AMSMessageRecords() = default;
+//   AMSMessageRecords() = default;
 
-public:
-  AMSMessageRecords(AMSMessageRecords&) = delete;
-  AMSMessageRecords& operator=(AMSMessageRecords&) = delete;
+// public:
+//   AMSMessageRecords(AMSMessageRecords&) = delete;
+//   AMSMessageRecords& operator=(AMSMessageRecords&) = delete;
 
-  AMSMessageRecords(AMSMessageRecords&&) = delete;
-  AMSMessageRecords& operator=(AMSMessageRecords&&) = delete;
+//   AMSMessageRecords(AMSMessageRecords&&) = delete;
+//   AMSMessageRecords& operator=(AMSMessageRecords&&) = delete;
 
-  /**
-  * @brief Return an iterator at the beggining of the records
-  */
-  iterator_t begin() { return std::begin(_msgs); }
+//   /**
+//   * @brief Return an iterator at the beggining of the records
+//   */
+//   iterator_t begin() { return std::begin(_msgs); }
 
-  /**
-  * @brief Return an iterator pointing at the end of the records
-  */
-  iterator_t end() { return std::end(_msgs); }
+//   /**
+//   * @brief Return an iterator pointing at the end of the records
+//   */
+//   iterator_t end() { return std::end(_msgs); }
 
-  /**
-  * @brief Insert a new record
-  * @param[in]   id         Message ID
-  * @param[out]  value      Record that will be inserted
-  */
-  void insert(int id, const record_t& value);
+//   /**
+//   * @brief Insert a new record
+//   * @param[in]   id         Message ID
+//   * @param[out]  value      Record that will be inserted
+//   */
+//   void insert(int id, const record_t& value);
 
-  /**
-  * @brief Print the hashmap for debugging
-  */
-  void print();
+//   /**
+//   * @brief Print the hashmap for debugging
+//   */
+//   void print();
 
-  /**
-   * @brief pubslishes all the messages in map 
-   */
-  void publishUnacknowledged(RMQPublisher& publisher);
+//   /**
+//    * @brief pubslishes all the messages in map 
+//    */
+//   void publishUnacknowledged(RMQPublisher& publisher);
 
-  /**
-  * @brief Return the number of records in the underlying structure
-  * @return Return the size of the structure.
-  */
-  size_t size();
+//   /**
+//   * @brief Return the number of records in the underlying structure
+//   * @return Return the size of the structure.
+//   */
+//   size_t size();
 
-  static AMSMessageRecords& getInstance();
-};
+//   static AMSMessageRecords& getInstance();
+// };
 
 /**
  * @brief Structure that represents incoming RabbitMQ messages.
@@ -1074,40 +1209,79 @@ private:
 
 };  // class AMSMessageInbound
 
-
-/**
- * @brief Specific handler for RabbitMQ connections based on libevent.
- */
-class RMQHandler : public AMQP::LibEventHandler
+// Custom handler for AMQP events.
+class AMQPHandler : public AMQP::LibEventHandler
 {
-protected:
-  /** @brief Path to TLS certificate (if empty, no TLS certificate) */
-  std::string _cacert;
-  /** @brief MPI rank (0 if no MPI support) */
-  uint64_t _rId;
-  /** @brief LibEvent I/O loop */
-  std::shared_ptr<struct event_base> _loop;
-
-  std::promise<RMQConnectionStatus> establish_connection;
-  std::future<RMQConnectionStatus> established;
-
-  std::promise<RMQConnectionStatus> close_connection;
-  std::future<RMQConnectionStatus> closed;
-
-  std::atomic<bool> error_connection{0};  // Atomic variable
-
 public:
-  /**
-   *  @brief Constructor
-   *  @param[in]  loop         Event Loop
-   *  @param[in]  rId          MPI rank
-   *  @param[in]  cacert       SSL Cacert
-   */
-  RMQHandler(uint64_t rId,
-             std::shared_ptr<struct event_base> loop,
-             std::string cacert = "");
+  AMQPHandler(struct event_base* base, std::string cacert)
+      : AMQP::LibEventHandler(base), _cacert(cacert)
+  {
+    _establishedConnection = _establishingConnection.get_future();
+    // _closedConnection = _closingConnection.get_future()
+  }
 
-  ~RMQHandler() = default;
+  virtual void onDetached(AMQP::TcpConnection* connection) override
+  {
+    std::cerr << "AMQPHandler: Connection detached." << std::endl;
+    // Signal reconnection if needed.
+    if (reconnectCallback) reconnectCallback();
+  }
+
+  virtual void onError(AMQP::TcpConnection* connection,
+                       const char* message) override
+  {
+    std::cerr << "AMQPHandler: Connection error: " << message << std::endl;
+    if (reconnectCallback) reconnectCallback();
+  }
+
+  virtual bool onSecuring(AMQP::TcpConnection* connection, SSL* ssl) override
+  {
+    // No TLS certificate provided
+    ERR_clear_error();
+    unsigned long err;
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    int ret = SSL_use_certificate_file(ssl, _cacert.c_str(), SSL_FILETYPE_PEM);
+#else
+    int ret = SSL_use_certificate_chain_file(ssl, _cacert.c_str());
+#endif
+    if (ret != 1) {
+      std::string error("openssl: error loading ca-chain () + from [");
+      SSL_get_error(ssl, ret);
+      if ((err = ERR_get_error())) {
+        error += std::string(ERR_reason_error_string(err));
+      }
+      error += "]";
+      return false;
+    } else {
+      std::cout << "Success logged with ca-chain \n";
+      return true;
+    }
+  }
+
+  bool waitFuture(std::future<ConnectionStatus>& future,
+    unsigned ms,
+    int repeat)
+  {
+    std::chrono::milliseconds span(ms);
+    int iters = 0;
+    std::future_status status;
+    while ((status = future.wait_for(span)) == std::future_status::timeout && (iters++ < repeat))
+    std::future<ConnectionStatus> _establishedConnection; // TODO: check that??
+    return status == std::future_status::ready;
+  }
+
+  // /**
+  //  *  @brief  Wait (blocking call) until connection has been closed or that ms * repeat is over.
+  //  *  @param[in]  ms            Number of milliseconds the function will wait on the future
+  //  *  @param[in]  repeat        Number of times the function will wait
+  //  *  @return     True if connection has been closed
+  //  */
+  //  bool waitToClose(unsigned ms, int repeat = 1) {
+  //   if (waitFuture(closed, ms, repeat)) {
+  //     return closed.get() == CLOSED;
+  //   }
+  //   return false;
+  //  }
 
   /**
    *  @brief  Wait (blocking call) until connection has been established or that ms * repeat is over.
@@ -1115,81 +1289,162 @@ public:
    *  @param[in]  repeat        Number of times the function will wait
    *  @return     True if connection has been established
    */
-  bool waitToEstablish(unsigned ms, int repeat = 1);
+   bool waitToEstablish(unsigned ms, int repeat = 1) {
+    if (waitFuture(_establishedConnection, ms, repeat)) {
+      auto status = _establishedConnection.get();
+      DBG(AMQPHandler, "Connection Status: %d", status);
+      return status == CONNECTED;
+    }
+    return false;
+   }
 
-  /**
-   *  @brief  Wait (blocking call) until connection has been closed or that ms * repeat is over.
-   *  @param[in]  ms            Number of milliseconds the function will wait on the future
-   *  @param[in]  repeat        Number of times the function will wait
-   *  @return     True if connection has been closed
-   */
-  bool waitToClose(unsigned ms, int repeat = 1);
-
-  /**
-   *  @brief  Check if the connection can be used to send messages.
-   *  @return     True if connection is valid (i.e., can send messages)
-   */
-  bool connectionValid();
-
-private:
-  /**
-   *  @brief Method that is called after a TCP connection has been set up, and
-   * right before the SSL handshake is going to be performed to secure the
-   * connection (only for amqps:// connections). This method can be overridden
-   * in user space to load client side certificates.
-   *  @param[in]  connection      The connection for which TLS was just started
-   *  @param[in]  ssl             Pointer to the SSL structure that can be
-   * modified
-   *  @return     bool            True to proceed / accept the connection, false
-   * to break up
-   */
-  virtual bool onSecuring(AMQP::TcpConnection* connection, SSL* ssl) override;
-
-  /**
-   *  @brief Method that is called when the secure TLS connection has been
-   * established. This is only called for amqps:// connections. It allows you to
-   * inspect whether the connection is secure enough for your liking (you can
-   *  for example check the server certificate). The AMQP protocol still has
-   *  to be started.
-   *  @param[in]  connection      The connection that has been secured
-   *  @param[in]  ssl             SSL structure from openssl library
-   *  @return     bool            True if connection can be used
-   */
   virtual bool onSecured(AMQP::TcpConnection* connection,
-                         const SSL* ssl) override;
+                         const SSL* ssl) override
+  {
+    std::cout << "Secured \n";
+    return true;
+  }
 
-  /**
-    *  Method that is called when the AMQP protocol is ended. This is the
-    *  counter-part of a call to connection.close() to graceful shutdown
-    *  the connection. Note that the TCP connection is at this time still 
-    *  active, and you will also receive calls to onLost() and onDetached()
-    *  @param  connection      The connection over which the AMQP protocol ended
-    */
-  virtual void onClosed(AMQP::TcpConnection* connection) override;
+  virtual void onClosed(AMQP::TcpConnection* connection) override
+  {
+    std::cout << "On closed \n";
+  }
 
-  /**
-   *  @brief Method that is called by the AMQP library when a fatal error occurs
-   *  on the connection, for example because data received from RabbitMQ
-   *  could not be recognized, or the underlying connection is lost. This
-   *  call is normally followed by a call to onLost() (if the error occurred
-   *  after the TCP connection was established) and onDetached().
-   *  @param[in]  connection      The connection on which the error occurred
-   *  @param[in]  message         A human readable error message
-   */
-  virtual void onError(AMQP::TcpConnection* connection,
-                       const char* message) override;
+  virtual void onReady(AMQP::TcpConnection* connection) override
+  {
+    std::cout << "Connection established and ready." << std::endl;
+    _establishingConnection.set_value(CONNECTED);
+  }
 
-  /**
-    *  @brief Final method that is called. This signals that no further calls to your
-    *  handler will be made about the connection.
-    *  @param  connection      The connection that can be destructed
-    */
-  virtual void onDetached(AMQP::TcpConnection* connection) override;
+  // Set by the connection manager.
+  std::function<void()> reconnectCallback;
+  std::string _cacert;
 
-  bool waitFuture(std::future<RMQConnectionStatus>& future,
-                  unsigned ms,
-                  int repeat);
-};  // class RMQHandler
+  std::promise<ConnectionStatus> _establishingConnection;
+  std::future<ConnectionStatus> _establishedConnection;
+
+  // std::promise<ConnectionStatus> _closingConnection;
+  // std::future<ConnectionStatus> _closedConnection;
+
+  std::atomic<ConnectionStatus> _status{CLOSED};  // Atomic variable
+
+}; // class AMQPHandler
+
+// /**
+//  * @brief Specific handler for RabbitMQ connections based on libevent.
+//  */
+// class RMQHandler : public AMQP::LibEventHandler
+// {
+// protected:
+//   /** @brief Path to TLS certificate (if empty, no TLS certificate) */
+//   std::string _cacert;
+//   /** @brief MPI rank (0 if no MPI support) */
+//   uint64_t _rId;
+//   /** @brief LibEvent I/O loop */
+//   std::shared_ptr<struct event_base> _loop;
+
+//   std::promise<RMQConnectionStatus> establish_connection;
+//   std::future<RMQConnectionStatus> established;
+
+//   std::promise<RMQConnectionStatus> close_connection;
+//   std::future<RMQConnectionStatus> closed;
+
+//   std::atomic<bool> error_connection{0};  // Atomic variable
+
+// public:
+//   /**
+//    *  @brief Constructor
+//    *  @param[in]  loop         Event Loop
+//    *  @param[in]  rId          MPI rank
+//    *  @param[in]  cacert       SSL Cacert
+//    */
+//   RMQHandler(uint64_t rId,
+//              std::shared_ptr<struct event_base> loop,
+//              std::string cacert = "");
+
+//   ~RMQHandler() = default;
+
+//   /**
+//    *  @brief  Wait (blocking call) until connection has been established or that ms * repeat is over.
+//    *  @param[in]  ms            Number of milliseconds the function will wait on the future
+//    *  @param[in]  repeat        Number of times the function will wait
+//    *  @return     True if connection has been established
+//    */
+//   bool waitToEstablish(unsigned ms, int repeat = 1);
+
+//   /**
+//    *  @brief  Wait (blocking call) until connection has been closed or that ms * repeat is over.
+//    *  @param[in]  ms            Number of milliseconds the function will wait on the future
+//    *  @param[in]  repeat        Number of times the function will wait
+//    *  @return     True if connection has been closed
+//    */
+//   bool waitToClose(unsigned ms, int repeat = 1);
+
+//   /**
+//    *  @brief  Check if the connection can be used to send messages.
+//    *  @return     True if connection is valid (i.e., can send messages)
+//    */
+//   bool connectionValid();
+
+// private:
+//   /**
+//    *  @brief Method that is called after a TCP connection has been set up, and
+//    * right before the SSL handshake is going to be performed to secure the
+//    * connection (only for amqps:// connections). This method can be overridden
+//    * in user space to load client side certificates.
+//    *  @param[in]  connection      The connection for which TLS was just started
+//    *  @param[in]  ssl             Pointer to the SSL structure that can be
+//    * modified
+//    *  @return     bool            True to proceed / accept the connection, false
+//    * to break up
+//    */
+//   virtual bool onSecuring(AMQP::TcpConnection* connection, SSL* ssl) override;
+
+//   /**
+//    *  @brief Method that is called when the secure TLS connection has been
+//    * established. This is only called for amqps:// connections. It allows you to
+//    * inspect whether the connection is secure enough for your liking (you can
+//    *  for example check the server certificate). The AMQP protocol still has
+//    *  to be started.
+//    *  @param[in]  connection      The connection that has been secured
+//    *  @param[in]  ssl             SSL structure from openssl library
+//    *  @return     bool            True if connection can be used
+//    */
+//   virtual bool onSecured(AMQP::TcpConnection* connection,
+//                          const SSL* ssl) override;
+
+//   /**
+//     *  Method that is called when the AMQP protocol is ended. This is the
+//     *  counter-part of a call to connection.close() to graceful shutdown
+//     *  the connection. Note that the TCP connection is at this time still 
+//     *  active, and you will also receive calls to onLost() and onDetached()
+//     *  @param  connection      The connection over which the AMQP protocol ended
+//     */
+//   virtual void onClosed(AMQP::TcpConnection* connection) override;
+
+//   /**
+//    *  @brief Method that is called by the AMQP library when a fatal error occurs
+//    *  on the connection, for example because data received from RabbitMQ
+//    *  could not be recognized, or the underlying connection is lost. This
+//    *  call is normally followed by a call to onLost() (if the error occurred
+//    *  after the TCP connection was established) and onDetached().
+//    *  @param[in]  connection      The connection on which the error occurred
+//    *  @param[in]  message         A human readable error message
+//    */
+//   virtual void onError(AMQP::TcpConnection* connection,
+//                        const char* message) override;
+
+//   /**
+//     *  @brief Final method that is called. This signals that no further calls to your
+//     *  handler will be made about the connection.
+//     *  @param  connection      The connection that can be destructed
+//     */
+//   virtual void onDetached(AMQP::TcpConnection* connection) override;
+
+//   bool waitFuture(std::future<RMQConnectionStatus>& future,
+//                   unsigned ms,
+//                   int repeat);
+// };  // class RMQHandler
 
 /**
  * @brief Specific handler for RabbitMQ connections based on libevent.
@@ -1208,338 +1463,694 @@ private:
  * these messages are lost. RabbitMQ can notify the sender that these messages
  * never arrived if the sender uses publication confirmation.
  */
-class RMQConsumerHandler final : public RMQHandler
+// class RMQConsumerHandler final : public RMQHandler
+// {
+// private:
+//   /** @brief main channel used to send data to the broker */
+//   std::shared_ptr<AMQP::TcpChannel> _channel;
+//   /** @brief RabbitMQ queue (internal use only) */
+//   std::string _queue;
+//   /** @brief RabbitMQ exchange */
+//   std::string _exchange;
+//   /** @brief RabbitMQ routing key */
+//   std::string _routing_key;
+//   /** @brief Type of the exchange used (AMQP::topic, AMQP::fanout, AMQP::direct) */
+//   AMQP::ExchangeType _extype;
+//   /** @brief Queue that contains all the messages received on receiver queue */
+//   std::shared_ptr<std::vector<AMSMessageInbound>> _messages;
+
+// public:
+//   /**
+//    *  @brief Constructor
+//    *  @param[in]  loop         Event Loop
+//    *  @param[in]  cacert       SSL Cacert
+//    *  @param[in]  routing_key  Routing key
+//    *  @param[in]  exchange     Exchange
+//    */
+//   RMQConsumerHandler(uint64_t rId,
+//                      std::shared_ptr<struct event_base> loop,
+//                      std::string cacert,
+//                      std::string exchange,
+//                      std::string routing_key,
+//                      AMQP::ExchangeType extype = AMQP::fanout);
+
+//   /**
+//    *  @brief Delete the message with given ID
+//    *  @param[in] delivery_tag Delivery tag that will be deleted (if found)
+//    */
+//   void delMessage(uint64_t delivery_tag) { getMessages(delivery_tag, true); }
+
+//   /**
+//    *  @brief Check if messages received contains new model paths
+//    *  @return Return a tuple with the ID and path of the latest model available or ID=0 and empty string if no model available
+//    */
+//   std::tuple<uint64_t, std::string> getLatestModel();
+
+//   /**
+//    *  @brief Return the most recent messages and delete it
+//    *  @return A structure AMSMessageInbound which is a std::tuple (see typedef)
+//    */
+//   AMSMessageInbound popMessages();
+
+//   /**
+//    *  @brief Return the message corresponding to the delivery tag. Do not delete the
+//    *  message.
+//    *  @param[in] delivery_tag Delivery tag that will be returned (if found)
+//    *  @param[in] erase if True, the element will also be deleted from underyling structure
+//    *  @return A structure AMSMessageInbound which is a std::tuple (see typedef)
+//    */
+//   AMSMessageInbound getMessages(uint64_t delivery_tag, bool erase);
+
+//   ~RMQConsumerHandler() = default;
+
+// private:
+//   /**
+//    *  @brief Method that is called by the AMQP library when the login attempt
+//    *  succeeded. After this the connection is ready to use.
+//    *  @param[in]  connection      The connection that can now be used
+//    */
+//   virtual void onReady(AMQP::TcpConnection* connection) override;
+// };  // class RMQConsumerHandler
+
+
+// /**
+//  * @brief Class that manages a RabbitMQ broker and handles connection, event
+//  * loop and set up various handlers.
+//  */
+// class RMQConsumer
+// {
+// private:
+//   /** @brief Connection to the broker */
+//   AMQP::TcpConnection* _connection;
+//   /** @brief name of the exchange */
+//   std::string _exchange;
+//   /** @brief name of the routing binded to exchange */
+//   std::string _routing_key;
+//   /** @brief TLS certificate file */
+//   std::string _cacert;
+//   /** @brief MPI rank (if MPI is used, otherwise 0) */
+//   uint64_t _rId;
+//   /** @brief The event loop for sender (usually the default one in libevent) */
+//   std::shared_ptr<struct event_base> _loop;
+//   /** @brief The handler which contains various callbacks for the sender */
+//   std::shared_ptr<RMQConsumerHandler> _handler;
+//   /** @brief Queue that contains all the messages received on receiver queue (messages can be popped in) */
+//   std::vector<AMSMessageInbound> _messages;
+
+// public:
+//   RMQConsumer(const RMQConsumer&) = delete;
+//   RMQConsumer& operator=(const RMQConsumer&) = delete;
+
+//   RMQConsumer(uint64_t rId,
+//               const AMQP::Address& address,
+//               std::string cacert,
+//               std::string routing_key,
+//               std::string exchange);
+
+//   /**
+//    *  @brief Start the underlying I/O loop (blocking call)
+//    */
+//   void start();
+
+//   /**
+//    *  @brief Stop the underlying I/O loop
+//    */
+//   void stop();
+
+//   /**
+//    *  @brief Check if the underlying RabbitMQ connection is ready and usable
+//    *  @return True if the publisher is ready to publish
+//    */
+//   bool ready();
+
+//   /**
+//    *  @brief Wait that the connection is ready (blocking call)
+//    *  @param[in] ms Number of milliseconds to wait between each tentative
+//    *  @param[in] repeat Number of tentatives
+//    *  @return True if the publisher is ready to publish
+//    */
+//   bool waitToEstablish(unsigned ms, int repeat = 1);
+
+//   /**
+//    *  @brief Return the most recent messages and delete it
+//    *  @return A structure AMSMessageInbound which is a std::tuple (see typedef)
+//    */
+//   AMSMessageInbound popMessages();
+
+//   /**
+//    *  @brief Delete the message with given ID
+//    *  @param[in] delivery_tag Delivery tag that will be deleted (if found)
+//    */
+//   void delMessage(uint64_t delivery_tag);
+
+//   /**
+//    *  @brief Return the message corresponding to the delivery tag. Do not delete the
+//    *  message.
+//    *  @param[in] delivery_tag Delivery tag that will be returned (if found)
+//    *  @param[in] erase if True, the element will also be deleted from underyling structure
+//    *  @return A structure AMSMessageInbound which is a std::tuple (see typedef)
+//    */
+//   AMSMessageInbound getMessages(uint64_t delivery_tag, bool erase = false);
+
+//   /**
+//    *  @brief Return the path of latest ML model available
+//    *  @return Tuple with ID of new model and ML model path or empty string if no model available
+//    */
+//   std::tuple<uint64_t, std::string> getLatestModel();
+
+//   /**
+//    *  @brief    Close the unerlying connection
+//    *  @param[in] ms Number of milliseconds to wait between each tentative
+//    *  @param[in] repeat Number of tentatives
+//    *  @return  True if connection was closed properly
+//    */
+//   bool close(unsigned ms, int repeat = 1);
+
+//   ~RMQConsumer();
+// };  // class RMQConsumer
+
+// /**
+//  * @brief Specific handler for RabbitMQ connections based on libevent.
+//  */
+// class RMQPublisherHandler final : public RMQHandler
+// {
+// private:
+//   std::shared_ptr<AMQP::TcpChannel> _channel;
+//   /** @brief AMQP reliable channel (wrapper of classic channel with added functionalities) */
+//   std::shared_ptr<AMQP::Reliable<AMQP::Tagger>> _rchannel;
+//   /** @brief RabbitMQ queue */
+//   std::string _queue;
+//   /** @brief Total number of messages sent */
+//   int _nb_msg;
+//   /** @brief Number of messages successfully acknowledged */
+//   int _nb_msg_ack;
+
+// public:
+//   /**
+//    *  @brief Constructor
+//    *  @param[in]  loop         Event Loop
+//    *  @param[in]  cacert       SSL Cacert
+//    *  @param[in]  rank         MPI rank
+//    */
+//   RMQPublisherHandler(uint64_t rId,
+//                       std::shared_ptr<struct event_base> loop,
+//                       std::string cacert,
+//                       std::string queue);
+
+//   ~RMQPublisherHandler() = default;
+
+//   /**
+//    *  @brief  Publish data on RMQ queue.
+//    *  @param[in]  msg            The AMSMessage to publish
+//    */
+//   // void publish(AMSMessage&& msg);
+//   void publish(int message_id,
+//                const std::pair<std::shared_ptr<uint8_t>, size_t>&);
+
+//   /**
+//    *  @brief    Total number of messages sent
+//    *  @return   Number of messages
+//    */
+//   int msgSent() const;
+
+//   /**
+//    *  @brief    Total number of messages successfully acknowledged
+//    *  @return   Number of messages
+//    */
+//   int msgAcknowledged() const;
+
+//   /**
+//    *  @brief    Total number of messages unacknowledged
+//    *  @return   Number of messages unacknowledged
+//    */
+//   unsigned unacknowledged() const;
+
+//   /**
+//    *  @brief    Flush the handler by waiting for all unacknowledged mesages.
+//    *            it will wait for a given amount of time until timeout.
+//    */
+//   void flush();
+
+// private:
+//   /**
+//    *  @brief Method that is called by the AMQP library when the login attempt
+//    *  succeeded. After this the connection is ready to use.
+//    *  @param[in]  connection      The connection that can now be used
+//    */
+//   virtual void onReady(AMQP::TcpConnection* connection) override;
+// };  // class RMQPublisherHandler
+
+
+// /**
+//  * @brief Class that manages a RabbitMQ broker and handles connection, event
+//  * loop and set up various handlers.
+//  */
+// class RMQPublisher
+// {
+// private:
+//   /** @brief Connection to the broker */
+//   AMQP::TcpConnection* _connection;
+//   /** @brief MPI rank (0 if no MPI support) */
+//   uint64_t _rId;
+//   /** @brief name of the queue to send data */
+//   std::string _queue;
+//   /** @brief TLS certificate file */
+//   std::string _cacert;
+//   /** @brief MPI rank (if MPI is used, otherwise 0) */
+//   int _rank;
+//   /** @brief The event loop for sender (usually the default one in libevent) */
+//   std::shared_ptr<struct event_base> _loop;
+//   /** @brief The handler which contains various callbacks for the sender */
+//   std::shared_ptr<RMQPublisherHandler> _handler;
+
+// public:
+//   RMQPublisher(const RMQPublisher&) = delete;
+//   RMQPublisher& operator=(const RMQPublisher&) = delete;
+
+//   RMQPublisher(uint64_t rId,
+//                const AMQP::Address& address,
+//                std::string cacert,
+//                std::string queue);
+
+//   /**
+//    * @brief Check if the underlying RabbitMQ connection is ready and usable
+//    * @return True if the publisher is ready to publish
+//    */
+//   bool readyPublish();
+
+//   /**
+//    * @brief Wait that the connection is ready (blocking call)
+//    * @return True if the publisher is ready to publish
+//    */
+//   bool waitToEstablish(unsigned ms, int repeat = 1);
+
+//   /**
+//    * @brief Return the number of unacknowledged messages
+//    * @return Number of unacknowledged messages
+//    */
+//   unsigned unacknowledged() const;
+
+//   /**
+//    * @brief Start the underlying I/O loop (blocking call)
+//    */
+//   void start();
+
+//   /**
+//    * @brief Stop the underlying I/O loop
+//    */
+//   void stop();
+
+//   /**
+//    * @brief Check if the underlying connection has no errors
+//    * @return True if no errors
+//    */
+//   bool connectionValid();
+
+//   /**
+//    * @brief Publish a message on attached RMQ connection
+//    * @param[in]  id        The ID of the message
+//    * @param[in]  record    A pair of the memory content (ptr) and its size in byte
+//    */
+//   void publish(int id,
+//                const std::pair<std::shared_ptr<uint8_t>, size_t>& record);
+
+//   /**
+//    *  @brief    Total number of messages sent
+//    *  @return   Number of messages
+//    */
+//   int msgSent() const;
+
+//   /**
+//    *  @brief    Total number of messages successfully acknowledged
+//    *  @return   Number of messages
+//    */
+//   int msgAcknowledged() const;
+
+//   /**
+//    *  @brief    Total number of messages successfully acknowledged
+//    *  @return   Number of messages
+//    */
+//   bool close(unsigned ms, int repeat = 1);
+
+//   ~RMQPublisher() = default;
+
+// };  // class RMQPublisher
+
+
+/** 
+  TODO: THAT CLASS MIGHT MOVE TO DEDICATED HEADER + CPP FILES
+**/
+
+class ConnectionManagerAMQP
 {
+public:
+  ConnectionManagerAMQP(std::string rmq_user,
+                    std::string rmq_password,
+                    std::string rmq_vhost,
+                    std::string service_host,
+                    int service_port,
+                    std::string rmq_cert,
+                    std::string outbound_queue,
+                    std::string exchange,
+                    std::string routing_key)
+      : _address(service_host,
+                 service_port,
+                 AMQP::Login(rmq_user, rmq_password),
+                 rmq_vhost,
+                 rmq_cert.empty() ? false : true),
+        _stop(false),
+        _queue_sender(outbound_queue),
+        _exchange(exchange),
+        _routing_key(routing_key),
+        _reconnecting(false)
+  {
+    #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
+    evthread_use_pthreads();
+    #else
+    FATAL(ConnectionManagerAMQP, "Libevent does not support pthreads")
+    #endif
+
+    DBG(ConnectionManagerAMQP,
+      "%s (OPENSSL_VERSION_NUMBER = %#010x)",
+      OPENSSL_VERSION_TEXT,
+      OPENSSL_VERSION_NUMBER);
+
+    DBG(ConnectionManagerAMQP,
+      "RabbitMQ address: %s:%d/%s (exchange = %s / routing key = %s)",
+      _address.hostname().c_str(),
+      _address.port(),
+      _address.vhost().c_str(),
+      _exchange.c_str(),
+      _routing_key.c_str())
+
+    _base = event_base_new();
+    _handler = std::make_shared<AMQPHandler>(_base, rmq_cert);
+    // Set up the reconnection callback.
+    _handler->reconnectCallback =
+        std::bind(&ConnectionManagerAMQP::scheduleReconnect, this);
+
+    // The main threads uses the 'sendEvent' mechanism to pick messages
+    // from the main-application queue and publish them
+    // to the rmq broker.
+    _sendEvent = event_new(
+        _base, -1, EV_PERSIST, ConnectionManagerAMQP::sendMessageCallback, this);
+    event_add(_sendEvent, nullptr);
+
+    // The main thread uses the '_flushEvent' event to notify the event thread to send 'nack' messages
+    // to the rmq broker.
+
+    _flushEvent = event_new(_base,
+                            -1,
+                            EV_PERSIST,
+                            ConnectionManagerAMQP::flushNAckMessageCallback,
+                            this);
+    event_add(_flushEvent, nullptr);
+
+    // // 2000ms timer to simulate connection drops
+    // struct timeval tv = {4, 0};  // Every 2 seconds
+    // m = event_new(
+    //     _base, -1, EV_PERSIST, ConnectionManagerAMQP::simulateConnectionDrop, this);
+    // event_add(_dropConnectionEvent, &tv);  // Add the event to the event loop
+
+    // Start the worker thread.
+    createConnection();
+    _workerThread = std::thread([this]() {
+      std::cout << "Starting dispatch \n";
+      event_base_dispatch(_base);
+      std::cout << "Stop dispatch\n";
+    });
+  }
+
+  ~ConnectionManagerAMQP()
+  {
+    if (!_stop) stop();
+    std::cout << "Stopped\n";
+    if (_workerThread.joinable()) _workerThread.join();
+    std::cout << "Joined \n";
+    // if (_dropConnectionEvent) {
+    //   event_free(_dropConnectionEvent);
+    //   _dropConnectionEvent = nullptr;
+    // }
+    if (_sendEvent) {
+      event_free(_sendEvent);
+      _sendEvent = nullptr;
+    }
+    if (_flushEvent) {
+      event_free(_flushEvent);
+      _flushEvent = nullptr;
+    }
+    if (_base) {
+      event_base_free(_base);
+      _base = nullptr;
+    }
+  }
+
+  bool isConnected()
+  {
+    return !_reconnecting.load() && _isConnected.load();
+  }
+
+  void publish(const PublishMessage& msg)
+  {
+    std::cout << "Setting send event callback " << _sendEvent << "\n";
+    _msgQueue.push(msg);
+    event_active(this->_sendEvent, EV_WRITE, 0);
+    flush();
+  }
+
+  void closeConnection()
+  {
+    if (_connection) {
+      close(_connection->fileno());  // Close the connection
+      std::cout << "Connection closed." << std::endl;
+    }
+    _isConnected.store(false);
+  }
+
+  static void simulateConnectionDrop(evutil_socket_t, short, void* arg)
+  {
+    ConnectionManagerAMQP* mgr = reinterpret_cast<ConnectionManagerAMQP*>(arg);
+    std::cout << "Simulating connection drop..." << std::endl;
+
+    // Close the current connection (simulate a drop)
+    mgr->closeConnection();
+  }
+
+  void flush()
+  {
+    auto reconnecting = this->_reconnecting.load();
+    if (!reconnecting) {
+      if (MessagesBuffer::getInstance().size() > 0) {
+        event_active(this->_flushEvent, EV_WRITE, 0);
+      }
+    }
+  }
+
+
+  /* Stops the event loop, and closes the TCP connection. */
+  void stop()
+  {
+    std::cerr << "we have " << MessagesBuffer::getInstance().size()
+              << " messages not acked\n";
+
+    _stop.store(true);
+    _connection->close();
+    _isConnected.store(false);
+    event_base_loopexit(_base, nullptr);
+  }
+
 private:
-  /** @brief main channel used to send data to the broker */
+  struct event_base* _base;
+  struct event* _sendEvent;
+  struct event* _flushEvent;
+  struct event* _dropConnectionEvent;
+  std::shared_ptr<AMQPHandler> _handler;
+  AMQP::Address _address;
+  std::unique_ptr<AMQP::TcpConnection> _connection;
+  // Use both a plain channel and a reliable wrapper for confirmations.
   std::shared_ptr<AMQP::TcpChannel> _channel;
-  /** @brief RabbitMQ queue (internal use only) */
-  std::string _queue;
-  /** @brief RabbitMQ exchange */
+  std::shared_ptr<AMQP::Reliable<AMQP::Tagger>> _reliableChannel;
+  MessageQueue _msgQueue;
+  std::thread _workerThread;
+  std::atomic<bool> _stop;
+  std::atomic<bool> _reconnecting;
+  std::string _queue_sender;
   std::string _exchange;
-  /** @brief RabbitMQ routing key */
   std::string _routing_key;
-  /** @brief Type of the exchange used (AMQP::topic, AMQP::fanout, AMQP::direct) */
-  AMQP::ExchangeType _extype;
-  /** @brief Queue that contains all the messages received on receiver queue */
-  std::shared_ptr<std::vector<AMSMessageInbound>> _messages;
+  std::atomic<bool> _isConnected;
 
-public:
-  /**
-   *  @brief Constructor
-   *  @param[in]  loop         Event Loop
-   *  @param[in]  cacert       SSL Cacert
-   *  @param[in]  routing_key  Routing key
-   *  @param[in]  exchange     Exchange
-   */
-  RMQConsumerHandler(uint64_t rId,
-                     std::shared_ptr<struct event_base> loop,
-                     std::string cacert,
-                     std::string exchange,
-                     std::string routing_key,
-                     AMQP::ExchangeType extype = AMQP::fanout);
+  ConnectionManagerAMQP(const ConnectionManagerAMQP&) = delete;
+  ConnectionManagerAMQP& operator=(const ConnectionManagerAMQP&) = delete;
 
-  /**
-   *  @brief Delete the message with given ID
-   *  @param[in] delivery_tag Delivery tag that will be deleted (if found)
-   */
-  void delMessage(uint64_t delivery_tag) { getMessages(delivery_tag, true); }
+  ConnectionManagerAMQP(ConnectionManagerAMQP&&) = delete;
+  ConnectionManagerAMQP& operator=(ConnectionManagerAMQP&&) = delete;
 
-  /**
-   *  @brief Check if messages received contains new model paths
-   *  @return Return a tuple with the ID and path of the latest model available or ID=0 and empty string if no model available
-   */
-  std::tuple<uint64_t, std::string> getLatestModel();
+  void internalPublish(const PublishMessage& msg)
+  {
+    // Publish using the reliable channel if available.
+    if (_reliableChannel) {
+      _reliableChannel
+          ->publish("",
+                    _queue_sender,
+                    reinterpret_cast<char*>(msg.dPtr.get()),
+                    msg.size)
+          .onAck([msg]() {
+            std::cout << "Ok: Message acked: " << msg.id << std::endl;
+            // If msg is in the MessagesBuffer, we erase it
+            MessagesBuffer::getInstance().erase(msg.id);
+          })
+          .onNack([this, msg]() {
+            std::cerr << "Warning: Message nack'ed, requeueing: " << msg.id
+                      << std::endl;
+            MessagesBuffer::getInstance().insert(msg);
+          })
+          .onError([this, msg](const char* errMsg) {
+            std::cerr << "Error: Publish error for message (" << msg.id
+                      << "): " << errMsg << std::endl;
+            MessagesBuffer::getInstance().insert(msg);
+          });
+    } else {
+      std::cerr << "No valid channel for publishing." << std::endl;
+      MessagesBuffer::getInstance().insert(msg);
+    }
+  }
 
-  /**
-   *  @brief Return the most recent messages and delete it
-   *  @return A structure AMSMessageInbound which is a std::tuple (see typedef)
-   */
-  AMSMessageInbound popMessages();
+  void processQueue()
+  {
+    // Publishing the current msgs buffered
+    PublishMessage msg;
+    while (_msgQueue.size() > 0) {
+      if (_msgQueue.pop(msg)) {
+        std::cout << "Processing message: " << msg.id << std::endl;
+        internalPublish(msg);
+      }
+    }
+  }
 
-  /**
-   *  @brief Return the message corresponding to the delivery tag. Do not delete the
-   *  message.
-   *  @param[in] delivery_tag Delivery tag that will be returned (if found)
-   *  @param[in] erase if True, the element will also be deleted from underyling structure
-   *  @return A structure AMSMessageInbound which is a std::tuple (see typedef)
-   */
-  AMSMessageInbound getMessages(uint64_t delivery_tag, bool erase);
+  int unacknowledged() const
+  {
+    if(_reliableChannel)
+      return _reliableChannel->unacknowledged();
+    return -1;
+  }
 
-  ~RMQConsumerHandler() = default;
+  void flushNAckMessages()
+  {
 
-private:
-  /**
-   *  @brief Method that is called by the AMQP library when the login attempt
-   *  succeeded. After this the connection is ready to use.
-   *  @param[in]  connection      The connection that can now be used
-   */
-  virtual void onReady(AMQP::TcpConnection* connection) override;
-};  // class RMQConsumerHandler
+    std::cout << "Flushing messages" << std::endl;
+    for (auto& item : MessagesBuffer::getInstance()) {
+      internalPublish(item.second);
+    }
+  }
 
+  // The send event callback. This is called when _sendEvent is activated.
+  static void sendMessageCallback(evutil_socket_t, short, void* arg)
+  {
+    std::cout << "Sending message callback\n";
+    ConnectionManagerAMQP* mgr = reinterpret_cast<ConnectionManagerAMQP*>(arg);
+    mgr->processQueue();
+  }
 
-/**
- * @brief Class that manages a RabbitMQ broker and handles connection, event
- * loop and set up various handlers.
- */
-class RMQConsumer
-{
-private:
-  /** @brief Connection to the broker */
-  AMQP::TcpConnection* _connection;
-  /** @brief name of the exchange */
-  std::string _exchange;
-  /** @brief name of the routing binded to exchange */
-  std::string _routing_key;
-  /** @brief TLS certificate file */
-  std::string _cacert;
-  /** @brief MPI rank (if MPI is used, otherwise 0) */
-  uint64_t _rId;
-  /** @brief The event loop for sender (usually the default one in libevent) */
-  std::shared_ptr<struct event_base> _loop;
-  /** @brief The handler which contains various callbacks for the sender */
-  std::shared_ptr<RMQConsumerHandler> _handler;
-  /** @brief Queue that contains all the messages received on receiver queue (messages can be popped in) */
-  std::vector<AMSMessageInbound> _messages;
+  static void flushNAckMessageCallback(evutil_socket_t, short, void* arg)
+  {
+    std::cout << "Sending message callback\n";
+    ConnectionManagerAMQP* mgr = reinterpret_cast<ConnectionManagerAMQP*>(arg);
+    mgr->flushNAckMessages();
+  }
 
-public:
-  RMQConsumer(const RMQConsumer&) = delete;
-  RMQConsumer& operator=(const RMQConsumer&) = delete;
+  // Create connection, channel, and wrap the channel in a reliable channel.
+  void createConnection()
+  {
+    _connection =
+        std::make_unique<AMQP::TcpConnection>(_handler.get(), _address);
+    
 
-  RMQConsumer(uint64_t rId,
-              const AMQP::Address& address,
-              std::string cacert,
-              std::string routing_key,
-              std::string exchange);
+    std::cerr << "waitToEstablish\n";
+    if (!_handler->waitToEstablish(100,30)) {
+      std::cerr << "We are ready to create queue\n";
+      _channel = std::make_shared<AMQP::TcpChannel>(_connection.get());
+      _channel->onError([&](const char* message) {
+        std::cerr << "Error on channel: " << message << "\n";
+      });
 
-  /**
-   *  @brief Start the underlying I/O loop (blocking call)
-   */
-  void start();
+      std::cerr << "declaring queue \n";
 
-  /**
-   *  @brief Stop the underlying I/O loop
-   */
-  void stop();
+      _channel->declareQueue(_queue_sender)
+          .onSuccess([&](const std::string& name,
+                          uint32_t messagecount,
+                          uint32_t consumercount) {
+            DBG(ConnectionManagerAMQP,
+                "declared queue: %s (messagecount=%d, "
+                "consumercount=%d)",
+                _queue_sender.c_str(),
+                messagecount,
+                consumercount)
+            // _reliableChannel = std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel);
+            // establish_connection.set_value(CONNECTED);
+          })
+          .onError([&](const char* message) {
+            CFATAL(ConnectionManagerAMQP,
+                    false,
+                    "Error while creating broker queue (%s): "
+                    "%s",
+                    _queue_sender.c_str(),
+                    message)
+            // establish_connection.set_value(FAILED);
+          });
+      
+      std::cerr << "declaring queue \n";
+      // Wrap the plain channel in a reliable channel for publish confirmations.
+      _reliableChannel =
+          std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel);
+      _isConnected = true;
+      std::cout << "Connection and channels established." << std::endl;
+      
+    } else {
+      _isConnected = false;
+      std::cerr << "Error could not estlblish connection" << "\n";
+    }
+  }
 
-  /**
-   *  @brief Check if the underlying RabbitMQ connection is ready and usable
-   *  @return True if the publisher is ready to publish
-   */
-  bool ready();
+  // Schedule a reconnect if not already in progress.
+  void scheduleReconnect()
+  {
+    if (_stop) return;
+    if (_reconnecting.exchange(true)) return;  // Already reconnecting.
+    // TODO: Currently we have no delay. We may at some point implement a back off policy here,
+    // in which we increase the wait time by some exponential factor... and once we connect
+    // we reset the delay
+    struct timeval tv = {0, 0};
+    event_base_once(_base,
+                    -1,
+                    EV_TIMEOUT,
+                    ConnectionManagerAMQP::reconnectTimerCallback,
+                    this,
+                    &tv);
+  }
 
-  /**
-   *  @brief Wait that the connection is ready (blocking call)
-   *  @param[in] ms Number of milliseconds to wait between each tentative
-   *  @param[in] repeat Number of tentatives
-   *  @return True if the publisher is ready to publish
-   */
-  bool waitToEstablish(unsigned ms, int repeat = 1);
+  // Static callback wrapper for the timer.
+  static void reconnectTimerCallback(evutil_socket_t, short, void* arg)
+  {
+    ConnectionManagerAMQP* mgr = static_cast<ConnectionManagerAMQP*>(arg);
+    mgr->reconnect();
+  }
 
-  /**
-   *  @brief Return the most recent messages and delete it
-   *  @return A structure AMSMessageInbound which is a std::tuple (see typedef)
-   */
-  AMSMessageInbound popMessages();
+  // Reconnect by closing the old connection and re-creating everything.
+  void reconnect()
+  {
+    std::cout << "Reconnecting..." << std::endl;
+    if (_connection) {
+      _connection->close();
+    }
+    // Clean up the channels.
+    _channel.reset();
+    _reliableChannel.reset();
+    createConnection();
+    _reconnecting = false;
+    std::cout << "Reconnection complete." << std::endl;
+  }
+};
 
-  /**
-   *  @brief Delete the message with given ID
-   *  @param[in] delivery_tag Delivery tag that will be deleted (if found)
-   */
-  void delMessage(uint64_t delivery_tag);
-
-  /**
-   *  @brief Return the message corresponding to the delivery tag. Do not delete the
-   *  message.
-   *  @param[in] delivery_tag Delivery tag that will be returned (if found)
-   *  @param[in] erase if True, the element will also be deleted from underyling structure
-   *  @return A structure AMSMessageInbound which is a std::tuple (see typedef)
-   */
-  AMSMessageInbound getMessages(uint64_t delivery_tag, bool erase = false);
-
-  /**
-   *  @brief Return the path of latest ML model available
-   *  @return Tuple with ID of new model and ML model path or empty string if no model available
-   */
-  std::tuple<uint64_t, std::string> getLatestModel();
-
-  /**
-   *  @brief    Close the unerlying connection
-   *  @param[in] ms Number of milliseconds to wait between each tentative
-   *  @param[in] repeat Number of tentatives
-   *  @return  True if connection was closed properly
-   */
-  bool close(unsigned ms, int repeat = 1);
-
-  ~RMQConsumer();
-};  // class RMQConsumer
-
-/**
- * @brief Specific handler for RabbitMQ connections based on libevent.
- */
-class RMQPublisherHandler final : public RMQHandler
-{
-private:
-  std::shared_ptr<AMQP::TcpChannel> _channel;
-  /** @brief AMQP reliable channel (wrapper of classic channel with added functionalities) */
-  std::shared_ptr<AMQP::Reliable<AMQP::Tagger>> _rchannel;
-  /** @brief RabbitMQ queue */
-  std::string _queue;
-  /** @brief Total number of messages sent */
-  int _nb_msg;
-  /** @brief Number of messages successfully acknowledged */
-  int _nb_msg_ack;
-
-public:
-  /**
-   *  @brief Constructor
-   *  @param[in]  loop         Event Loop
-   *  @param[in]  cacert       SSL Cacert
-   *  @param[in]  rank         MPI rank
-   */
-  RMQPublisherHandler(uint64_t rId,
-                      std::shared_ptr<struct event_base> loop,
-                      std::string cacert,
-                      std::string queue);
-
-  ~RMQPublisherHandler() = default;
-
-  /**
-   *  @brief  Publish data on RMQ queue.
-   *  @param[in]  msg            The AMSMessage to publish
-   */
-  // void publish(AMSMessage&& msg);
-  void publish(int message_id,
-               const std::pair<std::shared_ptr<uint8_t>, size_t>&);
-
-  /**
-   *  @brief    Total number of messages sent
-   *  @return   Number of messages
-   */
-  int msgSent() const;
-
-  /**
-   *  @brief    Total number of messages successfully acknowledged
-   *  @return   Number of messages
-   */
-  int msgAcknowledged() const;
-
-  /**
-   *  @brief    Total number of messages unacknowledged
-   *  @return   Number of messages unacknowledged
-   */
-  unsigned unacknowledged() const;
-
-  /**
-   *  @brief    Flush the handler by waiting for all unacknowledged mesages.
-   *            it will wait for a given amount of time until timeout.
-   */
-  void flush();
-
-private:
-  /**
-   *  @brief Method that is called by the AMQP library when the login attempt
-   *  succeeded. After this the connection is ready to use.
-   *  @param[in]  connection      The connection that can now be used
-   */
-  virtual void onReady(AMQP::TcpConnection* connection) override;
-};  // class RMQPublisherHandler
-
-
-/**
- * @brief Class that manages a RabbitMQ broker and handles connection, event
- * loop and set up various handlers.
- */
-class RMQPublisher
-{
-private:
-  /** @brief Connection to the broker */
-  AMQP::TcpConnection* _connection;
-  /** @brief MPI rank (0 if no MPI support) */
-  uint64_t _rId;
-  /** @brief name of the queue to send data */
-  std::string _queue;
-  /** @brief TLS certificate file */
-  std::string _cacert;
-  /** @brief MPI rank (if MPI is used, otherwise 0) */
-  int _rank;
-  /** @brief The event loop for sender (usually the default one in libevent) */
-  std::shared_ptr<struct event_base> _loop;
-  /** @brief The handler which contains various callbacks for the sender */
-  std::shared_ptr<RMQPublisherHandler> _handler;
-
-public:
-  RMQPublisher(const RMQPublisher&) = delete;
-  RMQPublisher& operator=(const RMQPublisher&) = delete;
-
-  RMQPublisher(uint64_t rId,
-               const AMQP::Address& address,
-               std::string cacert,
-               std::string queue);
-
-  /**
-   * @brief Check if the underlying RabbitMQ connection is ready and usable
-   * @return True if the publisher is ready to publish
-   */
-  bool readyPublish();
-
-  /**
-   * @brief Wait that the connection is ready (blocking call)
-   * @return True if the publisher is ready to publish
-   */
-  bool waitToEstablish(unsigned ms, int repeat = 1);
-
-  /**
-   * @brief Return the number of unacknowledged messages
-   * @return Number of unacknowledged messages
-   */
-  unsigned unacknowledged() const;
-
-  /**
-   * @brief Start the underlying I/O loop (blocking call)
-   */
-  void start();
-
-  /**
-   * @brief Stop the underlying I/O loop
-   */
-  void stop();
-
-  /**
-   * @brief Check if the underlying connection has no errors
-   * @return True if no errors
-   */
-  bool connectionValid();
-
-  /**
-   * @brief Publish a message on attached RMQ connection
-   * @param[in]  id        The ID of the message
-   * @param[in]  record    A pair of the memory content (ptr) and its size in byte
-   */
-  void publish(int id,
-               const std::pair<std::shared_ptr<uint8_t>, size_t>& record);
-
-  /**
-   *  @brief    Total number of messages sent
-   *  @return   Number of messages
-   */
-  int msgSent() const;
-
-  /**
-   *  @brief    Total number of messages successfully acknowledged
-   *  @return   Number of messages
-   */
-  int msgAcknowledged() const;
-
-  /**
-   *  @brief    Total number of messages successfully acknowledged
-   *  @return   Number of messages
-   */
-  bool close(unsigned ms, int repeat = 1);
-
-  ~RMQPublisher() = default;
-
-};  // class RMQPublisher
 
 /**
  * @brief Class that manages a RabbitMQ broker and handles connection, event
@@ -1607,28 +2218,33 @@ private:
   std::string _exchange;
   /** @brief name of the routing key to receive data */
   std::string _routing_key;
-  /** @brief Address of the RabbitMQ server */
-  std::shared_ptr<AMQP::Address> _address;
+  // /** @brief Address of the RabbitMQ server */
+  // std::shared_ptr<AMQP::Address> _address;
   /** @brief TLS certificate path */
   std::string _cacert;
   /** @brief Represent the ID of the last message sent */
   int _msg_tag;
-  /** @brief Publisher sending messages to RMQ server */
-  std::shared_ptr<RMQPublisher> _publisher;
-  /** @brief Thread in charge of the publisher */
-  std::thread _publisher_thread;
-  /** @brief Consumer listening to RMQ and consuming messages */
-  std::shared_ptr<RMQConsumer> _consumer;
-  /** @brief Thread in charge of the consumer */
-  std::thread _consumer_thread;
-  /** @brief True if publisher is connected to RabbitMQ */
-  bool _publisher_connected;
-  /** @brief True if consumer is connected to RabbitMQ */
-  bool _consumer_connected;
+  // /** @brief Publisher sending messages to RMQ server */
+  // std::shared_ptr<RMQPublisher> _publisher;
+  // /** @brief Thread in charge of the publisher */
+  // std::thread _publisher_thread;
+  // /** @brief Consumer listening to RMQ and consuming messages */
+  // std::shared_ptr<RMQConsumer> _consumer;
+  // /** @brief Thread in charge of the consumer */
+  // std::thread _consumer_thread;
+  // /** @brief True if publisher is connected to RabbitMQ */
+  // bool _publisher_connected;
+  // /** @brief True if consumer is connected to RabbitMQ */
+  // bool _consumer_connected;
+
+  /** @brief True if we support surrogate update */
+  bool _updateSurrogate;
+
+  std::unique_ptr<ConnectionManagerAMQP> _publishingManager;
 
 public:
   RMQInterface()
-      : _publisher_connected(false), _consumer_connected(false), _rId(0)
+      : _rId(0), _updateSurrogate(false)
   {
   }
 
@@ -1644,30 +2260,42 @@ public:
    * @param[in] outbound_queue Name of the queue on which AMSlib publishes (send) messages
    * @param[in] exchange Exchange for incoming messages
    * @param[in] routing_key Routing key for incoming messages (must match what the AMS Python side is using)
-   * @return True, True if connection succeeded for both publisher/consumer
    */
-  std::pair<bool, bool> connect(std::string rmq_password,
-                                std::string rmq_user,
+  void connect(std::string rmq_user,
+                                std::string rmq_password,                            
                                 std::string rmq_vhost,
-                                int service_port,
                                 std::string service_host,
+                                int service_port,
                                 std::string rmq_cert,
                                 std::string outbound_queue,
                                 std::string exchange,
                                 std::string routing_key,
-                                bool update_surrogate);
+                                bool updateSurrogate)
+  {
+    _publishingManager = std::make_unique<ConnectionManagerAMQP>(rmq_user,
+      rmq_password,
+      rmq_vhost,
+      service_host,
+      service_port,
+      rmq_cert,
+      outbound_queue,
+      exchange,
+      routing_key);
+
+    _updateSurrogate = updateSurrogate;
+  }
 
   /**
    * @brief Check if the RabbitMQ connection is connected.
    * @return True if connected
    */
-  bool isPublisherConnected() const { return _publisher_connected; }
+  bool isPublisherConnected() const { return _publishingManager->isConnected(); }
 
   /**
-   * @brief Check if the RabbitMQ connection is connected.
+   * @brief Check if the consumer connection is connected.
    * @return True if connected
    */
-  bool isConsumerConnected() const { return _consumer_connected; }
+  bool isConsumerConnected() const { return false; }
 
   /**
    * @brief Check if at least one RabbitMQ connection is connected.
@@ -1675,7 +2303,7 @@ public:
    */
   bool isConnected() const
   {
-    return isPublisherConnected() || isConsumerConnected();
+    return isPublisherConnected();// || isConsumerConnected();
   }
 
   /**
@@ -1684,10 +2312,10 @@ public:
    */
   void setId(uint64_t id) { _rId = id; }
 
-  /**
-   * @brief Try to restart the RabbitMQ publisher (restart the thread managing messages publishing)
-   */
-  void restartPublisher();
+  // /**
+  //  * @brief Try to restart the RabbitMQ publisher (restart the thread managing messages publishing)
+  //  */
+  // void restartPublisher();
 
   /**
    * @brief Return the latest model and, by default, delete the corresponding message from the Consumer
@@ -1713,66 +2341,72 @@ public:
     CALIPER(CALI_MARK_BEGIN("STORE_RMQ");)
     AMSMessage msg(_msg_tag, _rId, domain_name, num_elements, inputs, outputs);
 
-    if (!_publisher->connectionValid()&& interrupedThread = NO) {
-      // STEP 1. Set the action of the RMQ thread to RESTART.
-      // STEP 2. Recall that we restarted
-      interruptedThread = YES;
-      // STEP 3. Stop the io loop (not the thread)
-    } else if (!_publisher->connectionValid()&& interruptedThread = YES) {
-      // Here we should not publish, but instead push messages on the sigleton queue.
-    } else if (_publisher->connectionValid()&& interruptedThread = Yes) {
-      // Here we had a failed connect had interrupted the thread and now the thread
-      // restarted the publisher properly. So now we reset the interruptedThread state machine to NO.
-      interrupedThread = NO;
-    }
+    // TODO: we could simplify the logic here
+    // AMSMessage could directly produce a shared ptr
+    std::shared_ptr<uint8_t> ptr(msg.data(), AMSMessage::getDeleter());
+    PublishMessage record(ptr, msg.size(), _msg_tag);
+    _publishingManager->publish(record);
 
-    std::shared_ptr<uint8_t> ptr(msg.data());
-    auto record = std::make_pair(std::move(ptr), msg.size());
-
-    // if we have some messages to send first (from a potential restart)
-    AMSMessageRecords::getInstance().publishUnacknowledged(*_publisher);
-    _publisher->publish(msg.id(), record);
+    // TODO: remove after tests
+    if (_msg_tag % 5)
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
     _msg_tag++;
     CALIPER(CALI_MARK_END("STORE_RMQ");)
+  }
+
+  void flush(int repeat) {
+    _publishingManager->flush();
+    int iters = 0;
+    while ((MessagesBuffer::getInstance().size() != 0) && (iters++ < repeat)) {
+      std::cout << "Flushing messages..." << std::endl;
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
   }
 
   /**
    * @brief Close the underlying connection
    */
-  void close();
-
-  /**
-   * @brief Check if a new ML model is available
-   * @return True if there is a valid ML model
-   */
-  bool updateModel()
-  {
-    // NOTE: The architecture here is not great for now, we have redundant call to getLatestModel
-    // Solution: when switching to C++ use std::variant to return an std::optional
-    // the std::optional would be a string if a model is available otherwise it's a bool false
-    auto data = _consumer->getLatestModel();
-    return !std::get<1>(data).empty();
+  void close() {
+    flush(10);
+    _publishingManager->stop();
+    auto size = MessagesBuffer::getInstance().size();
+    if (size != 0)
+      DBG(RMQInterface, "Rank %ju did not ack %d messages", _rId, size)
   }
 
-  /**
-   * @brief Return the latest model and, by default, delete the corresponding message from the Consumer
-   * @param[in] remove_msg if True, delete the message corresponding to the model
-   * @return The Path of the new model
-   */
-  std::string getLatestModel(bool remove_msg = true)
-  {
-    auto res = _consumer->getLatestModel();
-    bool empty = std::get<1>(res).empty();
-    if (remove_msg && !empty) {
-      auto id = std::get<0>(res);
-      _consumer->delMessage(id);
-    }
-    return std::get<1>(res);
-  }
+  // /**
+  //  * @brief Check if a new ML model is available
+  //  * @return True if there is a valid ML model
+  //  */
+  // bool updateModel()
+  // {
+  //   // NOTE: The architecture here is not great for now, we have redundant call to getLatestModel
+  //   // Solution: when switching to C++ use std::variant to return an std::optional
+  //   // the std::optional would be a string if a model is available otherwise it's a bool false
+  //   auto data = _consumer->getLatestModel();
+  //   return !std::get<1>(data).empty();
+  // }
+
+  // /**
+  //  * @brief Return the latest model and, by default, delete the corresponding message from the Consumer
+  //  * @param[in] remove_msg if True, delete the message corresponding to the model
+  //  * @return The Path of the new model
+  //  */
+  // std::string getLatestModel(bool remove_msg = true)
+  // {
+  //   auto res = _consumer->getLatestModel();
+  //   bool empty = std::get<1>(res).empty();
+  //   if (remove_msg && !empty) {
+  //     auto id = std::get<0>(res);
+  //     _consumer->delMessage(id);
+  //   }
+  //   return std::get<1>(res);
+  // }
 
   ~RMQInterface()
   {
-    if (isConnected()) close();
+    // if (isConnected()) close();
+    _publishingManager->stop();
   }
 };
 
@@ -1850,18 +2484,18 @@ public:
    */
   std::string type() override { return "rabbitmq"; }
 
-  /**
-   * @brief Check if the surrogate model can be updated (i.e., if
-   * RMQConsumer received a training message)
-   * @return True if the model can be updated
-   */
-  bool updateModel() { return interface.updateModel(); }
+  // /**
+  //  * @brief Check if the surrogate model can be updated (i.e., if
+  //  * RMQConsumer received a training message)
+  //  * @return True if the model can be updated
+  //  */
+  // bool updateModel() { return interface.updateModel(); }
 
-  /**
-   * @brief Return the path of the latest surrogate model if available
-   * @return The path of the latest available surrogate model
-   */
-  std::string getLatestModel() { return interface.getLatestModel(); }
+  // /**
+  //  * @brief Return the path of the latest surrogate model if available
+  //  * @return The path of the latest available surrogate model
+  //  */
+  // std::string getLatestModel() { return interface.getLatestModel(); }
 
   /**
    * @brief Return the DB enumerationt type (File, Redis etc)
@@ -1982,7 +2616,7 @@ public:
 
   bool isInitialized() const
   {
-    return fs_interface.isConnected() || rmq_interface.isConnected();
+    return fs_interface.isConnected(); // || rmq_interface.isConnected();
   }
 
   /**
@@ -2141,11 +2775,11 @@ public:
     dbType = AMSDBType::AMS_RMQ;
     updateSurrogate = update_surrogate;
 #ifdef __ENABLE_RMQ__
-    rmq_interface.connect(rmq_pass,
-                          rmq_user,
+    rmq_interface.connect(rmq_user,
+                          rmq_pass,
                           rmq_vhost,
-                          port,
                           host,
+                          port,
                           rmq_cert,
                           outbound_queue,
                           exchange,
