@@ -168,7 +168,68 @@ AMSMessage::AMSMessage(int id, uint64_t rId, uint8_t* data)
   DBG(AMSMessage, "Allocated message %d: %p", _id, _data);
 }
 
+/**
+ * MessageQueue
+ */
 
+void MessageQueue::push(const PublishMessage& msg)
+{
+  std::lock_guard<std::mutex> lock(_mutex);
+  _queue.push(msg);
+}
+
+bool MessageQueue::pop(PublishMessage& msg)
+{
+  std::lock_guard<std::mutex> lock(_mutex);
+  if (_queue.empty()) return false;
+  msg = _queue.front();
+  _queue.pop();
+  return true;
+}
+
+size_t MessageQueue::size()
+{
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _queue.size();
+}
+
+/**
+ * MessagesBuffer
+ */
+
+void MessagesBuffer::insert(const PublishMessage& msg)
+{
+  std::lock_guard<std::mutex> lock(_mutex);
+  _msgs[msg.id] = msg;
+}
+
+void MessagesBuffer::erase(int id)
+{
+  std::lock_guard<std::mutex> lock(_mutex);
+  _msgs.erase(id);
+}
+
+void MessagesBuffer::print()
+{
+  std::lock_guard<std::mutex> lock(_mutex);
+  for (const auto& e : _msgs)
+      DBG(MessagesBuffer,
+            "Message [%d] (addr=%p,use_count=%d, size=%d)\n",
+            e.second.id,
+            e.second.dPtr.get(),
+            e.second.dPtr.use_count(),
+            e.second.size);
+}
+
+size_t MessagesBuffer::size()
+{
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _msgs.size();
+}
+
+/**
+ * AMQPHandler
+ */
 
 bool AMQPHandler::waitToConnect(const std::chrono::milliseconds& duration) {
   auto lock = std::unique_lock<std::mutex>(_mutex);

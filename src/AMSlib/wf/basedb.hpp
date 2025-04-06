@@ -972,6 +972,66 @@ public:
   size_t size() const { return _total_size; }
 };  // class AMSMessage
 
+/**
+ * @brief Structure that represents incoming RabbitMQ messages.
+ */
+ class AMSMessageInbound
+ {
+ public:
+   /** @brief Delivery tag (ID of the message) */
+   uint64_t id;
+   /** @brief MPI rank */
+   uint64_t rId;
+   /** @brief message content (body) */
+   std::string body;
+   /** @brief RabbitMQ exchange from which the message has been received */
+   std::string exchange;
+   /** @brief routing key */
+   std::string routing_key;
+   /** @brief True if messages has been redelivered */
+   bool redelivered;
+ 
+   AMSMessageInbound() = default;
+ 
+   AMSMessageInbound(AMSMessageInbound&) = default;
+   AMSMessageInbound& operator=(AMSMessageInbound&) = default;
+ 
+   AMSMessageInbound(AMSMessageInbound&&) = default;
+   AMSMessageInbound& operator=(AMSMessageInbound&&) = default;
+ 
+   AMSMessageInbound(uint64_t id,
+                     uint64_t rId,
+                     std::string body,
+                     std::string exchange,
+                     std::string routing_key,
+                     bool redelivered);
+ 
+   /**
+    * @brief Check if a message is empty.
+    * @return True if message is empty
+    */
+   bool empty();
+ 
+   /**
+    * @brief Check if a message is empty.
+    * @return True if message is empty.
+    */
+   bool isTraining();
+ 
+   /**
+    * @brief Get the model path from the message.
+    * @return Return model path or empty string if no model available.
+    */
+   std::string getModelPath();
+ 
+ private:
+   /**
+    * @brief Check if a message is empty.
+    * @return True if message is empty
+    */
+   std::vector<std::string> splitString(std::string str, std::string delimiter);
+ 
+ };  // class AMSMessageInbound 
 
 /**
  * @brief Structure to hold a publish request.
@@ -987,42 +1047,32 @@ struct PublishMessage {
       : dPtr(dPtr), size(size), id(id)
   {
   }
-
   // TODO: implement some move semantics to avoid copying shared_ptr (expensive)
 }; // struct PublishMessage
 
 /**
- * @brief A simple thread-safe queue for publish messages.
+ * @brief A simple thread-safe queue for publishing messages.
  */
 class MessageQueue
 {
-public:
-  void push(const PublishMessage& msg)
-  {
-    std::lock_guard<std::mutex> lock(_mutex);
-    _queue.push(msg);
-  }
-
-  // Returns true if a message was popped.
-  bool pop(PublishMessage& msg)
-  {
-    std::lock_guard<std::mutex> lock(_mutex);
-    if (_queue.empty()) return false;
-    msg = _queue.front();
-    _queue.pop();
-    return true;
-  }
-
-  // Returns size of the queue
-  size_t size()
-  {
-    std::lock_guard<std::mutex> lock(_mutex);
-    return _queue.size();
-  }
-
 private:
   std::queue<PublishMessage> _queue;
   std::mutex _mutex;
+
+public:
+  MessageQueue() = default;
+  MessageQueue(MessageQueue&) = delete;
+  MessageQueue& operator=(MessageQueue&) = delete;
+
+  MessageQueue(MessageQueue&&) = delete;
+  MessageQueue& operator=(MessageQueue&&) = delete;
+
+  // Push a message on the queue
+  void push(const PublishMessage& msg);
+  // Returns true if a message was popped.
+  bool pop(PublishMessage& msg);
+  // Returns size of the queue
+  size_t size();
 }; // class MessageQueue
 
 /**
@@ -1050,35 +1100,11 @@ public:
 
   iterator_t end() { return std::end(_msgs); }
 
-  void insert(const PublishMessage& msg)
-  {
-    std::lock_guard<std::mutex> lock(_mutex);
-    _msgs[msg.id] = msg;
-  }
+  void insert(const PublishMessage& msg);
+  void erase(int id);
+  void print();
 
-  void erase(int id)
-  {
-    std::lock_guard<std::mutex> lock(_mutex);
-    _msgs.erase(id);
-  }
-
-  void print()
-  {
-    std::lock_guard<std::mutex> lock(_mutex);
-    for (const auto& e : _msgs)
-      fprintf(stdout,
-              "Message [%d] (addr=%p,use_count=%d, size=%d)\n",
-              e.second.id,
-              e.second.dPtr.get(),
-              e.second.dPtr.use_count(),
-              e.second.size);
-  }
-
-  size_t size()
-  {
-    std::lock_guard<std::mutex> lock(_mutex);
-    return _msgs.size();
-  }
+  size_t size();
 
   static MessagesBuffer& getInstance()
   {
@@ -1086,67 +1112,6 @@ public:
     return instance;
   }
 }; // class MessagesBuffer
-
-/**
- * @brief Structure that represents incoming RabbitMQ messages.
- */
-class AMSMessageInbound
-{
-public:
-  /** @brief Delivery tag (ID of the message) */
-  uint64_t id;
-  /** @brief MPI rank */
-  uint64_t rId;
-  /** @brief message content (body) */
-  std::string body;
-  /** @brief RabbitMQ exchange from which the message has been received */
-  std::string exchange;
-  /** @brief routing key */
-  std::string routing_key;
-  /** @brief True if messages has been redelivered */
-  bool redelivered;
-
-  AMSMessageInbound() = default;
-
-  AMSMessageInbound(AMSMessageInbound&) = default;
-  AMSMessageInbound& operator=(AMSMessageInbound&) = default;
-
-  AMSMessageInbound(AMSMessageInbound&&) = default;
-  AMSMessageInbound& operator=(AMSMessageInbound&&) = default;
-
-  AMSMessageInbound(uint64_t id,
-                    uint64_t rId,
-                    std::string body,
-                    std::string exchange,
-                    std::string routing_key,
-                    bool redelivered);
-
-  /**
-   * @brief Check if a message is empty.
-   * @return True if message is empty
-   */
-  bool empty();
-
-  /**
-   * @brief Check if a message is empty.
-   * @return True if message is empty.
-   */
-  bool isTraining();
-
-  /**
-   * @brief Get the model path from the message.
-   * @return Return model path or empty string if no model available.
-   */
-  std::string getModelPath();
-
-private:
-  /**
-   * @brief Check if a message is empty.
-   * @return True if message is empty
-   */
-  std::vector<std::string> splitString(std::string str, std::string delimiter);
-
-};  // class AMSMessageInbound
 
 /**
  * @brief Custom handler for RabbitMQ (AMQP) connections based on libevent.
@@ -1261,6 +1226,43 @@ private:
  */
 class ConnectionManagerAMQP
 {
+private:
+  /** @brief MPI rank (0 if no MPI support) */
+  uint64_t _rId;
+  /** @brief The event loop for sender (usually the default one in libevent) */
+  struct event_base* _base;
+  /** @brief Event used to initiate message publishing */
+  struct event* _sendEvent;
+  /** @brief Event used to flush the queue of messsages */
+  struct event* _flushEvent;
+  /** @brief Event used to simulate connection drop */
+  struct event* _dropConnectionEvent;
+  /** @brief Handler using Libevent to send messages */
+  std::shared_ptr<AMQPHandler> _handler;
+  /** @brief AMQP address */
+  AMQP::Address _address;
+  /** @brief AMQP connection */
+  std::unique_ptr<AMQP::TcpConnection> _connection;
+  /** @brief AMQP channel */
+  std::shared_ptr<AMQP::TcpChannel> _channel;
+  /** @brief AMQP reliable channel (wrapper around channel with aautomatic confirmations) */
+  std::shared_ptr<AMQP::Reliable<AMQP::Tagger>> _reliableChannel;
+  /** @brief A thread-safe queue to hold messages */
+  MessageQueue _msgQueue;
+  /** @brief Thread that runs the I/O loop */
+  std::thread _workerThread;
+  /** @brief True if stopped */
+  std::atomic<bool> _stop;
+  /** @brief True if currently reconnectiong */
+  std::atomic<bool> _reconnecting;
+  std::string _queue_sender;
+  /** @brief name of the exchange */
+  std::string _exchange;
+  /** @brief name of the routing binded to exchange */
+  std::string _routing_key;
+  /** @brief True if connection */
+  std::atomic<bool> _isConnected;
+
 public:
   ConnectionManagerAMQP(uint64_t id, std::string rmq_user,
                     std::string rmq_password,
@@ -1332,7 +1334,7 @@ public:
         _base, -1, EV_PERSIST, ConnectionManagerAMQP::simulateConnectionDrop, this);
 
     // Uncomment to simulate drop connection
-    // event_add(_dropConnectionEvent, &tv);  // Add the event to the event loop
+    // event_add(_dropConnectionEvent, &tv);
 
     // Start the worker thread.
     createConnection();
@@ -1415,42 +1417,6 @@ public:
   }
 
 private:
-  /** @brief MPI rank (0 if no MPI support) */
-  uint64_t _rId;
-  /** @brief The event loop for sender (usually the default one in libevent) */
-  struct event_base* _base;
-  /** @brief Event used to initiate message publishing */
-  struct event* _sendEvent;
-  /** @brief Event used to flush the queue of messsages */
-  struct event* _flushEvent;
-  /** @brief Event used to simulate connection drop */
-  struct event* _dropConnectionEvent;
-  /** @brief Handler using Libevent to send messages */
-  std::shared_ptr<AMQPHandler> _handler;
-  /** @brief AMQP address */
-  AMQP::Address _address;
-  /** @brief AMQP connection */
-  std::unique_ptr<AMQP::TcpConnection> _connection;
-  /** @brief AMQP channel */
-  std::shared_ptr<AMQP::TcpChannel> _channel;
-  /** @brief AMQP reliable channel (wrapper around channel with aautomatic confirmations) */
-  std::shared_ptr<AMQP::Reliable<AMQP::Tagger>> _reliableChannel;
-  /** @brief A thread-safe queue to hold messages */
-  MessageQueue _msgQueue;
-  /** @brief Thread that runs the I/O loop */
-  std::thread _workerThread;
-  /** @brief True if stopped */
-  std::atomic<bool> _stop;
-  /** @brief True if currently reconnectiong */
-  std::atomic<bool> _reconnecting;
-  std::string _queue_sender;
-  /** @brief name of the exchange */
-  std::string _exchange;
-  /** @brief name of the routing binded to exchange */
-  std::string _routing_key;
-  /** @brief True if connection */
-  std::atomic<bool> _isConnected;
-
   ConnectionManagerAMQP(const ConnectionManagerAMQP&) = delete;
   ConnectionManagerAMQP& operator=(const ConnectionManagerAMQP&) = delete;
 
