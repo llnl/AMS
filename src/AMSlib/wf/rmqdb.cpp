@@ -169,6 +169,56 @@ AMSMessage::AMSMessage(int id, uint64_t rId, uint8_t* data)
 }
 
 /**
+ * AMSMessageInbound
+ */
+
+AMSMessageInbound::AMSMessageInbound(uint64_t id,
+                                     uint64_t rId,
+                                     std::string body,
+                                     std::string exchange,
+                                     std::string routing_key,
+                                     bool redelivered)
+    : id(id),
+      rId(rId),
+      body(std::move(body)),
+      exchange(std::move(exchange)),
+      routing_key(std::move(routing_key)),
+      redelivered(redelivered) {};
+
+
+bool AMSMessageInbound::empty() { return body.empty() || routing_key.empty(); }
+
+bool AMSMessageInbound::isTraining()
+{
+  auto split = splitString(body, ":");
+  return split[0] == "UPDATE";
+}
+
+std::string AMSMessageInbound::getModelPath()
+{
+  auto split = splitString(body, ":");
+  if (split[0] == "UPDATE") {
+    return split[1];
+  }
+  return {};
+}
+
+std::vector<std::string> AMSMessageInbound::splitString(std::string str,
+                                                        std::string delimiter)
+{
+  size_t pos = 0;
+  std::string token;
+  std::vector<std::string> res;
+  while ((pos = str.find(delimiter)) != std::string::npos) {
+    token = str.substr(0, pos);
+    res.push_back(token);
+    str.erase(0, pos + delimiter.length());
+  }
+  res.push_back(str);
+  return res;
+}
+
+/**
  * MessageQueue
  */
 
