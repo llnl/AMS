@@ -862,15 +862,15 @@ public:
   };
 
   /**
-  * @brief Custom destructor for a shared ptr
+  * @brief Custom destructor for a shared_ptr
   *        (useful for debugging)
   */
   struct AMSMessageDeleter {
     void operator()(void* x)
     {
-      DBG(AMSMessageDeleter, "Freeing %p", x)
-      free(x);
-      x = nullptr;
+      DBG(AMSMessageDeleter, "Deallocating %p", x)
+      auto& rm = ams::ResourceManager::getInstance();
+      rm.deallocate(x, AMSResourceType::AMS_HOST);
     }
   };
 
@@ -1093,7 +1093,6 @@ public:
 class MessagesBuffer
 {
 private:
-  using iterator_t = std::unordered_map<int, PublishMessage>::iterator;
   /** @brief The hashmap containing the messages */
   std::unordered_map<int, PublishMessage> _msgs;
   /** @brief Mutex */
@@ -1109,16 +1108,16 @@ public:
   MessagesBuffer& operator=(MessagesBuffer&&) = delete;
 
   /**
-   *  @brief Return the beginning of the buffer
-   *  @return Iterator pointing to the beginning of the buffer
+   *  @brief Apply a lambda to each element of the map
+   *  @param[in]  lambda The lambda to pass, the lambda takes as 
+   *                     input a std::pair<int, PublishMessage>
    */
-  iterator_t begin() { return std::begin(_msgs); }
-
-  /**
-   *  @brief Return the end of the buffer
-   *  @return Iterator pointing to the end of the buffer
-   */
-  iterator_t end() { return std::end(_msgs); }
+  template <typename Func>
+  void forAll(Func&& lambda)
+  {
+    std::lock_guard<std::mutex> lock(_mutex);
+    std::for_each(_msgs.begin(), _msgs.end(), lambda);
+  }
 
   /**
    *  @brief Insert a message in the underlying data structure
@@ -1155,7 +1154,9 @@ public:
 };  // class MessagesBuffer
 
 /**
- * @brief Custom handler for RabbitMQ (AMQP) connections based on libevent.
+ * @brief Custom handler for RabbitMQ (AMQP) connections based
+ *        on libevent that calls the reconnectCallback when
+ *        connections errors.
  */
 class AMQPHandler : public AMQP::LibEventHandler
 {
@@ -1175,8 +1176,7 @@ public:
    *  @param[in]  cacert       SSL Cacert
    */
   AMQPHandler(struct event_base* base, const std::string& cacert)
-      : AMQP::LibEventHandler(base),
-        _cacert(cacert)
+      : AMQP::LibEventHandler(base), _cacert(cacert)
   {
   }
 
@@ -1300,7 +1300,8 @@ public:
                         std::string rmq_cert,
                         std::string outbound_queue,
                         std::string exchange,
-                        std::string routing_key)
+                        std::string routing_key,
+                        bool connectionDrop = false)
       : _rId(id),
         _address(service_host,
                  service_port,
@@ -1317,8 +1318,7 @@ public:
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
     evthread_use_pthreads();
 #else
-    // Should that be fatal?
-    CFATAL(ConnectionManagerAMQP, false "Libevent does not support pthreads")
+    WARNING(ConnectionManagerAMQP, "Libevent does not support pthreads")
 #endif
 
     DBG(ConnectionManagerAMQP,
@@ -1370,8 +1370,10 @@ public:
                   ConnectionManagerAMQP::simulateConnectionDrop,
                   this);
 
-    // Uncomment to simulate drop connection
-    event_add(_dropConnectionEvent, &tv);
+    if (connectionDrop) {
+      std::cout << "we simulate drtop of connection\n";
+      event_add(_dropConnectionEvent, &tv);
+    }
 
     // Start the worker thread.
     createConnection();
@@ -1400,8 +1402,16 @@ public:
     }
   }
 
+  /**
+   *  @brief Check if the connection valid
+   *  @return True if connected
+   */
   bool isConnected() { return !_reconnecting && _isConnected; }
 
+  /**
+   *  @brief Publish a message to the broker
+   *  @param[in]  msg  The message to publish
+   */
   void publish(const PublishMessage& msg)
   {
     DBG(ConnectionManagerAMQP,
@@ -1409,21 +1419,27 @@ public:
         msg.id,
         msg.dPtr.get())
     _msgQueue.push(msg);
-    std::cout << "Setting send event callback " << _sendEvent << "\n";
     event_active(this->_sendEvent, EV_WRITE, 0);
     flush();
   }
 
+  /**
+   * @brief Close the connection abruptly
+   *
+   * @note Do not use unless you want to simulate connection drops
+   */
   void closeConnection()
   {
     if (_connection) {
       close(_connection->fileno());  // Close the connection
-      // _connection->close();
       DBG(ConnectionManagerAMQP, "Connection closed")
     }
     _isConnected = false;
   }
 
+  /**
+   * @brief Simulate a drop in connection (useful for debugging)
+   */
   static void simulateConnectionDrop(evutil_socket_t, short, void* arg)
   {
     ConnectionManagerAMQP* mgr = reinterpret_cast<ConnectionManagerAMQP*>(arg);
@@ -1432,6 +1448,10 @@ public:
     mgr->closeConnection();
   }
 
+  /**
+   * @brief Trigger the event for flushing messages if
+   *        the buffer holding messages contains entries.
+   */
   void flush()
   {
     auto reconnecting = this->_reconnecting.load();
@@ -1442,7 +1462,9 @@ public:
     }
   }
 
-  /* Stops the event loop, and closes the TCP connection. */
+  /**
+   * @brief Stops the event loop, and closes the TCP connection.
+   */
   void stop()
   {
     DBG(ConnectionManagerAMQP,
@@ -1462,6 +1484,10 @@ private:
   ConnectionManagerAMQP(ConnectionManagerAMQP&&) = delete;
   ConnectionManagerAMQP& operator=(ConnectionManagerAMQP&&) = delete;
 
+  /**
+   *  @brief Internal method that publishes a message using the reliable channel
+   *  @param[in]  msg  The message to publish
+   */
   void internalPublish(const PublishMessage& msg)
   {
     // Publish using the reliable channel if available.
@@ -1507,6 +1533,9 @@ private:
     }
   }
 
+  /**
+   *  @brief Process the messages in the internal queue
+   */
   void processMessages()
   {
     // Publishing the current msgs buffered
@@ -1535,8 +1564,10 @@ private:
   void flushNAckMessages()
   {
     DBG(ConnectionManagerAMQP, "Flushing messages")
-    for (auto& item : MessagesBuffer::getInstance())
-      internalPublish(item.second);
+    auto lambda = [this](const std::pair<int, PublishMessage>& item) {
+      this->internalPublish(item.second);
+    };
+    MessagesBuffer::getInstance().forAll(lambda);
   }
 
   /**
@@ -1545,7 +1576,6 @@ private:
    */
   static void sendMessageCallback(evutil_socket_t, short, void* arg)
   {
-    std::cout << "Sending message callback\n";
     ConnectionManagerAMQP* mgr = reinterpret_cast<ConnectionManagerAMQP*>(arg);
     mgr->processMessages();
   }
@@ -1571,8 +1601,7 @@ private:
 
     _channel = std::make_shared<AMQP::TcpChannel>(_connection.get());
     _channel->onError([&](const char* message) {
-      CFATAL(ConnectionManagerAMQP,
-              false,
+      WARNING(ConnectionManagerAMQP,
               "Error on channel: "
               "%s",
               message)
@@ -1581,8 +1610,8 @@ private:
 
     _channel->declareQueue(_queue_sender)
         .onSuccess([](const std::string& name,
-                        uint32_t messagecount,
-                        uint32_t consumercount) {
+                      uint32_t messagecount,
+                      uint32_t consumercount) {
           DBG(ConnectionManagerAMQP,
               "declared queue: %s (messagecount=%d, "
               "consumercount=%d)",
@@ -1591,16 +1620,15 @@ private:
               consumercount)
         })
         .onError([&](const char* message) {
-          CFATAL(ConnectionManagerAMQP,
-                  false,
+          WARNING(ConnectionManagerAMQP,
                   "Error while creating broker queue: "
                   "%s",
                   message)
           _isConnected = false;
         });
     _isConnected = true;
-    _reliableChannel = std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel);
-    std::cout << "Connection and channels established." << std::endl;
+    _reliableChannel =
+        std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel);
   }
 
   /**
@@ -1751,6 +1779,9 @@ public:
                std::string routing_key,
                bool updateSurrogate)
   {
+    bool amsRMQFailure = checkEnvVariable("AMS_SIMULATE_RMQ_FAILURE");
+    CWARNING(RMQInterface, amsRMQFailure, "Simulating connetion drops")
+
     _publishingManager = std::make_unique<ConnectionManagerAMQP>(_rId,
                                                                  rmq_user,
                                                                  rmq_password,
@@ -1760,8 +1791,20 @@ public:
                                                                  rmq_cert,
                                                                  outbound_queue,
                                                                  exchange,
-                                                                 routing_key);
+                                                                 routing_key,
+                                                                 amsRMQFailure);
     _updateSurrogate = updateSurrogate;
+  }
+
+  /**
+   * @brief Check if a environment variable is set to 1
+   * @return True if envVar is set 1, false otherwise
+   */
+  bool checkEnvVariable(const std::string& envVar)
+  {
+    if (const char* env_p = std::getenv(envVar.c_str()))
+      return strcmp(env_p, "1") == 0 ? true : false;
+    return false;
   }
 
   /**
@@ -1815,24 +1858,26 @@ public:
 
     // TODO: we could simplify the logic here
     // AMSMessage could directly produce a shared ptr
-    std::shared_ptr<uint8_t> ptr(msg.data());
+    std::shared_ptr<uint8_t> ptr(msg.data(), AMSMessage::getDeleter());
     PublishMessage record(ptr, msg.size(), _msg_tag);
     _publishingManager->publish(record);
 
-    // TODO: remove after tests
-    // if (_msg_tag % 2)
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     _msg_tag++;
     CALIPER(CALI_MARK_END("STORE_RMQ");)
   }
 
-  void flush(int repeat)
+  /**
+   * @brief Flush messages from the RMQ connection
+   * @param[in] repeat Number of times to repeat flushing
+   * @param[in] ms     Number of ms to wait before each trial
+   */
+  void flush(int repeat, int ms)
   {
     _publishingManager->flush();
     int iters = 0;
     while ((MessagesBuffer::getInstance().size() != 0) && (iters++ < repeat)) {
       DBG(RMQInterface, "Flushing messages...")
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      std::this_thread::sleep_for(std::chrono::milliseconds(ms));
     }
   }
 
@@ -1841,7 +1886,7 @@ public:
    */
   void close()
   {
-    flush(10);
+    flush(10, 100);
     _publishingManager->stop();
     auto size = MessagesBuffer::getInstance().size();
     if (size != 0)

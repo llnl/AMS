@@ -316,7 +316,7 @@ bool AMQPHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
       error += std::string(ERR_reason_error_string(err));
     }
     error += "]";
-    CFATAL(AMQPHandler, false, "%s", error.c_str())
+    WARNING(AMQPHandler, "%s", error.c_str())
     return false;
   } else {
     DBG(AMQPHandler, "Success logged with ca-chain")
