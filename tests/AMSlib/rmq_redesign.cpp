@@ -257,7 +257,7 @@ public:
     event_add(_flushEvent, nullptr);
 
     // 2000ms timer to simulate connection drops
-    struct timeval tv = {4, 0};  // Every 2 seconds
+    struct timeval tv = {2, 0};  // Every 2 seconds
     _dropConnectionEvent = event_new(
         _base, -1, EV_PERSIST, ConnectionManager::simulateConnectionDrop, this);
     event_add(_dropConnectionEvent, &tv);  // Add the event to the event loop
@@ -434,9 +434,27 @@ private:
     _connection =
         std::make_unique<AMQP::TcpConnection>(_handler.get(), _address);
     _channel = std::make_shared<AMQP::TcpChannel>(_connection.get());
+    _channel->onError([](const char* message) {
+      std::cerr << "ERROR: channel: " << message << std::endl;
+    });
     // Wrap the plain channel in a reliable channel for publish confirmations.
     _reliableChannel =
         std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel);
+
+    _channel->declareQueue(_queue_sender)
+        .onSuccess([](const std::string& name,
+                        uint32_t messagecount,
+                        uint32_t consumercount) {
+          std::cerr << "Created queue: " << name << std::endl;
+        })
+        .onError([](const char* message) {
+          std::cerr << "Error: queue: " << message << std::endl;
+        });
+
+    // Wrap the plain channel in a reliable channel for publish confirmations.
+    _reliableChannel =
+        std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel);
+
     std::cout << "Connection and channels established." << std::endl;
   }
 
@@ -589,8 +607,8 @@ int main(int argc, char* argv[])
     for (auto& O : Outputs)
       free(O);
     if (i %
-        5)  // to slow down the process enough to let the simulated failures be impactul
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        2)  // to slow down the process enough to let the simulated failures be impactul
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
 
   connManager.flush();
