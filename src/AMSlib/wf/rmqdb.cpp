@@ -264,7 +264,7 @@ void MessagesBuffer::print()
   std::lock_guard<std::mutex> lock(_mutex);
   for (const auto& e : _msgs)
     DBG(MessagesBuffer,
-        "Message [%d] (addr=%p,use_count=%d, size=%d)\n",
+        "Message [%d] (addr=%p,use_count=%d, size=%d)",
         e.second.id,
         e.second.dPtr.get(),
         e.second.dPtr.use_count(),
@@ -280,14 +280,6 @@ size_t MessagesBuffer::size()
 /**
  * AMQPHandler
  */
-
-bool AMQPHandler::waitToConnect(const std::chrono::milliseconds& duration)
-{
-  auto lock = std::unique_lock<std::mutex>(_mutex);
-  return _cv.wait_for(lock, duration, [&]() {
-    return _status == ConnectionStatus::CONNECTED;
-  });
-}
 
 void AMQPHandler::onDetached(AMQP::TcpConnection* connection)
 {
@@ -346,9 +338,4 @@ void AMQPHandler::onClosed(AMQP::TcpConnection* connection)
 void AMQPHandler::onReady(AMQP::TcpConnection* connection)
 {
   DBG(AMQPHandler, "Connection established and ready")
-  {
-    auto lock = std::lock_guard<std::mutex>(_mutex);
-    _status = ConnectionStatus::CONNECTED;
-  }
-  _cv.notify_one();
 }

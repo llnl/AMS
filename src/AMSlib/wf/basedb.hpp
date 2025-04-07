@@ -1162,12 +1162,6 @@ class AMQPHandler : public AMQP::LibEventHandler
 private:
   /** @brief Path to TLS certificate */
   std::string _cacert;
-  /** @brief Mutex and CV to update internal status */
-  // TODO: Update with std::atomic<ConnectionStatus> wait() in C++20
-  std::mutex _mutex;
-  std::condition_variable _cv;
-  /** @brief Status of the connection */
-  ConnectionStatus _status;
   /** @brief Callback when reconnecting, set by the connection manager */
   std::function<void()> reconnectCallback;
 
@@ -1182,8 +1176,7 @@ public:
    */
   AMQPHandler(struct event_base* base, const std::string& cacert)
       : AMQP::LibEventHandler(base),
-        _cacert(cacert),
-        _status(ConnectionStatus::CLOSED)
+        _cacert(cacert)
   {
   }
 
@@ -1191,13 +1184,6 @@ public:
    *  @brief Default destructor
    */
   ~AMQPHandler() = default;
-
-  /**
-   *  @brief  Wait (blocking call) until connection has been established or that duration is over.
-   *  @param[in]  duration            Number of milliseconds the function will wait
-   *  @return     True if connection has been established, false otherwise
-   */
-  bool waitToConnect(const std::chrono::milliseconds& duration);
 
 private:
   /**
@@ -1325,7 +1311,8 @@ public:
         _queue_sender(outbound_queue),
         _exchange(exchange),
         _routing_key(routing_key),
-        _reconnecting(false)
+        _reconnecting(false),
+        _isConnected(false)
   {
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
     evthread_use_pthreads();
@@ -1384,7 +1371,7 @@ public:
                   this);
 
     // Uncomment to simulate drop connection
-    // event_add(_dropConnectionEvent, &tv);
+    event_add(_dropConnectionEvent, &tv);
 
     // Start the worker thread.
     createConnection();
@@ -1422,6 +1409,7 @@ public:
         msg.id,
         msg.dPtr.get())
     _msgQueue.push(msg);
+    std::cout << "Setting send event callback " << _sendEvent << "\n";
     event_active(this->_sendEvent, EV_WRITE, 0);
     flush();
   }
@@ -1430,6 +1418,7 @@ public:
   {
     if (_connection) {
       close(_connection->fileno());  // Close the connection
+      // _connection->close();
       DBG(ConnectionManagerAMQP, "Connection closed")
     }
     _isConnected = false;
@@ -1556,6 +1545,7 @@ private:
    */
   static void sendMessageCallback(evutil_socket_t, short, void* arg)
   {
+    std::cout << "Sending message callback\n";
     ConnectionManagerAMQP* mgr = reinterpret_cast<ConnectionManagerAMQP*>(arg);
     mgr->processMessages();
   }
@@ -1579,49 +1569,38 @@ private:
     _connection =
         std::make_unique<AMQP::TcpConnection>(_handler.get(), _address);
 
-    auto duration = std::chrono::milliseconds(1000);
-
-    if (!_handler->waitToConnect(duration)) {
-      _channel = std::make_shared<AMQP::TcpChannel>(_connection.get());
-      _channel->onError([&](const char* message) {
-        CFATAL(ConnectionManagerAMQP,
-               false,
-               "Error on channel: "
-               "%s",
-               message)
-        _isConnected = false;
-      });
-
-      _channel->declareQueue(_queue_sender)
-          .onSuccess([&](const std::string& name,
-                         uint32_t messagecount,
-                         uint32_t consumercount) {
-            DBG(ConnectionManagerAMQP,
-                "declared queue: %s (messagecount=%d, "
-                "consumercount=%d)",
-                _queue_sender.c_str(),
-                messagecount,
-                consumercount)
-            _reliableChannel =
-                std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel);
-            _isConnected = true;
-          })
-          .onError([&](const char* message) {
-            CFATAL(ConnectionManagerAMQP,
-                   false,
-                   "Error while creating broker queue (%s): "
-                   "%s",
-                   _queue_sender.c_str(),
-                   message)
-            _isConnected = false;
-          });
-      _isConnected = true;
-    } else {
-      _isConnected = false;
+    _channel = std::make_shared<AMQP::TcpChannel>(_connection.get());
+    _channel->onError([&](const char* message) {
       CFATAL(ConnectionManagerAMQP,
-             false,
-             "Error: timeout could not establish connection")
-    }
+              false,
+              "Error on channel: "
+              "%s",
+              message)
+      _isConnected = false;
+    });
+
+    _channel->declareQueue(_queue_sender)
+        .onSuccess([](const std::string& name,
+                        uint32_t messagecount,
+                        uint32_t consumercount) {
+          DBG(ConnectionManagerAMQP,
+              "declared queue: %s (messagecount=%d, "
+              "consumercount=%d)",
+              name.c_str(),
+              messagecount,
+              consumercount)
+        })
+        .onError([&](const char* message) {
+          CFATAL(ConnectionManagerAMQP,
+                  false,
+                  "Error while creating broker queue: "
+                  "%s",
+                  message)
+          _isConnected = false;
+        });
+    _isConnected = true;
+    _reliableChannel = std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel);
+    std::cout << "Connection and channels established." << std::endl;
   }
 
   /**
@@ -1662,8 +1641,8 @@ private:
   {
     if (_connection) _connection->close();
     // Clean up the channels.
-    if (_channel) _channel.reset();
-    if (_reliableChannel) _reliableChannel.reset();
+    _channel.reset();
+    _reliableChannel.reset();
     createConnection();
     _reconnecting = false;
   }
@@ -1836,13 +1815,13 @@ public:
 
     // TODO: we could simplify the logic here
     // AMSMessage could directly produce a shared ptr
-    std::shared_ptr<uint8_t> ptr(msg.data(), AMSMessage::getDeleter());
+    std::shared_ptr<uint8_t> ptr(msg.data());
     PublishMessage record(ptr, msg.size(), _msg_tag);
     _publishingManager->publish(record);
 
     // TODO: remove after tests
-    if (_msg_tag % 5)
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // if (_msg_tag % 2)
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     _msg_tag++;
     CALIPER(CALI_MARK_END("STORE_RMQ");)
   }
