@@ -245,7 +245,7 @@ private:
       at::Tensor output_mean_tensor =
           output_tuple->elements()[0].toTensor().detach();
       at::Tensor output_stdev_tensor =
-          output_tuple->elements()[1].toTensor().detach();
+          output_tuple->elements()[1].toTensor().detach().contiguous();
       CALIPER(CALI_MARK_BEGIN("TENSOR_TO_ARRAY");)
 
       computeDeltaUQPredicates(uq_policy,
