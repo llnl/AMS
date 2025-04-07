@@ -547,13 +547,11 @@ class AMSDataStore:
 
             # 4. Update DB entries
             for entry, _, dst_path in move_plan:
-                entry.filename = str(dst_path)
+                entry.filename = str(dst_path.resolve())
                 entry.entry_type = dest_type
 
             session.commit()
-            print(
-                f"Database updated. Promoted {len(entries)} entries to '{dest_type.value}'."
-            )
+            print(f"Database updated. Promoted {len(entries)} entries to '{dest_type.value}'.")
 
             # 5. After successful DB update, delete originals
             for _, src_path, _ in move_plan:
