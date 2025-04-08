@@ -1473,7 +1473,7 @@ public:
    * is defined as neither ack or nack or a message that has to be 
    * resent because an error happened during a prebious trial.
    */
-   int pendingMessages()
+   int pendingMessages() const
    {
     return MessagesBuffer::getInstance().size() + unacknowledged();
    }
