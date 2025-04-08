@@ -481,7 +481,7 @@ jobs:
             \"domain_models\": {}
           }""" > $GITHUB_WORKSPACE/build/tests/AMSlib/rmq.json
 
-          make test
+          ctest --output-on-failure ./
         env:
           RABBITMQ_USER: ams
           RABBITMQ_PASS: ams

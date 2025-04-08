@@ -137,7 +137,8 @@ int main(int argc, char **argv)
     std::cout << argv[0]
               << " use_device(0|1) num_inputs num_outputs "
                  "data_type(float|double) "
-                 "num_iterations num_elements" << std::endl;
+                 "num_iterations num_elements"
+              << std::endl;
     return -1;
   }
 
@@ -173,33 +174,34 @@ int main(int argc, char **argv)
   AMSSetAllocator(AMSResourceType::AMS_HOST, "TEST_HOST");
 
   AMSCAbstrModel ams_model = AMSRegisterAbstractModel("rmq_db_no_model",
-                                                        AMSUQPolicy::AMS_RANDOM,
-                                                        0.5,
-                                                        "",
-                                                        "",
-                                                        "rmq_db_no_model",
-                                                        1);
+                                                      AMSUQPolicy::AMS_RANDOM,
+                                                      0.5,
+                                                      "",
+                                                      "",
+                                                      "rmq_db_no_model",
+                                                      1);
 
   if (data_type == AMSDType::AMS_SINGLE) {
     Problem<float> prob(num_inputs, num_outputs);
     AMSExecutor wf = AMSCreateExecutor(ams_model,
-                                        AMSDType::AMS_SINGLE,
-                                        resource,
-                                        (AMSPhysicFn)callBackSingle,
-                                        0,
-                                        1);
+                                       AMSDType::AMS_SINGLE,
+                                       resource,
+                                       (AMSPhysicFn)callBackSingle,
+                                       0,
+                                       1);
 
     prob.ams_run(wf, resource, num_iterations, num_elements);
   } else {
     Problem<double> prob(num_inputs, num_outputs);
     AMSExecutor wf = AMSCreateExecutor(ams_model,
-                                        AMSDType::AMS_DOUBLE,
-                                        resource,
-                                        (AMSPhysicFn)callBackDouble,
-                                        0,
-                                        1);
+                                       AMSDType::AMS_DOUBLE,
+                                       resource,
+                                       (AMSPhysicFn)callBackDouble,
+                                       0,
+                                       1);
     prob.ams_run(wf, resource, num_iterations, num_elements);
   }
+  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
   return 0;
 }

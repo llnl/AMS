@@ -6,25 +6,41 @@
 #include <caliper/cali_macros.h>
 #endif
 
+#include <cassert>
+#include <csignal>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <execinfo.h>
+#include <limits>
+#include <thread>
 #include <unistd.h>
 
-#include <cassert>
-#include <cstdlib>
-#include <cstring>
-#include <limits>
 #include <mfem.hpp>
-#include <thread>
-#include <umpire/Umpire.hpp>
-#include <umpire/strategy/QuickPool.hpp>
 
 #include "AMS.h"
 
-void createUmpirePool(const std::string &parent_name,
-                      const std::string &pool_name)
-{
-  auto &rm = umpire::ResourceManager::getInstance();
-  auto alloc_resource = rm.makeAllocator<umpire::strategy::QuickPool, true>(
-      pool_name, rm.getAllocator(parent_name));
+
+// Signal handler to print the stack trace
+void signalHandler(int signum) {
+  // Print the signal
+  printf("Caught signal %d\n", signum);
+
+  // Obtain the backtrace
+  const int maxFrames = 128;
+  void *addrlist[maxFrames];
+
+  // Get void*'s for all entries on the stack
+  int addrlen = backtrace(addrlist, maxFrames);
+
+  if (addrlen == 0) {
+    printf("No stack trace available\n");
+    exit(1);
+  }
+
+  // Print out all the frames to stderr
+  backtrace_symbols_fd(addrlist, addrlen, STDERR_FILENO);
+  exit(1);
 }
 
 AMSDType getDataType(const char *d_type)
@@ -92,7 +108,6 @@ struct Problem {
                int num_elements)
   {
     CALIPER(CALI_CXX_MARK_FUNCTION;)
-    auto &rm = umpire::ResourceManager::getInstance();
 
     CALIPER(CALI_CXX_MARK_LOOP_BEGIN(mainloop_id, "mainloop");)
 
@@ -159,6 +174,15 @@ int main(int argc, char **argv)
   int rId = 0;
   // Level of Threading provided by MPI
   int provided = 0;
+
+  signal(SIGSEGV, signalHandler); // segmentation fault
+  signal(SIGABRT, signalHandler); // abort()
+  signal(SIGFPE, signalHandler);  // floating-point exception
+  signal(SIGILL, signalHandler);  // illegal instruction
+  signal(SIGINT, signalHandler);  // interrupt (e.g., Ctrl+C)
+  signal(SIGTERM, signalHandler); // termination request
+  signal(SIGPIPE, signalHandler); // broken pipe
+
 
   MPI_CALL(MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided));
   MPI_CALL(MPI_Comm_size(MPI_COMM_WORLD, &wS));
