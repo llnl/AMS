@@ -1893,7 +1893,10 @@ public:
       DBG(RMQInterface, "Rank %ju did not ack %d messages", _rId, size)
   }
 
-  ~RMQInterface() { _publishingManager->stop(); }
+  ~RMQInterface()
+  {
+    if (_publishingManager) _publishingManager->stop();
+  }
 };
 
 /* A class that provides a BaseDB interface to AMS workflow.
@@ -2078,6 +2081,7 @@ public:
     }
 
     if (rmq_interface.isConnected()) {
+      DBG(DBManager, "Closing RMQ Connection");
       rmq_interface.close();
     }
   }
