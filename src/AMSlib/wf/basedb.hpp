@@ -1813,7 +1813,7 @@ public:
    */
   bool isPublisherConnected() const
   {
-    return _publishingManager->isConnected();
+    return _publishingManager && _publishingManager->isConnected();
   }
 
   /**
@@ -2053,7 +2053,7 @@ private:
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
-  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false) {};
+  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false){};
 
 protected:
   RMQInterface rmq_interface;
