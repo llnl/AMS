@@ -661,8 +661,6 @@ public:
 #ifdef __ENABLE_RMQ__
 
 enum class ConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
-// // Forward declaration
-// class RMQPublisher;
 
 /**
   * @brief AMS represents the header as follows:
@@ -1370,10 +1368,8 @@ public:
                   ConnectionManagerAMQP::simulateConnectionDrop,
                   this);
 
-    if (connectionDrop) {
-      std::cout << "we simulate drtop of connection\n";
+    if (connectionDrop)
       event_add(_dropConnectionEvent, &tv);
-    }
 
     // Start the worker thread.
     createConnection();
@@ -1463,6 +1459,26 @@ public:
   }
 
   /**
+   *  @brief    Total number of messages unacknowledged
+   *  @return   Number of messages unacknowledged
+   */
+   int unacknowledged() const
+   {
+     if (_reliableChannel) return _reliableChannel->unacknowledged();
+     return 0;
+   }
+
+  /**
+   * @brief Return the number of pending messages. A pending message
+   * is defined as neither ack or nack or a message that has to be 
+   * resent because an error happened during a prebious trial.
+   */
+   int pendingMessages()
+   {
+    return MessagesBuffer::getInstance().size() + unacknowledged();
+   }
+
+  /**
    * @brief Stops the event loop, and closes the TCP connection.
    */
   void stop()
@@ -1507,7 +1523,7 @@ private:
             // If msg is in the MessagesBuffer, we erase it
             MessagesBuffer::getInstance().erase(msg.id);
           })
-          .onNack([this, msg]() {
+          .onNack([msg]() {
             DBG(ConnectionManagerAMQP,
                 "message #%d (%p / %ld) received negative "
                 "acknowledgment ",
@@ -1516,7 +1532,7 @@ private:
                 msg.size)
             MessagesBuffer::getInstance().insert(msg);
           })
-          .onError([this, msg](const char* errMsg) {
+          .onError([msg](const char* errMsg) {
             DBG(ConnectionManagerAMQP,
                 "message #%d (%p / %ld) did not get send: \"%s\"",
                 msg.id,
@@ -1546,16 +1562,6 @@ private:
         internalPublish(msg);
       }
     }
-  }
-
-  /**
-   *  @brief    Total number of messages unacknowledged
-   *  @return   Number of messages unacknowledged (-1 if error)
-   */
-  int unacknowledged() const
-  {
-    if (_reliableChannel) return _reliableChannel->unacknowledged();
-    return -1;
   }
 
   /**
@@ -1875,8 +1881,8 @@ public:
   {
     _publishingManager->flush();
     int iters = 0;
-    while ((MessagesBuffer::getInstance().size() != 0) && (iters++ < repeat)) {
-      DBG(RMQInterface, "Flushing messages...")
+    while (_publishingManager->pendingMessages() > 0 && (iters++ < repeat)) {
+      DBG(RMQInterface, "[r%ld] Flushing messages %d messages ...", _rId, _publishingManager->pendingMessages())
       std::this_thread::sleep_for(std::chrono::milliseconds(ms));
     }
   }
@@ -1886,7 +1892,7 @@ public:
    */
   void close()
   {
-    flush(10, 100);
+    flush(100, 100);
     _publishingManager->stop();
     auto size = MessagesBuffer::getInstance().size();
     if (size != 0)
