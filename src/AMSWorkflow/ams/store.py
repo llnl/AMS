@@ -495,12 +495,13 @@ class AMSDataStore:
 
         return self.get_files(domain_name, "data", versions)
 
-    def move(self, domain_name, src_type, dest_type, filenames):
+    def move(self, domain_name, dest_root_path, src_type, dest_type, filenames):
         """
         Moves files between direcories and updates the respective db. It follows a "safe" approach: copy, add, delete the file instead of moving the underlying file.
 
         Args:
             src_type: the ensemble name containing the original files
+            dst_root_path: The directory to which we should move directories to
             dest_type: the ensemble name of the files
             files: The files to be moved
 
@@ -512,8 +513,8 @@ class AMSDataStore:
         try:
             if isinstance(src_type, str):
                 src_type = EntryType(src_type)
-            if isinstance(dst_type, str):
-                dst_type = EntryType(dst_type)
+            if isinstance(dest_type, str):
+                dest_type = EntryType(dest_type)
 
             # 1. Query all matching entries
             entries = (
@@ -535,22 +536,22 @@ class AMSDataStore:
             move_plan = []
             for entry in entries:
                 src_path = Path(entry.filename)
-                dst_path = Path(self._entry_paths[dest_type]) / src_path.name
-                move_plan.append((entry, src_path, dst_path))
+                dest_path = Path(dest_root_path) / src_path.name
+                move_plan.append((entry, src_path, dest_path))
 
             # 3. Copy files to new location first
-            for _, src_path, dst_path in move_plan:
+            for _, src_path, dest_path in move_plan:
                 if not src_path.exists():
                     raise FileNotFoundError(f"Source file not found: {src_path}")
-                shutil.copy2(src_path, dst_path)
+                shutil.copy2(src_path, dest_path)
 
             # 4. Update DB entries
             for entry, _, dst_path in move_plan:
-                entry.filename = str(dst_path)
-                entry.entry_type = dst_type
+                entry.filename = str(dst_path.resolve())
+                entry.entry_type = dest_type
 
             session.commit()
-            print(f"Database updated. Promoted {len(entries)} entries to '{dst_type.value}'.")
+            print(f"Database updated. Promoted {len(entries)} entries to '{dest_type.value}'.")
 
             # 5. After successful DB update, delete originals
             for _, src_path, _ in move_plan:
@@ -608,12 +609,18 @@ class AMSDataStore:
         return result
 
     def __str__(self):
-        return "AMS Store(name={0}, status={2})".format(self._application_name, "Open" if self.is_open() else "Closed")
+        return "AMS Store(name={0}, status={2})".format(
+            self._application_name, "Open" if self.is_open() else "Closed"
+        )
 
     def _suggest_entry_file_name(self, entry, domain_name):
         if domain_name is None:
             return str(Path(f"{get_unique_fn()}.{self.__class__.entry_suffix[entry]}"))
-        return str(Path(f"{domain_name}_{get_unique_fn()}.{self.__class__.entry_suffix[entry]}"))
+        return str(
+            Path(
+                f"{domain_name}_{get_unique_fn()}.{self.__class__.entry_suffix[entry]}"
+            )
+        )
 
     def suggest_model_file_name(self, domain_name=None):
         return self._suggest_entry_file_name("models", domain_name)

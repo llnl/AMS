@@ -51,11 +51,11 @@ class CreateStore(StoreCommand):
         ["path", "p", "path of the AMS-store directory", {"required": True}],
     ]
 
-    def __init__(self, path, name, sname):
+    def __init__(self, path, **kwargs):
         db_path = Path(path)
         create_store_directories(db_path)
 
-        super().__init__(path=str(db_path))
+        super().__init__(path=str(db_path), **kwargs)
 
     def __call__(self, store):
         pass
