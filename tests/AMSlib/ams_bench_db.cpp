@@ -20,11 +20,10 @@
 
 #include "AMS.h"
 
-
 // Signal handler to print the stack trace
 void signalHandler(int signum) {
-  // Print the signal
-  printf("Caught signal %d\n", signum);
+  const char* msg = "[signalHandler] Caught signal\n";
+  write(STDERR_FILENO, msg, sizeof(msg));
 
   // Obtain the backtrace
   const int maxFrames = 128;
@@ -34,13 +33,14 @@ void signalHandler(int signum) {
   int addrlen = backtrace(addrlist, maxFrames);
 
   if (addrlen == 0) {
-    printf("No stack trace available\n");
-    exit(1);
+    const char* no_stack = "No stack trace available\n";
+    write(STDERR_FILENO, no_stack, sizeof(no_stack));
+    _exit(1); // _exit() Cannot be trap, interrupted
   }
 
   // Print out all the frames to stderr
   backtrace_symbols_fd(addrlist, addrlen, STDERR_FILENO);
-  exit(1);
+  _exit(1);
 }
 
 AMSDType getDataType(const char *d_type)
@@ -175,13 +175,13 @@ int main(int argc, char **argv)
   // Level of Threading provided by MPI
   int provided = 0;
 
-  signal(SIGSEGV, signalHandler); // segmentation fault
-  signal(SIGABRT, signalHandler); // abort()
-  signal(SIGFPE, signalHandler);  // floating-point exception
-  signal(SIGILL, signalHandler);  // illegal instruction
-  signal(SIGINT, signalHandler);  // interrupt (e.g., Ctrl+C)
-  signal(SIGTERM, signalHandler); // termination request
-  signal(SIGPIPE, signalHandler); // broken pipe
+  std::signal(SIGSEGV, signalHandler); // segmentation fault
+  std::signal(SIGABRT, signalHandler); // abort()
+  std::signal(SIGFPE, signalHandler);  // floating-point exception
+  std::signal(SIGILL, signalHandler);  // illegal instruction
+  std::signal(SIGINT, signalHandler);  // interrupt (e.g., Ctrl+C)
+  std::signal(SIGTERM, signalHandler); // termination request
+  std::signal(SIGPIPE, signalHandler); // broken pipe
 
 
   MPI_CALL(MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided));
