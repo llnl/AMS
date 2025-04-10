@@ -22,9 +22,22 @@ function(BUILD_UNIT_TEST exe source)
   endif()
 
   if (WITH_CALIPER)
-  target_compile_definitions(${exe} PRIVATE __AMS_ENABLE_CALIPER__)
-  target_link_libraries(${exe} PRIVATE caliper)
+    target_compile_definitions(${exe} PRIVATE __AMS_ENABLE_CALIPER__)
+    target_link_libraries(${exe} PRIVATE caliper)
   endif()
+
+  if (WITH_RMQ)
+    target_link_libraries(${exe} PRIVATE amqpcpp)
+    if (OPENSSL_FOUND)
+      target_link_libraries(${exe} PRIVATE OpenSSL::SSL OpenSSL::Crypto) 
+    endif()
+    # NOTE: We set here the event/event pthreads as public. As there is no easy way
+    # to do a find package(libevent) and RMQ is not exposing that properly.
+    target_link_libraries(${exe} PRIVATE ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
+  endif()
+
+  target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
+
 endfunction()
 
 BUILD_UNIT_TEST(domain_to_application domain_to_application.cpp)
