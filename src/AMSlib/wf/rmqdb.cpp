@@ -247,10 +247,14 @@ size_t MessageQueue::size()
  * MessagesBuffer
  */
 
-void MessagesBuffer::insert(const PublishMessage& msg)
+bool MessagesBuffer::insert(const PublishMessage& msg)
 {
   std::lock_guard<std::mutex> lock(_mutex);
+  if (auto it = _msgs.find(msg.id); it != _msgs.end()) {
+    return false;
+  }
   _msgs[msg.id] = msg;
+  return true;
 }
 
 void MessagesBuffer::erase(int id)
