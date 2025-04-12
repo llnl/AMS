@@ -242,7 +242,6 @@ void compute_start_end(float g_start,
 
 int main(int argc, char **argv)
 {
-  AMSInit();
   FILE *file;
   int size = 1;
   int rank = 0;
@@ -421,7 +420,6 @@ int main(int argc, char **argv)
     exit(EXIT_FAILURE);
   }
 
-  AMSFinalize();
   printf("Test passed\n");
   exit(EXIT_SUCCESS);
 }
