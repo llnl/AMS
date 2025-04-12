@@ -1374,8 +1374,7 @@ public:
                   ConnectionManagerAMQP::simulateConnectionDrop,
                   this);
 
-    if (connectionDrop)
-      event_add(_dropConnectionEvent, &tv);
+    if (connectionDrop) event_add(_dropConnectionEvent, &tv);
 
     // Start the worker thread.
     createConnection();
@@ -1459,8 +1458,7 @@ public:
   {
     auto reconnecting = this->_reconnecting.load();
     if (!reconnecting) {
-      if (pendingMessages() > 0)
-        event_active(this->_flushEvent, EV_WRITE, 0);
+      if (pendingMessages() > 0) event_active(this->_flushEvent, EV_WRITE, 0);
     }
   }
 
@@ -1468,21 +1466,21 @@ public:
    *  @brief    Total number of messages unacknowledged
    *  @return   Number of messages unacknowledged
    */
-   int unacknowledged() const
-   {
-     if (_reliableChannel) return _reliableChannel->unacknowledged();
-     return 0;
-   }
+  int unacknowledged() const
+  {
+    if (_reliableChannel) return _reliableChannel->unacknowledged();
+    return 0;
+  }
 
   /**
    * @brief Return the number of pending messages. A pending message
    * is defined as neither ack or nack or a message that has to be 
    * resent because an error happened during a prebious trial.
    */
-   int pendingMessages() const
-   {
+  int pendingMessages() const
+  {
     return MessagesBuffer::getInstance().size() + _nbProcessingMsg.load();
-   }
+  }
 
   /**
    * @brief Stops the event loop, and closes the TCP connection.
@@ -1490,8 +1488,10 @@ public:
   void stop()
   {
     DBG(ConnectionManagerAMQP,
-        "Stopping connection: %d messages not processed (%d messages not acked)",
-        pendingMessages(), unacknowledged())
+        "Stopping connection: %d messages not processed (%d messages not "
+        "acked)",
+        pendingMessages(),
+        unacknowledged())
 
     _stop = true;
     _connection->close();
@@ -1537,8 +1537,7 @@ private:
                 msg.id,
                 msg.dPtr.get(),
                 msg.size)
-            if(MessagesBuffer::getInstance().insert(msg))
-              _nbProcessingMsg++;
+            if (MessagesBuffer::getInstance().insert(msg)) _nbProcessingMsg++;
           })
           .onError([this, msg](const char* errMsg) {
             DBG(ConnectionManagerAMQP,
@@ -1550,8 +1549,7 @@ private:
             // onNack and onError can be both called by AMQP-CPP
             // We make sure that if the message was not in the buffer
             // we do increment _nbProcessingMsg
-            if(MessagesBuffer::getInstance().insert(msg))
-              _nbProcessingMsg++;
+            if (MessagesBuffer::getInstance().insert(msg)) _nbProcessingMsg++;
           });
     } else {
       DBG(ConnectionManagerAMQP,
@@ -1894,7 +1892,10 @@ public:
     _publishingManager->flush();
     int iters = 0;
     while (_publishingManager->pendingMessages() > 0 && (iters++ < repeat)) {
-      DBG(RMQInterface, "[r%ld] Flushing messages %d messages ...", _rId, _publishingManager->pendingMessages())
+      DBG(RMQInterface,
+          "[r%ld] Flushing messages %d messages ...",
+          _rId,
+          _publishingManager->pendingMessages())
       std::this_thread::sleep_for(std::chrono::milliseconds(ms));
     }
   }
@@ -2074,7 +2075,7 @@ private:
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
-  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false){};
+  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false) {};
 
 protected:
   RMQInterface rmq_interface;
