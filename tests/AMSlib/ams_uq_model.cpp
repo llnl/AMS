@@ -9,6 +9,8 @@
 #include <vector>
 #include <wf/resource_manager.hpp>
 
+#include "utils.hpp"
+
 #define SIZE (32L * 1024L + 3L)
 
 template <typename T>
@@ -46,6 +48,9 @@ void model(UQ<T> &model,
 int main(int argc, char *argv[])
 {
   using namespace ams;
+  installSignals();
+  AMSInit();
+
   auto &ams_rm = ResourceManager::getInstance();
   int use_device = std::atoi(argv[1]);
   std::string model_path(argv[2]);
@@ -63,9 +68,6 @@ int main(int argc, char *argv[])
     resource = AMSResourceType::AMS_DEVICE;
   }
 
-  ams_rm.init();
-
-
   if (data_type.compare("double") == 0) {
     UQ<double> UQModel(resource, uq_policy, uq_path, -1, model_path, threshold);
     model(UQModel, resource, num_inputs, num_outputs);
@@ -73,6 +75,6 @@ int main(int argc, char *argv[])
     UQ<float> UQModel(resource, uq_policy, uq_path, -1, model_path, threshold);
     model(UQModel, resource, num_inputs, num_outputs);
   }
-
+  AMSFinalize();
   return 0;
 }

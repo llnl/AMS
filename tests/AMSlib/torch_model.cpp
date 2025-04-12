@@ -15,6 +15,8 @@
 #include <vector>
 #include <wf/resource_manager.hpp>
 
+#include "utils.hpp"
+
 #define SIZE (32L * 1024L + 3L)
 
 template <typename T>
@@ -46,6 +48,9 @@ void inference(SurrogateModel<T> &model, AMSResourceType resource)
 int main(int argc, char *argv[])
 {
   using namespace ams;
+  installSignals();
+  AMSInit();
+
   if (argc != 4) {
     std::cout << "Wrong cli, correct one: \n";
     std::cout << argv[0] << " "
@@ -79,5 +84,6 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  AMSFinalize();
   return 0;
 }
