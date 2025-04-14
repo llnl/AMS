@@ -14,7 +14,7 @@ import time
 from pika.exchange_type import ExchangeType
 import logging
 
-logging.basicConfig(level=logging.DEBUG)  # or INFO
+logging.basicConfig(level=logging.WARN)  # or INFO
 
 
 def get_rmq_connection(json_file):
@@ -36,7 +36,7 @@ def main(args):
         context.load_verify_locations(cacert)
         ssl_options = pika.SSLOptions(context)
 
-    print(f"[shutdown.py] Connecting to {conn['service-host']} ...")
+    print(f"Connecting to {conn['service-host']} ...")
 
     credentials = pika.PlainCredentials(conn["rabbitmq-user"], conn["rabbitmq-password"])
     cp = pika.ConnectionParameters(
@@ -55,6 +55,7 @@ def main(args):
             connection = pika.BlockingConnection(cp)
             channel = connection.channel()
             print("Connection successful!")
+            break
         except Exception as e:
             print(f"Unexpected error: {type(e).__name__}: {e}")
             retries += 1
