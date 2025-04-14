@@ -1120,8 +1120,10 @@ public:
   /**
    *  @brief Insert a message in the underlying data structure
    *  @param[in]  msg The PublishMessage to insert
+   *  @return True if the message was not present in the record 
+              before being inserted (false otherwise)
    */
-  void insert(const PublishMessage& msg);
+  bool insert(const PublishMessage& msg);
 
   /**
    *  @brief Erase a message from the underlying data structure
@@ -1288,6 +1290,9 @@ private:
   /** @brief True if connection */
   std::atomic<bool> _isConnected;
 
+  /** @brief Number of messages not acked / nacked */
+  std::atomic<int> _nbProcessingMsg;
+
 public:
   ConnectionManagerAMQP(uint64_t id,
                         std::string rmq_user,
@@ -1311,7 +1316,8 @@ public:
         _exchange(exchange),
         _routing_key(routing_key),
         _reconnecting(false),
-        _isConnected(false)
+        _isConnected(false),
+        _nbProcessingMsg(0)
   {
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
     evthread_use_pthreads();
@@ -1368,8 +1374,7 @@ public:
                   ConnectionManagerAMQP::simulateConnectionDrop,
                   this);
 
-    if (connectionDrop)
-      event_add(_dropConnectionEvent, &tv);
+    if (connectionDrop) event_add(_dropConnectionEvent, &tv);
 
     // Start the worker thread.
     createConnection();
@@ -1415,8 +1420,9 @@ public:
         msg.id,
         msg.dPtr.get())
     _msgQueue.push(msg);
+    // Counter tracking how many messages we are supposed to publish
+    _nbProcessingMsg++;
     event_active(this->_sendEvent, EV_WRITE, 0);
-    flush();
   }
 
   /**
@@ -1452,9 +1458,7 @@ public:
   {
     auto reconnecting = this->_reconnecting.load();
     if (!reconnecting) {
-      if (MessagesBuffer::getInstance().size() > 0) {
-        event_active(this->_flushEvent, EV_WRITE, 0);
-      }
+      if (pendingMessages() > 0) event_active(this->_flushEvent, EV_WRITE, 0);
     }
   }
 
@@ -1462,21 +1466,21 @@ public:
    *  @brief    Total number of messages unacknowledged
    *  @return   Number of messages unacknowledged
    */
-   int unacknowledged() const
-   {
-     if (_reliableChannel) return _reliableChannel->unacknowledged();
-     return 0;
-   }
+  int unacknowledged() const
+  {
+    if (_reliableChannel) return _reliableChannel->unacknowledged();
+    return 0;
+  }
 
   /**
    * @brief Return the number of pending messages. A pending message
    * is defined as neither ack or nack or a message that has to be 
    * resent because an error happened during a prebious trial.
    */
-   int pendingMessages() const
-   {
-    return MessagesBuffer::getInstance().size() + unacknowledged();
-   }
+  int pendingMessages() const
+  {
+    return MessagesBuffer::getInstance().size() + _nbProcessingMsg.load();
+  }
 
   /**
    * @brief Stops the event loop, and closes the TCP connection.
@@ -1484,8 +1488,10 @@ public:
   void stop()
   {
     DBG(ConnectionManagerAMQP,
-        "Stopping connection: %d messages not acked",
-        MessagesBuffer::getInstance().size())
+        "Stopping connection: %d messages not processed (%d messages not "
+        "acked)",
+        pendingMessages(),
+        unacknowledged())
 
     _stop = true;
     _connection->close();
@@ -1513,7 +1519,7 @@ private:
                     _queue_sender,
                     reinterpret_cast<char*>(msg.dPtr.get()),
                     msg.size)
-          .onAck([msg]() {
+          .onAck([this, msg]() {
             DBG(ConnectionManagerAMQP,
                 "message #%d (%p / %ld) got acknowledged "
                 "successfully ",
@@ -1522,24 +1528,28 @@ private:
                 msg.size)
             // If msg is in the MessagesBuffer, we erase it
             MessagesBuffer::getInstance().erase(msg.id);
+            _nbProcessingMsg--;
           })
-          .onNack([msg]() {
+          .onNack([this, msg]() {
             DBG(ConnectionManagerAMQP,
                 "message #%d (%p / %ld) received negative "
                 "acknowledgment ",
                 msg.id,
                 msg.dPtr.get(),
                 msg.size)
-            MessagesBuffer::getInstance().insert(msg);
+            if (MessagesBuffer::getInstance().insert(msg)) _nbProcessingMsg++;
           })
-          .onError([msg](const char* errMsg) {
+          .onError([this, msg](const char* errMsg) {
             DBG(ConnectionManagerAMQP,
                 "message #%d (%p / %ld) did not get send: \"%s\"",
                 msg.id,
                 msg.dPtr.get(),
                 msg.size,
                 errMsg)
-            MessagesBuffer::getInstance().insert(msg);
+            // onNack and onError can be both called by AMQP-CPP
+            // We make sure that if the message was not in the buffer
+            // we do increment _nbProcessingMsg
+            if (MessagesBuffer::getInstance().insert(msg)) _nbProcessingMsg++;
           });
     } else {
       DBG(ConnectionManagerAMQP,
@@ -1882,7 +1892,10 @@ public:
     _publishingManager->flush();
     int iters = 0;
     while (_publishingManager->pendingMessages() > 0 && (iters++ < repeat)) {
-      DBG(RMQInterface, "[r%ld] Flushing messages %d messages ...", _rId, _publishingManager->pendingMessages())
+      DBG(RMQInterface,
+          "[r%ld] Flushing messages %d messages ...",
+          _rId,
+          _publishingManager->pendingMessages())
       std::this_thread::sleep_for(std::chrono::milliseconds(ms));
     }
   }
@@ -2062,7 +2075,7 @@ private:
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
-  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false){};
+  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false) {};
 
 protected:
   RMQInterface rmq_interface;
