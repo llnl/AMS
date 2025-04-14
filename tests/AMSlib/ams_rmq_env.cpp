@@ -16,6 +16,8 @@
 #include "AMS.h"
 #include "wf/debug.h"
 
+#include "../utils.hpp"
+
 void createUmpirePool(std::string parent_name, std::string pool_name)
 {
   auto &rm = umpire::ResourceManager::getInstance();
@@ -142,6 +144,8 @@ int main(int argc, char **argv)
     return -1;
   }
 
+  installSignals();
+  AMSInit();
 
   int use_device = std::atoi(argv[1]);
   int num_inputs = std::atoi(argv[2]);
@@ -151,24 +155,6 @@ int main(int argc, char **argv)
   int num_elements = std::atoi(argv[6]);
   AMSResourceType resource = AMSResourceType::AMS_HOST;
   srand(time(NULL));
-
-  // int num_inputs = 2;
-  // int num_outputs = 4;
-  // AMSDType data_type = getDataType("double");
-  // int num_iterations = 1;
-  // int num_elements = 10;
-
-  // Configure DB
-  // auto db_type = "rmq";
-
-  // AMSDBType dbType = AMSDBType::AMS_NONE;
-  // if (std::strcmp(db_type, "csv") == 0) {
-  //   dbType = AMSDBType::AMS_CSV;
-  // } else if (std::strcmp(db_type, "hdf5") == 0) {
-  //   dbType = AMSDBType::AMS_HDF5;
-  // } else if (std::strcmp(db_type, "rmq") == 0) {
-  //   dbType = AMSDBType::AMS_RMQ;
-  // }
 
   createUmpirePool("HOST", "TEST_HOST");
   AMSSetAllocator(AMSResourceType::AMS_HOST, "TEST_HOST");
@@ -201,7 +187,8 @@ int main(int argc, char **argv)
                                        1);
     prob.ams_run(wf, resource, num_iterations, num_elements);
   }
-  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
+  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  AMSFinalize();
   return 0;
 }

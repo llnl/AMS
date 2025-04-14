@@ -13,6 +13,8 @@
 #include "utils/allocator.hpp"
 #include "utils/utils_data.hpp"
 
+#include "../utils.hpp"
+
 // All allocations and operations will happen on top of this 'SIZE'. 
 // Keep a small value for test to be 'fast'.
 #define SIZE (3280)
@@ -49,6 +51,9 @@ int verify(bool* pred, double* d1, double* d2, int size)
 int main(int argc, char* argv[])
 {
   using namespace ams;
+  installSignals();
+  AMSInit();
+
   using data_handler = DataHandler<double>;
   auto& rm = umpire::ResourceManager::getInstance();
   auto& ams_rm = ams::ResourceManager::getInstance();
@@ -121,6 +126,7 @@ int main(int argc, char* argv[])
   ams_rm.deallocate(h_rsparse,
                                    ResourceManager::ResourceType::HOST);
   ams_rm.deallocate(reindex);
-
+  
+  AMSFinalize();
   return 0;
 }

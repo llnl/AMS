@@ -70,6 +70,8 @@ enum struct AMSUQPolicy {
   AMS_UQ_END
 };
 
+void AMSInit();
+void AMSFinalize();
 
 AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
                               AMSDType data_type,

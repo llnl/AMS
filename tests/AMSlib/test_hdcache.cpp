@@ -16,6 +16,8 @@
 #include <vector>
 #include <wf/resource_manager.hpp>
 
+#include "../utils.hpp"
+
 template <typename T>
 std::vector<const T *> generate_vectors(const int num_clusters,
                                         int elements,
@@ -138,6 +140,8 @@ bool do_faiss(std::shared_ptr<HDCache<T>> &index,
 int main(int argc, char *argv[])
 {
   using namespace ams;
+  installSignals();
+  AMSInit();
 
   if (argc < 8) {
     std::cerr << "Wrong CLI\n";
@@ -179,6 +183,6 @@ int main(int argc, char *argv[])
     return !result;
   }
 
-
+  AMSFinalize();
   return 0;
 }

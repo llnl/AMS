@@ -16,6 +16,8 @@
 #include "AMS.h"
 #include "wf/debug.h"
 
+#include "../utils.hpp"
+
 void createUmpirePool(std::string parent_name, std::string pool_name)
 {
   auto &rm = umpire::ResourceManager::getInstance();
@@ -141,6 +143,8 @@ int main(int argc, char **argv)
     return -1;
   }
 
+  installSignals();
+  AMSInit();
 
   int use_device = std::atoi(argv[1]);
   int num_inputs = std::atoi(argv[2]);
@@ -192,6 +196,6 @@ int main(int argc, char **argv)
                                        1);
     prob.ams_run(wf, resource, num_iterations, avg_elements);
   }
-
+  AMSFinalize();
   return 0;
 }

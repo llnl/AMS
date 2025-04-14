@@ -517,6 +517,9 @@ public:
         "Enable Log %d stored under %s",
         log_stats.first,
         log_stats.second.c_str())
+
+    memManager.init();
+
     if (const char *object_descr = std::getenv("AMS_OBJECTS")) {
       DBG(AMS, "Opening env file %s", object_descr);
       std::ifstream json_file(object_descr);
@@ -595,7 +598,23 @@ public:
   }
 };
 
-static AMSWrap _amsWrap;
+static std::once_flag _amsInitFlag;
+static std::once_flag _amsFinalizeFlag;
+static std::unique_ptr<AMSWrap> _amsWrap;
+
+void AMSInit() {
+  std::call_once(_amsInitFlag, [&]() {
+    DBG(AMS, "Initialization of AMS")
+    _amsWrap = std::make_unique<AMSWrap>();
+  });
+}
+
+void AMSFinalize() {
+  std::call_once(_amsFinalizeFlag, [&]() {
+    DBG(AMS, "Finalization of AMS")
+    _amsWrap.reset();
+  });
+}
 
 void _AMSExecute(AMSExecutor executor,
                  void *probDescr,
@@ -605,10 +624,11 @@ void _AMSExecute(AMSExecutor executor,
                  int inputDim,
                  int outputDim)
 {
+  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   int64_t index = static_cast<int64_t>(executor);
-  if (index >= _amsWrap.executors.size())
+  if (index >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
-  auto currExec = _amsWrap.executors[index];
+  auto currExec = _amsWrap->executors[index];
 
   if (currExec.first == AMSDType::AMS_DOUBLE) {
     ams::AMSWorkflow<double> *dWF =
@@ -642,13 +662,8 @@ ams::AMSWorkflow<FPTypeValue> *_AMSCreateExecutor(AMSCAbstrModel model,
                                                   int process_id,
                                                   int world_size)
 {
-  static std::once_flag flag;
-  std::call_once(flag, [&]() {
-    auto &rm = ams::ResourceManager::getInstance();
-    rm.init();
-  });
-
-  auto &model_descr = _amsWrap.get_model(model);
+  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  auto &model_descr = _amsWrap->get_model(model);
 
   ams::AMSWorkflow<FPTypeValue> *WF =
       new ams::AMSWorkflow<FPTypeValue>(call_back,
@@ -670,9 +685,10 @@ template <typename FPTypeValue>
 AMSExecutor _AMSRegisterExecutor(AMSDType data_type,
                                  ams::AMSWorkflow<FPTypeValue> *workflow)
 {
-  _amsWrap.executors.push_back(
+  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  _amsWrap->executors.push_back(
       std::make_pair(data_type, static_cast<void *>(workflow)));
-  return static_cast<AMSExecutor>(_amsWrap.executors.size()) - 1L;
+  return static_cast<AMSExecutor>(_amsWrap->executors.size()) - 1L;
 }
 
 
@@ -748,10 +764,11 @@ void AMSExecute(AMSExecutor executor,
 
 void AMSDestroyExecutor(AMSExecutor executor)
 {
+  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   int64_t index = static_cast<int64_t>(executor);
-  if (index >= _amsWrap.executors.size())
+  if (index >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
-  auto currExec = _amsWrap.executors[index];
+  auto currExec = _amsWrap->executors[index];
 
   if (currExec.first == AMSDType::AMS_DOUBLE) {
     delete reinterpret_cast<ams::AMSWorkflow<double> *>(currExec.second);
@@ -785,9 +802,11 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         const char *db_label,
                                         int num_clusters)
 {
-  auto id = _amsWrap.get_model_index(domain_name);
+  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  std::cout << "_amsWrap = " << _amsWrap.get() << std::endl;
+  auto id = _amsWrap->get_model_index(domain_name);
   if (id == -1) {
-    id = _amsWrap.register_model(domain_name,
+    id = _amsWrap->register_model(domain_name,
                                  uq_policy,
                                  threshold,
                                  surrogate_path,
@@ -802,7 +821,8 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
 
 AMSCAbstrModel AMSQueryModel(const char *domain_model)
 {
-  return _amsWrap.get_model_index(domain_model);
+  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  return _amsWrap->get_model_index(domain_model);
 }
 
 void AMSConfigureFSDatabase(AMSDBType db_type, const char *db_path)

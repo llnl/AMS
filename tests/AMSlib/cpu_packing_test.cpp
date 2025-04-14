@@ -13,6 +13,8 @@
 #include <wf/data_handler.hpp>
 #include <wf/resource_manager.hpp>
 
+#include "../utils.hpp"
+
 #define SIZE (32 * 1024 + 1)
 
 void initPredicate(bool* ptr, double* data, int size)
@@ -48,6 +50,9 @@ int verify(bool* pred, double* d1, double* d2, int size, int flag)
 int main(int argc, char* argv[])
 {
   using namespace ams;
+  installSignals();
+  AMSInit();
+
   using data_handler = DataHandler<double>;
   const size_t size = SIZE;
   int device = std::atoi(argv[1]);
@@ -174,5 +179,6 @@ int main(int argc, char* argv[])
     rm.deallocate(reindex, AMSResourceType::AMS_DEVICE);
   }
 
+  AMSFinalize();
   return 0;
 }

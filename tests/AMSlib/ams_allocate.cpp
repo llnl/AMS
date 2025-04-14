@@ -17,6 +17,8 @@ constexpr int SUCCESS = 0;
 #include <umpire/strategy/QuickPool.hpp>
 #include <wf/resource_manager.hpp>
 
+#include "../utils.hpp"
+
 int test_allocation(AMSResourceType resource, std::string pool_name)
 {
   std::cout << "Testing Pool: " << pool_name << "\n";
@@ -43,8 +45,9 @@ int test_allocation(AMSResourceType resource, std::string pool_name)
 
 int main(int argc, char* argv[])
 {
+  installSignals();
+  AMSInit();
   int device = std::atoi(argv[1]);
-
   // Testing with global umpire allocators
   auto& ams_rm = ams::ResourceManager::getInstance();
   ams_rm.init();
@@ -75,5 +78,6 @@ int main(int argc, char* argv[])
               << "should be either 1 for GPU device or 0 for HOST\n";
   }
 
+  AMSFinalize();
   return 0;
 }

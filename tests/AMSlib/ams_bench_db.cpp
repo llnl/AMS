@@ -7,41 +7,18 @@
 #endif
 
 #include <cassert>
-#include <csignal>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <execinfo.h>
 #include <limits>
 #include <thread>
-#include <unistd.h>
 
 #include <mfem.hpp>
 
 #include "AMS.h"
 
-// Signal handler to print the stack trace
-void signalHandler(int signum) {
-  const char* msg = "[signalHandler] Caught signal\n";
-  write(STDERR_FILENO, msg, sizeof(msg));
-
-  // Obtain the backtrace
-  const int maxFrames = 128;
-  void *addrlist[maxFrames];
-
-  // Get void*'s for all entries on the stack
-  int addrlen = backtrace(addrlist, maxFrames);
-
-  if (addrlen == 0) {
-    const char* no_stack = "No stack trace available\n";
-    write(STDERR_FILENO, no_stack, sizeof(no_stack));
-    _exit(1); // _exit() Cannot be trap, interrupted
-  }
-
-  // Print out all the frames to stderr
-  backtrace_symbols_fd(addrlist, addrlen, STDERR_FILENO);
-  _exit(1);
-}
+#include "../utils.hpp"
 
 AMSDType getDataType(const char *d_type)
 {
@@ -175,14 +152,8 @@ int main(int argc, char **argv)
   // Level of Threading provided by MPI
   int provided = 0;
 
-  std::signal(SIGSEGV, signalHandler); // segmentation fault
-  std::signal(SIGABRT, signalHandler); // abort()
-  std::signal(SIGFPE, signalHandler);  // floating-point exception
-  std::signal(SIGILL, signalHandler);  // illegal instruction
-  std::signal(SIGINT, signalHandler);  // interrupt (e.g., Ctrl+C)
-  std::signal(SIGTERM, signalHandler); // termination request
-  std::signal(SIGPIPE, signalHandler); // broken pipe
-
+  installSignals();
+  AMSInit();
 
   MPI_CALL(MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &provided));
   MPI_CALL(MPI_Comm_size(MPI_COMM_WORLD, &wS));
@@ -352,6 +323,7 @@ int main(int argc, char **argv)
     prob.ams_run(wf, resource, num_iterations, num_elems);
   }
 
-      MPI_CALL(MPI_Finalize());
+  MPI_CALL(MPI_Finalize());
+  AMSFinalize();
   return 0;
 }

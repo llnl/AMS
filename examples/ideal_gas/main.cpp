@@ -598,7 +598,7 @@ int main(int argc, char **argv)
   // -------------------------------------------------------------------------
   // declare runtime options and default values
   // -------------------------------------------------------------------------
-
+  AMSInit();
   // Number of ranks in this run
   int wS = 1;
   // My Local Id
@@ -916,5 +916,6 @@ int main(int argc, char **argv)
 #endif
 
   MPI_CALL(MPI_Finalize());
+  AMSFinalize();
   return ret;
 }

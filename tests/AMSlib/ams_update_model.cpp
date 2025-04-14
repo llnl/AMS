@@ -11,6 +11,8 @@
 #include <vector>
 #include <wf/resource_manager.hpp>
 
+#include "../utils.hpp"
+
 #define SIZE (32L)
 
 template <typename T>
@@ -88,6 +90,9 @@ bool inference(SurrogateModel<T> &model,
 int main(int argc, char *argv[])
 {
   using namespace ams;
+  installSignals();
+  AMSInit();
+
   auto &ams_rm = ams::ResourceManager::getInstance();
   int use_device = std::atoi(argv[1]);
   std::string data_type(argv[2]);
@@ -99,8 +104,6 @@ int main(int argc, char *argv[])
     resource = AMSResourceType::AMS_DEVICE;
   }
 
-
-  ams_rm.init();
   int ret = 0;
   if (data_type.compare("double") == 0) {
     std::shared_ptr<SurrogateModel<double>> model =
@@ -115,5 +118,6 @@ int main(int argc, char *argv[])
   }
   std::cout << "Zero Model is " << zero_model << "\n";
   std::cout << "One Model is " << one_model << "\n";
+  AMSFinalize();
   return ret;
 }
