@@ -10,6 +10,8 @@
 
 #include "wf/redist_load.hpp"
 
+#include "../utils.hpp"
+
 #define SIZE (10)
 
 void init(double *data, int elements, double value)
@@ -34,6 +36,10 @@ int main(int argc, char *argv[])
 {
   using namespace ams;
   int device = std::atoi(argv[1]);
+
+  installSignals();
+  AMSInit();
+
   MPI_Init(&argc, &argv);
   AMSSetupAllocator(AMSResourceType::AMS_HOST);
   AMSResourceType resource = AMSResourceType::AMS_HOST;
@@ -101,5 +107,6 @@ int main(int argc, char *argv[])
   ResourceManager::deallocate(srcHData, AMSResourceType::AMS_HOST);
 
   MPI_Finalize();
+  AMSFinalize();
   return ret;
 }

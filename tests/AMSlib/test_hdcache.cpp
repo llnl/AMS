@@ -16,7 +16,7 @@
 #include <vector>
 #include <wf/resource_manager.hpp>
 
-#include "utils.hpp"
+#include "../utils.hpp"
 
 template <typename T>
 std::vector<const T *> generate_vectors(const int num_clusters,

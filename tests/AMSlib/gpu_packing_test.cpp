@@ -13,7 +13,7 @@
 #include "utils/allocator.hpp"
 #include "utils/utils_data.hpp"
 
-#include "utils.hpp"
+#include "../utils.hpp"
 
 // All allocations and operations will happen on top of this 'SIZE'. 
 // Keep a small value for test to be 'fast'.

@@ -604,12 +604,14 @@ static std::unique_ptr<AMSWrap> _amsWrap;
 
 void AMSInit() {
   std::call_once(_amsInitFlag, [&]() {
+    DBG(AMS, "Initialization of AMS")
     _amsWrap = std::make_unique<AMSWrap>();
   });
 }
 
 void AMSFinalize() {
   std::call_once(_amsFinalizeFlag, [&]() {
+    DBG(AMS, "Finalization of AMS")
     _amsWrap.reset();
   });
 }

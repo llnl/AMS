@@ -17,7 +17,7 @@ constexpr int SUCCESS = 0;
 #include <umpire/strategy/QuickPool.hpp>
 #include <wf/resource_manager.hpp>
 
-#include "utils.hpp"
+#include "../utils.hpp"
 
 int test_allocation(AMSResourceType resource, std::string pool_name)
 {

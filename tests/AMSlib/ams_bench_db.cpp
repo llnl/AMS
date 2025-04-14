@@ -18,7 +18,7 @@
 
 #include "AMS.h"
 
-#include "utils.hpp"
+#include "../utils.hpp"
 
 AMSDType getDataType(const char *d_type)
 {
