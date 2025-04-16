@@ -63,6 +63,7 @@ if (WITH_MPI)
   endforeach()
   list(REMOVE_DUPLICATES MPI_DIRECTORIES)
   message(STATUS "MPI Liraries: ${MPI_DIRECTORIES}")
+  list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_MPI__")
 endif()
 
 # ------------------------------------------------------------------------------
@@ -93,14 +94,14 @@ if (WITH_HDF5)
       set(AMS_HDF5_TARGET hdf5-shared)
   endif()
   message(STATUS "HDF5 Dir is ${HDF5_DIR}")
-  list(APPEND AMS_APP_DEFINES "__ENABLE_HDF5__")
+  list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_HDF5__")
 endif() # WITH_HDF5
 
 if (WITH_RMQ)
   if (WITH_CUDA)
     add_compile_definitions(THRUST_IGNORE_CUB_VERSION_CHECK)
   endif()
-  list(APPEND AMS_APP_DEFINES "__ENABLE_RMQ__")
+  list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_RMQ__")
 
   find_package(amqpcpp REQUIRED)
   get_target_property(amqpcpp_INCLUDE_DIR amqpcpp INTERFACE_INCLUDE_DIRECTORIES)
@@ -143,7 +144,7 @@ endif()
 if (WITH_PERFFLOWASPECT)
   find_package(perfflowaspect CONFIG REQUIRED)
 
-  list(APPEND AMS_APP_DEFINES "__ENABLE_PERFFLOWASPECT__")
+  list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_PERFFLOWASPECT__")
   list(APPEND AMS_APP_LIB_DIRS "${PERFFLOWASPECT_LIB_DIR}")
 
   list(APPEND AMS_APP_LIBRARIES "perfflow_runtime")

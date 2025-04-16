@@ -66,7 +66,7 @@ class AMSWorkflow
   /** @brief The maximum distance of the predicate for a sample prediction to be considered as valid **/
   const float threshold;
 
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
   /** @brief MPI Communicator for all ranks that call collectively the evaluate function **/
   MPI_Comm comm;
 #endif
@@ -104,7 +104,7 @@ class AMSWorkflow
   {
     if (!DB || !DB->allowModelUpdate()) return false;
     bool local = DB->updateModel();
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
     bool global = false;
     MPI_Allreduce(&local, &global, 1, MPI_CXX_BOOL, MPI_LAND, comm);
     return global;
@@ -126,7 +126,7 @@ public:
         rId(_pId),
         wSize(_wSize),
         uqPolicy(uq_policy),
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
         comm(MPI_COMM_NULL),
 #endif
         threshold(threshold),
@@ -151,7 +151,7 @@ public:
   }
 
 
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
   void set_communicator(MPI_Comm communicator) { comm = communicator; }
 #endif
 
@@ -159,7 +159,7 @@ public:
 
   bool should_load_balance() const
   {
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
     return (comm != MPI_COMM_NULL && ePolicy == AMSExecPolicy::AMS_BALANCED);
 #else
     return false;

@@ -7,7 +7,7 @@
 
 #include <limits.h>
 
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
 #include <mpi.h>
 #endif
 #include <unistd.h>
@@ -621,7 +621,7 @@ void AMSConfigureFSDatabase(AMSDBType db_type, const char *db_path)
 }
 
 
-#ifdef __ENABLE_MPI__
+#ifdef __AMS_ENABLE_MPI__
 AMSExecutor AMSCreateDistributedExecutor(AMSCAbstrModel model,
                                          MPI_Comm Comm,
                                          int process_id,

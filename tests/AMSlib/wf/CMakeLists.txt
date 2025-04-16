@@ -10,19 +10,18 @@ function(BUILD_UNIT_TEST exe source)
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)
   target_include_directories(${exe} PRIVATE ${CMAKE_BINARY_DIR}/include/)
   target_link_libraries(${exe} PRIVATE ${AMS_APP_LIBRARIES} stdc++fs AMS torch)
+  target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
 
   if (WITH_HDF5)
     target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
   endif()
-  target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
+
 
   if(WITH_CUDA)
     target_link_libraries(${exe} PRIVATE CUDA::cudart)
-    target_compile_definitions(${exe} PRIVATE __ENABLE_CUDA__ LIBAMS_VERBOSE)
   endif()
 
   if (WITH_CALIPER)
-    target_compile_definitions(${exe} PRIVATE __AMS_ENABLE_CALIPER__)
     target_link_libraries(${exe} PRIVATE caliper)
   endif()
 
@@ -36,8 +35,9 @@ function(BUILD_UNIT_TEST exe source)
     target_link_libraries(${exe} PRIVATE ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
   endif()
 
-  target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
-
+  if (WITH_MPI)
+    target_link_libraries(${exe} PRIVATE MPI::MPI_CXX)
+  endif()
 endfunction()
 
 BUILD_UNIT_TEST(domain_to_application domain_to_application.cpp)
