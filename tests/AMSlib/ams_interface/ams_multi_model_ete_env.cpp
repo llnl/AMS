@@ -170,6 +170,7 @@ int main(int argc, char **argv)
     return -1;
   }
 
+  AMSInit();
 
   int use_device = std::atoi(argv[1]);
   int num_inputs = std::atoi(argv[2]);
@@ -204,5 +205,6 @@ int main(int argc, char **argv)
     }
   }
 
+  AMSFinalize();
   return 0;
 }

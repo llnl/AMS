@@ -180,6 +180,7 @@ struct Problem {
 
 int main(int argc, char **argv)
 {
+  AMSInit();
   if (argc != 12) {
     std::cout << "Wrong cli\n";
     std::cout << argv[0]
@@ -237,5 +238,6 @@ int main(int argc, char **argv)
     prob.ams_run(wf, resource, num_iterations, avg_elements);
   }
 
+  AMSFinalize();
   return 0;
 }

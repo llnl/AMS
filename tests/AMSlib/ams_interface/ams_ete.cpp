@@ -149,7 +149,7 @@ int main(int argc, char **argv)
     return -1;
   }
 
-
+  AMSInit();
   int use_device = std::atoi(argv[1]);
   int num_inputs = std::atoi(argv[2]);
   int num_outputs = std::atoi(argv[3]);
@@ -186,6 +186,6 @@ int main(int argc, char **argv)
     Problem<double> prob(num_inputs, num_outputs);
     prob.ams_run(wf, resource, num_iterations, avg_elements);
   }
-
+  AMSFinalize();
   return 0;
 }

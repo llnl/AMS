@@ -471,23 +471,6 @@ static std::once_flag _amsInitFlag;
 static std::once_flag _amsFinalizeFlag;
 static std::unique_ptr<AMSWrap> _amsWrap;
 
-void AMSInit()
-{
-  std::call_once(_amsInitFlag, [&]() {
-    DBG(AMS, "Initialization of AMS")
-    _amsWrap = std::make_unique<AMSWrap>();
-  });
-}
-
-void AMSFinalize()
-{
-  std::call_once(_amsFinalizeFlag, [&]() {
-    DBG(AMS, "Finalization of AMS")
-    _amsWrap.reset();
-  });
-}
-
-
 ams::AMSWorkflow *_AMSCreateExecutor(AMSCAbstrModel model,
                                      int process_id,
                                      int world_size)
@@ -515,6 +498,23 @@ AMSExecutor _AMSRegisterExecutor(ams::AMSWorkflow *workflow)
 
 namespace ams
 {
+
+void AMSInit()
+{
+  std::call_once(_amsInitFlag, [&]() {
+    DBG(AMS, "Initialization of AMS")
+    _amsWrap = std::make_unique<AMSWrap>();
+  });
+}
+
+void AMSFinalize()
+{
+  std::call_once(_amsFinalizeFlag, [&]() {
+    DBG(AMS, "Finalization of AMS")
+    _amsWrap.reset();
+  });
+}
+
 
 AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
                               int process_id,
@@ -598,7 +598,6 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         const char *db_label)
 {
   CFATAL(AMS, !_amsWrap, "AMSInit has not been called.")
-  std::cout << "_amsWrap = " << _amsWrap.get() << std::endl;
   auto id = _amsWrap->get_model_index(domain_name);
   if (id == -1) {
     id = _amsWrap->register_model(

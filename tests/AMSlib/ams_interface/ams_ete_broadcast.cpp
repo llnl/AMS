@@ -154,6 +154,7 @@ int main(int argc, char **argv)
                  "db_path(path to existing path to store data)";
     return -1;
   }
+  AMSInit();
 
 
   int use_device = std::atoi(argv[1]);
@@ -193,5 +194,6 @@ int main(int argc, char **argv)
     prob.ams_run(wf, resource, num_iterations, avg_elements);
   }
 
+  AMSFinalize();
   return 0;
 }
