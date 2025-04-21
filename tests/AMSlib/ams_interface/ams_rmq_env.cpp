@@ -7,26 +7,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
-#include <ml/uq.hpp>
 #include <wf/basedb.hpp>
 #include <wf/resource_manager.hpp>
 
 #include "../utils.hpp"
 #include "AMS.h"
 #include "wf/debug.h"
-
-AMSDType getDataType(char *d_type)
-{
-  AMSDType dType = AMSDType::AMS_DOUBLE;
-  if (std::strcmp(d_type, "float") == 0) {
-    dType = AMSDType::AMS_SINGLE;
-  } else if (std::strcmp(d_type, "double") == 0) {
-    dType = AMSDType::AMS_DOUBLE;
-  } else {
-    assert(false && "Unknown data type");
-  }
-  return dType;
-}
 
 template <typename DType>
 struct Problem {
