@@ -95,7 +95,8 @@ public:
       path = jRoot["model_path"].get<std::string>();
       CFATAL(AMS,
              (!path.empty() && !fs::exists(path)),
-             "Path to model does not exist\n");
+             "Path '%s' to model does not exist\n",
+             path.c_str());
     }
     return path;
   }
