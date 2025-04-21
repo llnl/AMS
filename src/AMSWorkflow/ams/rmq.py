@@ -53,24 +53,22 @@ class AMSMessage(object):
         This string represents the AMS format in Python pack format:
         See https://docs.python.org/3/library/struct.html#format-characters
         - 1 byte is the size of the header (here 12). Limit max: 255
-        - 1 byte is the precision (4 for float, 8 for double). Limit max: 255
         - 2 bytes are the MPI rank (0 if AMS is not running with MPI). Limit max: 65535
         - 2 bytes to store the size of the MSG domain name. Limit max: 65535
-        - 4 bytes are the number of elements in the message. Limit max: 2^32 - 1
         - 2 bytes are the input dimension. Limit max: 65535
         - 2 bytes are the output dimension. Limit max: 65535
-        - 2 bytes are for aligning memory to 8
+        - 3 bytes are for aligning memory to 4
 
-            |_Header_|_Datatype_|_Rank_|_DomainSize_|_#elems_|_InDim_|_OutDim_|_Pad_|_DomainName_|.Real_Data.|
+            |_Header_|_Rank_|_DomainSize_|_InDim_|_OutDim_|_Pad_|_DomainName_|.Real_Data.|
 
-        Then the data starts at byte 16 with the domain name, then the real data and
+        Then the data starts at byte 12 with the domain name, then the real data and
         is structured as pairs of input/outputs. Let K be the total number of elements,
-        then we have K pairs of inputs/outputs (either float or double):
+        then we have K inputs followed by K outputs:
 
-            |__Header_(16B)__|_Domain_Name_|__Input 1__|__Output 1__|...|__Input_K__|__Output_K__|
+            |__Header_(16B)__|_Domain_Name_|__Input 1__|...|__Input_K__|__Output_1__|...
 
         """
-        return "BBHHIHHH"
+        return "BHHHH3x"
 
     def endianness(self) -> str:
         """
@@ -90,7 +88,7 @@ class AMSMessage(object):
         """
         For debugging and testing purposes, this function encode a message identical to what AMS would send
         """
-        header_format = self.ams_endianness() + self.ams_header_format()
+        header_format = self.endianness() + self.ams_header_format()
         hsize = struct.calcsize(header_format)
         assert dtype_byte in [4, 8]
         dt = "f" if dtype_byte == 4 else "d"
@@ -127,29 +125,13 @@ class AMSMessage(object):
         # Parse header
         (
             res["hsize"],
-            res["datatype"],
             res["mpirank"],
             res["domain_size"],
-            res["num_element"],
             res["input_dim"],
             res["output_dim"],
-            res["padding"],
         ) = struct.unpack(fmt, body[:hsize])
-        assert hsize == res["hsize"], f"Hsize is {hsize} expected value is {res['hsize']}"
-        assert res["datatype"] in [4, 8]
-        if len(body) < hsize:
-            print(f"Incomplete message of size {len(body)}. Header should be of size {hsize}. skipping")
-            return {}
 
-        # Theoritical size in Bytes for the incoming message (without the header)
-        # Int() is needed otherwise we might overflow here (because of uint16 / uint8)
-        res["dsize"] = int(res["datatype"]) * int(res["num_element"]) * (int(res["input_dim"]) + int(res["output_dim"]))
-        res["msg_size"] = hsize + res["dsize"]
-        res["multiple_msg"] = len(body) != res["msg_size"]
-
-        self.num_elements = int(res["num_element"])
         self.hsize = int(res["hsize"])
-        self.dtype_byte = int(res["datatype"])
         self.mpi_rank = int(res["mpirank"])
         self.domain_name_size = int(res["domain_size"])
         self.input_dim = int(res["input_dim"])
@@ -157,53 +139,74 @@ class AMSMessage(object):
 
         return res
 
+    def _parse_tensor(self, body: str, offset: int):
+        print("Parsing tensor")
+        start = offset
+        (num_dims,) = struct.unpack_from(self.endianness() + "Q", body, offset)
+        offset += 8
+
+        (total_bytes,) = struct.unpack_from(self.endianness() + "Q", body, offset)
+        offset += 8
+        print("Total bytes are", total_bytes)
+
+        shapes_fmt = self.endianness() + "Q" * num_dims
+        print("Format is " , shapes_fmt)
+        shapes = struct.unpack_from(shapes_fmt, body, offset)
+        offset += 8 * num_dims
+
+        strides = struct.unpack_from(shapes_fmt, body, offset)
+        offset += 8 * num_dims
+        
+        print("Offset is", offset, " diff is ", offset - start, start)
+        tensor_data = body[offset : offset + total_bytes]
+        offset += total_bytes
+
+        return num_dims, shapes, strides, tensor_data, offset
+
     def _parse_data(self, body: str, header_info: dict) -> Tuple[str, np.array, np.array]:
         data = np.array([])
         if len(body) == 0:
             return data
         hsize = header_info["hsize"]
-        dsize = header_info["dsize"]
         domain_name_size = header_info["domain_size"]
         domain_name = body[hsize : hsize + domain_name_size]
         domain_name = domain_name.decode("utf-8")
-        try:
-            if header_info["datatype"] == 4:  # if datatype takes 4 bytes (float)
-                data = np.frombuffer(
-                    body[hsize + domain_name_size : hsize + domain_name_size + dsize],
-                    dtype=np.float32,
-                )
-            else:
-                data = np.frombuffer(
-                    body[hsize + domain_name_size : hsize + domain_name_size + dsize],
-                    dtype=np.float64,
-                )
-        except ValueError as e:
-            print(f"Error: {e} => {header_info}")
-            return np.array([])
+        inputs = []
+        offset = hsize + domain_name_size
+        dtype=np.dtype(self.endianness() + "f4")
+        print(f"hsize is {hsize} and domain size is {domain_name_size} of name {domain_name} offset is {offset}")
+        for i in range(0, header_info["input_dim"]):
+            num_dims, shapes, strides, data, offset = self._parse_tensor(body, offset)
+            ndarray = np.ndarray(shape=shapes, dtype=dtype, buffer=data, strides=tuple(s * dtype.itemsize for s in strides))
+            inputs.append(ndarray)
 
-        idim = header_info["input_dim"]
-        odim = header_info["output_dim"]
-        data = data.reshape((idim + odim, -1)).transpose()
+        outputs = []
+        for i in range(0, header_info["output_dim"]):
+            num_dims, shapes, strides, data, offset = self._parse_tensor(body, offset)
+            ndarray = np.ndarray(shape=shapes, dtype=dtype, buffer=data, strides=tuple(s * dtype.itemsize for s in strides ))
+            outputs.append(ndarray)
+
         # Return input, output
-        return (domain_name, data[:, :idim], data[:, idim:])
+
+        return offset, (domain_name, np.concatenate(inputs, axis=-1), np.concatenate(outputs, axis=-1))
 
     def _decode(self, body: str) -> Tuple[np.array]:
-        input = []
-        output = []
+        inputs = []
+        outputs = []
         # Multiple AMS messages could be packed in one RMQ message
         # TODO: we should manage potential mutliple messages per AMSMessage better
         while body:
             header_info = self._parse_header(body)
-            domain_name, temp_input, temp_output = self._parse_data(body, header_info)
+            print(f"Message header info {header_info}")
+            offset, (domain_name, temp_input, temp_output) = self._parse_data(body, header_info)
             # print(f"MSG: {domain_name} input shape {temp_input.shape} outpute shape {temp_output.shape}")
             # total size of byte we read for that message
-            chunk_size = header_info["hsize"] + header_info["dsize"] + header_info["domain_size"]
-            input.append(temp_input)
-            output.append(temp_output)
+            inputs.append(temp_input)
+            outputs.append(temp_output)
             # We remove the current message and keep going
-            body = body[chunk_size:]
+            body = body[offset:]
             self.domain_names.append(domain_name)
-        return domain_name, np.concatenate(input), np.concatenate(output)
+        return domain_name, np.concatenate(inputs), np.concatenate(outputs)
 
     def decode(self) -> Tuple[str, np.array, np.array]:
         return self._decode(self.body)
@@ -211,6 +214,7 @@ class AMSMessage(object):
 
 def default_ams_callback(method, properties, body):
     """Simple callback that decode incoming message assuming they are AMS binary messages"""
+    print("I am here")
     return AMSMessage(body)
 
 

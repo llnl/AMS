@@ -327,7 +327,7 @@ enum class ConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
   *   - 2 bytes to store the size of the MSG domain name. Limit max: 65535
   *   - 2 bytes are the number of input tensors . Limit max: 65535
   *   - 2 bytes are the number of output tensors . Limit max: 65535
-  *   - 2 bytes for padding. Limit max: 2^16 - 1
+  *   - 3 bytes for padding. Limit max: 2^16 - 1
   *
   * |_Header_|___Rank___|__DomainSize__|___InDim____|___OutDim___|_Pad_|.real data.|
   * ^        ^          ^          ^              ^          ^            ^            ^     ^           ^
@@ -384,9 +384,9 @@ struct AMSMsgHeader {
   static size_t constexpr size()
   {
     return ((sizeof(hsize) + sizeof(mpi_rank) + sizeof(domain_size) +
-             sizeof(in_dim) + sizeof(out_dim) + sizeof(double) - 1) /
-            sizeof(double)) *
-           sizeof(double);
+             sizeof(in_dim) + sizeof(out_dim) + sizeof(float) - 1) /
+            sizeof(float)) *
+           sizeof(float);
   }
 
   /**
@@ -404,6 +404,16 @@ struct AMSMsgHeader {
   static AMSMsgHeader decode(uint8_t* data_blob);
 };
 
+template <typename T>
+static inline size_t serialize_data(uint8_t* dest, T src)
+{
+  uint8_t* ptr = reinterpret_cast<uint8_t*>(&src);
+  for (int i = 0; i < sizeof(T); i++) {
+    dest[i] = ptr[i];
+  }
+
+  return sizeof(T);
+}
 
 /**
  * @brief Class representing a message for the AMSLib
@@ -423,25 +433,30 @@ private:
     return totalBytes + tensor.nbytes();
   }
 
+  static void serializeTensorHeader(const torch::Tensor& tensor, uint8_t*& blob)
+  {
+    blob += serialize_data(blob, static_cast<uint64_t>(tensor.sizes().size()));
+    blob += serialize_data(blob, static_cast<uint64_t>(tensor.nbytes()));
+    for (auto& V : tensor.sizes()) {
+      blob += serialize_data(blob, static_cast<uint64_t>(V));
+    }
+    for (auto& V : tensor.strides()) {
+      blob += serialize_data(blob, static_cast<uint64_t>(V));
+    }
+  }
+
   static void serializeTensor(const torch::Tensor& tensor, uint8_t*& blob)
   {
-    *reinterpret_cast<size_t*>(blob) = tensor.sizes().size();
-    blob += sizeof(size_t);
-    for (auto& V : tensor.sizes()) {
-      *reinterpret_cast<size_t*>(blob) = static_cast<size_t>(V);
-      blob += sizeof(size_t);
-    }
-    // Copy in
-    for (auto& V : tensor.strides()) {
-      *reinterpret_cast<size_t*>(blob) = static_cast<size_t>(V);
-      blob += sizeof(size_t);
-    }
 
-    *reinterpret_cast<size_t*>(blob) = static_cast<size_t>(tensor.nbytes());
-    blob += sizeof(size_t);
-
+    auto start = blob;
+    serializeTensorHeader(tensor, blob);
+    auto afterHeader = blob;
     std::memcpy(blob, tensor.data_ptr(), tensor.nbytes());
     blob += tensor.nbytes();
+    auto afterData = blob;
+
+    std::cout << "Distance to header " << (int64_t)((intptr_t) afterHeader - (intptr_t) start) << "\n";
+    std::cout << "Distance from header to data " << (int64_t)((intptr_t) afterData - (intptr_t) afterHeader) << "\n";
   }
 
 public:
@@ -506,6 +521,7 @@ public:
     AMSMsgHeader header(_rank, domain_name.size(), _input_dim, _output_dim);
 
     _total_size = AMSMsgHeader::size() + domain_name.size();
+    std::cout << "Header size is :" << AMSMsgHeader::size() << " and domain size: " << domain_name.size() << "\n";
     for (auto& tensor : _inputs)
       _total_size += computeSerializedSize(tensor);
     for (auto& tensor : _outputs)
@@ -1510,6 +1526,7 @@ public:
                ArrayRef<torch::Tensor> Inputs,
                ArrayRef<torch::Tensor> Outputs)
   {
+    CALIPER(CALI_MARK_BEGIN("STORE_RMQ");)
     DBG(RMQInterface,
         "[tag=%d] stores %ld elements of input/output "
         "dimensions (%ld, %ld)",

@@ -44,28 +44,20 @@ size_t AMSMsgHeader::encode(uint8_t* data_blob)
   if (!data_blob) return 0;
 
   size_t current_offset = 0;
-  // Header size (should be 1 bytes)
-  data_blob[current_offset] = hsize;
-  current_offset += sizeof(hsize);
   // MPI rank (should be 2 bytes)
-  std::memcpy(data_blob + current_offset, &(mpi_rank), sizeof(mpi_rank));
-  current_offset += sizeof(mpi_rank);
+  current_offset += serialize_data(&data_blob[current_offset], hsize);
+  current_offset += serialize_data(&data_blob[current_offset], mpi_rank);
+  current_offset += serialize_data(&data_blob[current_offset], domain_size);
+  current_offset +=
+      serialize_data(&data_blob[current_offset], static_cast<uint16_t>(in_dim));
+  current_offset +=
+      serialize_data(&data_blob[current_offset], static_cast<uint16_t>(out_dim));
+
   // Domain Size (should be 2 bytes)
   DBG(AMSMsgHeader,
-      "Generating domain name of size %d --- %lu offset %lu",
+      "Generating domain name of size %d --- %lu",
       domain_size,
-      sizeof(domain_size),
-      current_offset);
-  std::memcpy(data_blob + current_offset, &(domain_size), sizeof(domain_size));
-  current_offset += sizeof(domain_size);
-  // Input dim (should be 2 bytes)
-  std::memcpy(data_blob + current_offset, &(in_dim), sizeof(in_dim));
-  *reinterpret_cast<uint16_t*>(data_blob) = static_cast<uint16_t>(in_dim);
-  current_offset += sizeof(in_dim);
-  // Output dim (should be 2 bytes)
-  *reinterpret_cast<uint16_t*>(data_blob) = static_cast<uint16_t>(out_dim);
-  current_offset += sizeof(out_dim);
-
+      sizeof(domain_size));
   return AMSMsgHeader::size();
 }
 
@@ -139,7 +131,7 @@ AMSMessageInbound::AMSMessageInbound(uint64_t id,
       body(std::move(body)),
       exchange(std::move(exchange)),
       routing_key(std::move(routing_key)),
-      redelivered(redelivered) {};
+      redelivered(redelivered){};
 
 
 bool AMSMessageInbound::empty() { return body.empty() || routing_key.empty(); }
