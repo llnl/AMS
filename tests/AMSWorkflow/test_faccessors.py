@@ -1,4 +1,3 @@
-import csv
 import pathlib
 import unittest
 
@@ -34,27 +33,6 @@ class TestWriter(unittest.TestCase):
         return inputs, outputs
 
 
-class TestCSVWriter(TestWriter):
-    def test_csv_open_close(
-        self,
-    ):
-        super()._open_close(faccessors.CSVWriter, "ams_test." + faccessors.CSVReader.get_file_format_suffix())
-
-    def test_csv_store(self):
-        fn = "ams_test." + faccessors.CSVReader.get_file_format_suffix()
-        inputs, outputs = super()._store(faccessors.CSVWriter, fn)
-        with open(fn, "r") as x:
-            sample_data = list(csv.reader(x, delimiter=":"))
-        data = np.delete(np.array(sample_data), (0), axis=0).astype(inputs.dtype)
-        _cdata = np.hstack((inputs, outputs))
-        self.assertTrue(np.array_equal(data, _cdata), msg="Writting data loses information")
-
-    def tearDown(self):
-        fn = pathlib.Path("ams_test." + faccessors.CSVReader.get_file_format_suffix())
-        if fn.exists():
-            fn.unlink()
-
-
 class TestHDF5Writer(TestWriter):
     def _pack_dsets_to_list(self, dsets, selector):
         data = [dsets[k[0]] for k in selector]
@@ -67,12 +45,12 @@ class TestHDF5Writer(TestWriter):
         keys = [(k, int(k.split("_")[-1])) for k in keys]
         return keys
 
-    def test_csv_open_close(
+    def test_hdf5_open_close(
         self,
     ):
         super()._open_close(faccessors.HDF5Writer, "ams_test." + faccessors.HDF5Writer.get_file_format_suffix())
 
-    def test_csv_store(self):
+    def test_hdf5_store(self):
         fn = "ams_test." + faccessors.HDF5Writer.get_file_format_suffix()
         inputs, outputs = super()._store(faccessors.HDF5Writer, fn)
 
@@ -93,14 +71,14 @@ class TestHDF5Writer(TestWriter):
 
 
 class TestH5PackedWriter(TestWriter):
-    def test_csv_open_close(
+    def test_hdf5_open_close(
         self,
     ):
         super()._open_close(
             faccessors.HDF5PackedWriter, "ams_test." + faccessors.HDF5PackedWriter.get_file_format_suffix()
         )
 
-    def test_csv_store(self):
+    def test_hdf5_store(self):
         fn = "ams_test." + faccessors.HDF5PackedWriter.get_file_format_suffix()
         inputs, outputs = super()._store(faccessors.HDF5PackedWriter, fn)
 
@@ -147,18 +125,6 @@ class TestReader(unittest.TestCase):
         self.assertTrue(
             np.array_equal(read_outputs, outputs), msg="Writting with {writer_cls} and reading with {reader_cls}"
         )
-
-
-class TestCSVReader(TestReader):
-    def test_load(self):
-        fn = "ams_test." + faccessors.CSVReader.get_file_format_suffix()
-        super()._cmp(faccessors.CSVWriter, faccessors.CSVReader, fn)
-
-    def tearDown(self):
-        fn = "ams_test." + faccessors.CSVReader.get_file_format_suffix()
-        fn = pathlib.Path(fn)
-        if fn.exists():
-            fn.unlink()
 
 
 class TestHDF5Reader(TestReader):

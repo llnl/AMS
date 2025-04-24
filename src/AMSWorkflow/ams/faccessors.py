@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 import argparse
-import csv
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -55,61 +54,6 @@ class FileReader(ABC):
         load the data in the file and return a tupple of the inputs, outputs
         """
         raise NotImplementedError
-
-
-class CSVReader(FileReader):
-    """
-    A CSV File Reader
-    """
-
-    suffix = "csv"
-
-    def __init__(self, file_name: str, delimiter: str = ":"):
-        super().__init__()
-        self.file_name = file_name
-        self.delimiter = delimiter
-        self.fd = None
-
-    def open(self):
-        self.fd = open(self.file_name, "r")
-        return self
-
-    def close(self):
-        self.fd.close()
-
-    def __enter__(self):
-        self.open()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def load(self) -> tuple:
-        """
-        load the data in the file and return a tupple of the inputs, outputs
-
-        We assume the file is produced by the C/C++ front-end. Thus the file
-        will have a generic header row specifying the inputs/outputs
-
-        Returns:
-            A tuple of None, input, output data values
-        """
-
-        if self.fd and self.fd.closed:
-            return None, None
-
-        file_data = list(csv.reader(self.fd, delimiter=self.delimiter))
-        header = file_data[0]
-        data = file_data[1:]
-        output_start = header.index("output_0")
-        data = np.array(data)
-        input_data = data[:, :output_start]
-        output_data = data[:, output_start:]
-        return (None, input_data.astype(np.float64), output_data.astype(np.float64))
-
-    @classmethod
-    def get_file_format_suffix(cls):
-        return cls.suffix
 
 
 class HDF5CLibReader(FileReader):
@@ -270,68 +214,6 @@ class FileWriter(ABC):
         raise NotImplementedError
 
 
-class CSVWriter(FileWriter):
-    """
-    A simple CSV backend.
-    """
-
-    suffix = "csv"
-
-    def __init__(self, file_name: str, delimiter: str = ":"):
-        super().__init__()
-        self.file_name = file_name
-        self.delimiter = delimiter
-        self.fd = None
-        self.write_header = False
-
-    def __str__(self) -> str:
-        return f"{__class__.__name__}(fd={self.fd}, delimiter={self.delimiter})"
-
-    def open(self):
-        if not Path(self.file_name).exists():
-            self.write_header = True
-
-        self.fd = open(self.file_name, "a")
-        return self
-
-    def close(self):
-        self.write_header = False
-        self.fd.close()
-
-    def __enter__(self):
-        return self.open()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-    def store(self, inputs: np.array, outputs: np.array) -> int:
-        """Store the two arrays in a CSV file"""
-        assert len(inputs) == len(outputs)
-        if self.fd and self.fd.closed:
-            return 0
-        if self.write_header:
-            writer = csv.DictWriter(
-                self.fd,
-                fieldnames=[f"input_{i}" for i in range(inputs.shape[-1])]
-                + [f"output_{i}" for i in range(outputs.shape[-1])],
-                delimiter=self.delimiter,
-            )
-            writer.writeheader()
-            self.write_header = False
-
-        csvwriter = csv.writer(self.fd, delimiter=self.delimiter, quotechar="'", quoting=csv.QUOTE_MINIMAL)
-        nelem = len(inputs)
-        elem_wrote: int = 0
-        # We follow the mini-app format, inputs elem and then output elems
-        for i in range(nelem):
-            elem_wrote += csvwriter.writerow(np.concatenate((inputs[i], outputs[i]), axis=0))
-        return elem_wrote
-
-    @classmethod
-    def get_file_format_suffix(cls):
-        return cls.suffix
-
-
 class HDF5Writer(FileWriter):
     """
     A simple hdf5 backend.
@@ -422,7 +304,7 @@ def get_reader(ftype="dhdf5"):
     Factory method return a AMS file reader depending on the requested filetype
     """
 
-    readers = {"shdf5": HDF5CLibReader, "dhdf5": HDF5PackedReader, "csv": CSVReader}
+    readers = {"shdf5": HDF5CLibReader, "dhdf5": HDF5PackedReader}
     return readers[ftype]
 
 
@@ -431,21 +313,19 @@ def get_writer(ftype="shdf5"):
     Factory method return a AMS file writer depending on the requested filetype
     """
 
-    writers = {"shdf5": HDF5Writer, "dhdf5": HDF5PackedWriter, "csv": CSVWriter}
+    writers = {"shdf5": HDF5Writer, "dhdf5": HDF5PackedWriter}
     return writers[ftype]
 
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--type", "-t", help="version to assign to data file", choices=["hdf5", "csv"], required=True)
+    parser.add_argument("--type", "-t", help="version to assign to data file", choices=["hdf5"], required=True)
     parser.add_argument("--action", "-a", help="action", choices=["write", "read"], required=True)
     parser.add_argument("filename")
     args = parser.parse_args()
 
     if args.action == "write":
-        if args.type == "csv":
-            db = CSVWriter
-        elif args.type == "hdf5":
+        if args.type == "hdf5":
             db = HDF5PackedWriter
 
         with db(args.filename) as fd:
@@ -454,9 +334,7 @@ def main():
             fd.store(inputs, outputs)
 
     elif args.action == "read":
-        if args.type == "csv":
-            db = CSVReader
-        elif args.type == "hdf5":
+        if args.type == "hdf5":
             db = HDF5PackedReader
 
         with db(args.filename) as fd:

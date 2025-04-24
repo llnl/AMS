@@ -159,6 +159,7 @@ jobs:
             $GITHUB_WORKSPACE
             make -j$(nproc)
             make -j$(nproc) install
+            echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
       - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}

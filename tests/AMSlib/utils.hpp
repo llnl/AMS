@@ -58,9 +58,7 @@ static inline AMSDType getDataType(std::string& d_type)
 static inline AMSDBType getDBType(const char* db_type)
 {
   AMSDBType dbType = AMSDBType::AMS_NONE;
-  if (std::strcmp(db_type, "csv") == 0) {
-    dbType = AMSDBType::AMS_CSV;
-  } else if (std::strcmp(db_type, "hdf5") == 0) {
+  if (std::strcmp(db_type, "hdf5") == 0) {
     dbType = AMSDBType::AMS_HDF5;
   } else if (std::strcmp(db_type, "rmq") == 0) {
     dbType = AMSDBType::AMS_RMQ;
@@ -71,9 +69,7 @@ static inline AMSDBType getDBType(const char* db_type)
 static inline AMSDBType getDBType(std::string db_type)
 {
   AMSDBType dbType = AMSDBType::AMS_NONE;
-  if (db_type == "csv") {
-    dbType = AMSDBType::AMS_CSV;
-  } else if (db_type == "hdf5") {
+  if (db_type == "hdf5") {
     dbType = AMSDBType::AMS_HDF5;
   } else if (db_type == "rmq") {
     dbType = AMSDBType::AMS_RMQ;

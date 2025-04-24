@@ -144,7 +144,7 @@ int main(int argc, char **argv)
               << " use_device(0|1) num_inputs num_outputs model_path "
                  "data_type(float|double) uq_policy(random|deltaUQ "
                  "(mean)|deltaUQ (max)) threshold(0) "
-                 "num_iterations avg_num_values db_type(none|csv|hdf5) "
+                 "num_iterations avg_num_values db_type(none|hdf5) "
                  "db_path(path to existing path to store data)";
     return -1;
   }

@@ -193,8 +193,6 @@ int main(int argc, char **argv)
     if (data_type == AMSDType::AMS_SINGLE) {
       Problem<float> prob1(num_inputs, num_outputs);
       Problem<float> prob2(num_inputs + 1, num_outputs + 1);
-
-
       prob1.ams_run(wf1, resource, num_iterations, avg_elements, 0);
       prob2.ams_run(wf2, resource, num_iterations, avg_elements, 1);
     } else {
