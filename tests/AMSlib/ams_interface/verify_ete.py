@@ -6,7 +6,6 @@ import h5py
 import numpy as np
 import os
 from typing import Tuple, Optional
-import ams
 
 
 def get_suffix(db_type):
