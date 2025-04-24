@@ -447,16 +447,12 @@ private:
 
   static void serializeTensor(const torch::Tensor& tensor, uint8_t*& blob)
   {
-
     auto start = blob;
     serializeTensorHeader(tensor, blob);
     auto afterHeader = blob;
     std::memcpy(blob, tensor.data_ptr(), tensor.nbytes());
     blob += tensor.nbytes();
     auto afterData = blob;
-
-    std::cout << "Distance to header " << (int64_t)((intptr_t) afterHeader - (intptr_t) start) << "\n";
-    std::cout << "Distance from header to data " << (int64_t)((intptr_t) afterData - (intptr_t) afterHeader) << "\n";
   }
 
 public:
@@ -521,7 +517,7 @@ public:
     AMSMsgHeader header(_rank, domain_name.size(), _input_dim, _output_dim);
 
     _total_size = AMSMsgHeader::size() + domain_name.size();
-    std::cout << "Header size is :" << AMSMsgHeader::size() << " and domain size: " << domain_name.size() << "\n";
+
     for (auto& tensor : _inputs)
       _total_size += computeSerializedSize(tensor);
     for (auto& tensor : _outputs)

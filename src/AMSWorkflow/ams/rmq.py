@@ -140,24 +140,20 @@ class AMSMessage(object):
         return res
 
     def _parse_tensor(self, body: str, offset: int):
-        print("Parsing tensor")
         start = offset
         (num_dims,) = struct.unpack_from(self.endianness() + "Q", body, offset)
         offset += 8
 
         (total_bytes,) = struct.unpack_from(self.endianness() + "Q", body, offset)
         offset += 8
-        print("Total bytes are", total_bytes)
 
         shapes_fmt = self.endianness() + "Q" * num_dims
-        print("Format is " , shapes_fmt)
         shapes = struct.unpack_from(shapes_fmt, body, offset)
         offset += 8 * num_dims
 
         strides = struct.unpack_from(shapes_fmt, body, offset)
         offset += 8 * num_dims
-        
-        print("Offset is", offset, " diff is ", offset - start, start)
+
         tensor_data = body[offset : offset + total_bytes]
         offset += total_bytes
 
@@ -173,17 +169,21 @@ class AMSMessage(object):
         domain_name = domain_name.decode("utf-8")
         inputs = []
         offset = hsize + domain_name_size
-        dtype=np.dtype(self.endianness() + "f4")
-        print(f"hsize is {hsize} and domain size is {domain_name_size} of name {domain_name} offset is {offset}")
+        dtype = np.dtype(self.endianness() + "f4")
+
         for i in range(0, header_info["input_dim"]):
             num_dims, shapes, strides, data, offset = self._parse_tensor(body, offset)
-            ndarray = np.ndarray(shape=shapes, dtype=dtype, buffer=data, strides=tuple(s * dtype.itemsize for s in strides))
+            ndarray = np.ndarray(
+                shape=shapes, dtype=dtype, buffer=data, strides=tuple(s * dtype.itemsize for s in strides)
+            )
             inputs.append(ndarray)
 
         outputs = []
         for i in range(0, header_info["output_dim"]):
             num_dims, shapes, strides, data, offset = self._parse_tensor(body, offset)
-            ndarray = np.ndarray(shape=shapes, dtype=dtype, buffer=data, strides=tuple(s * dtype.itemsize for s in strides ))
+            ndarray = np.ndarray(
+                shape=shapes, dtype=dtype, buffer=data, strides=tuple(s * dtype.itemsize for s in strides)
+            )
             outputs.append(ndarray)
 
         # Return input, output
@@ -195,9 +195,9 @@ class AMSMessage(object):
         outputs = []
         # Multiple AMS messages could be packed in one RMQ message
         # TODO: we should manage potential mutliple messages per AMSMessage better
+
         while body:
             header_info = self._parse_header(body)
-            print(f"Message header info {header_info}")
             offset, (domain_name, temp_input, temp_output) = self._parse_data(body, header_info)
             # print(f"MSG: {domain_name} input shape {temp_input.shape} outpute shape {temp_output.shape}")
             # total size of byte we read for that message
@@ -214,7 +214,7 @@ class AMSMessage(object):
 
 def default_ams_callback(method, properties, body):
     """Simple callback that decode incoming message assuming they are AMS binary messages"""
-    print("I am here")
+
     return AMSMessage(body)
 
 

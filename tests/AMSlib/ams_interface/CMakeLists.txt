@@ -5,9 +5,6 @@ endfunction()
 
 
 function(JSON_TESTS db_type)
-  set(FS_PATH "${CMAKE_CURRENT_BINARY_DIR}")
-  set(AMS_DB_TEST_TYPE ${db_type})
-  set(JSON_FP "${CMAKE_CURRENT_BINARY_DIR}/${db_type}.json")
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/json_configs/env_2_models_fs_rand_uq.json.in" "${JSON_FP}" @ONLY)
   
   # Tests Random models with different percentages both models store to file
@@ -54,21 +51,40 @@ endfunction()
 
 
 function(INTEGRATION_TEST_ENV)
-  JSON_TESTS("hdf5")
+  set(DB_CONFIG "\"fs_path\" : \"${CMAKE_CURRENT_BINARY_DIR}\"")
+  set(AMS_DB_TEST_TYPE "hdf5")
   set(JSON_FP "${CMAKE_CURRENT_BINARY_DIR}/hdf5.json")
+  JSON_TESTS("hdf5")
   unset(JSON_FP)
+endfunction()
+
+
+function(CONFIGURE_RMQ_FILE)
+  if(DEFINED ENV{AMS_RMQ_CONFIG})
+    message(STATUS "Env variable for rmq is set: $ENV{AMS_RMQ_CONFIG}")
+    set(AMS_DB_TEST_TYPE "rmq")
+    set(DB_CONFIG "\"rmq_config\" : $ENV{AMS_RMQ_CONFIG},\n \"update_surrogate\": false\n")
+    set(JSON_FP "${CMAKE_CURRENT_BINARY_DIR}/rmq.json")
+    JSON_TESTS("rmq")
+    CHECK_RMQ_CONFIG(${JSON_FP})
+    unset(JSON_FP)
+  else()
+      message(STATUS "Copying empty configuration to ${CMAKE_CURRENT_BINARY_DIR}/rmq.json")
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/json_configs/rmq.json.in" "rmq.json" @ONLY)
+  endif()
 endfunction()
 
 function(INTEGRATION_TEST_RMQ)
     if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/rmq.json")
       # If file exists we do not overwrite it
       message(STATUS "Ctest will use ${CMAKE_CURRENT_BINARY_DIR}/rmq.json as RabbitMQ configuration for testing. Make sure RabbitMQ parameters are valid.")
+      set(JSON_FP "${CMAKE_CURRENT_BINARY_DIR}/rmq.json")
+      JSON_TESTS("rmq")
+      CHECK_RMQ_CONFIG(${CMAKE_CURRENT_BINARY_DIR}/rmq.json)
+      unset(JSON_FP)
     else()
-      message(STATUS "Copying empty configuration to ${CMAKE_CURRENT_BINARY_DIR}/rmq.json")
-      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/json_configs/rmq.json.in" "rmq.json" @ONLY)
+      CONFIGURE_RMQ_FILE()
     endif()
-    set(JSON_FP "${CMAKE_CURRENT_BINARY_DIR}/rmq.json")
-    CHECK_RMQ_CONFIG(${JSON_FP})
     #add_test(NAME AMSEndToEndFromJSON::NoModel::Double::DB::rmq::HOST COMMAND bash -c "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_rmq 0 8 8 \"double\" 2 128; AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_rmq.py 0 8 8 \"double\" 2 128")
 endfunction()
 
@@ -177,7 +193,12 @@ BUILD_TEST(ams_inout_2d ams_ete_2d.cpp)
 BUILD_TEST(ams_ete_broadcast ams_ete_broadcast.cpp)
 INTEGRATION_TEST()
 BUILD_TEST(ams_end_to_end_env ams_ete_env.cpp)
+if (WITH_HDF5)
 INTEGRATION_TEST_ENV()
+endif()
+if (WITH_RMQ)
+INTEGRATION_TEST_RMQ()
+endif()
 BUILD_TEST(ams_multi_model_end_to_end ams_multi_model_ete.cpp)
 #ADD_API_UNIT_TEST(API_DIRECT_QUERY AMS::API::MultiModelDefine::Random::Double::DB::OnlyPhysics::None::HOST "${CMAKE_CURRENT_BINARY_DIR}/ams_multi_model_end_to_end 0 8 8 ${TORCH_MODEL_DIR}/linear_scripted_single_cpu_random.pt \"double\" \"random\" 0.0 1 128 \"none\" \"./\"; python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 ${CMAKE_CURRENT_SOURCE_DIR}/linear_scripted_cpu.pt \"double\" \"random\" 0.0 1 128 \"none\" \"./\"")
 
@@ -187,5 +208,4 @@ BUILD_TEST(ams_multi_model_end_to_end_env ams_multi_model_ete_env.cpp)
 
 
 #BUILD_TEST(ams_rmq ams_rmq_env.cpp)
-INTEGRATION_TEST_RMQ()
 #
