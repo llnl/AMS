@@ -37,6 +37,15 @@ static std::string getAMSDTypeAsString(AMSDType dType)
   return "unknown";
 }
 
+static std::string getAMSResourceTypeAsString(AMSResourceType res)
+{
+  if (res == ams::AMS_DEVICE)
+    return "device";
+  else if (res == ams::AMS_HOST)
+    return "host";
+  return "unknown-device";
+}
+
 
 SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
     : _model_path(model_path), _is_DeltaUQ(isDeltaUQ)
@@ -58,6 +67,10 @@ SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
   }
   std::tie(model_device, torch_device) = getModelResourceType();
   std::tie(model_dtype, torch_dtype) = getModelDataType();
+  DBG(SurrogateModel,
+      "Loaded model with type %s on device %s",
+      getAMSDTypeAsString(model_dtype).c_str(),
+      getAMSResourceTypeAsString(model_device).c_str());
 }
 
 std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
