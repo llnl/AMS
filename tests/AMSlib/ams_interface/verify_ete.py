@@ -6,7 +6,6 @@ import h5py
 import numpy as np
 import os
 from typing import Tuple, Optional
-from ams.rmq import BlockingClient, default_ams_callback
 import ams
 
 
@@ -213,6 +212,7 @@ def verify_data(
     else:
         return 0
 
+
 def get_fs_data(db_type, fs_path, model_path, threshold, name="test"):
     if db_type != "hdf5" and db_type != "none":
         print(f"Wrong db_type, we support only hdf5 instead got {db_type}")
@@ -269,6 +269,8 @@ def from_cli(argv):
 
 
 def get_rmq_data(ams_config, domain_names, num_iterations, timeout=1):
+    from ams.rmq import BlockingClient, default_ams_callback
+
     rmq_json = ams_config["db"]["rmq_config"]
     print(rmq_json)
     host = rmq_json["service-host"]
