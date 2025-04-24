@@ -447,16 +447,12 @@ private:
 
   static void serializeTensor(const torch::Tensor& tensor, uint8_t*& blob)
   {
-
     auto start = blob;
     serializeTensorHeader(tensor, blob);
     auto afterHeader = blob;
     std::memcpy(blob, tensor.data_ptr(), tensor.nbytes());
     blob += tensor.nbytes();
     auto afterData = blob;
-
-    std::cout << "Distance to header " << (int64_t)((intptr_t) afterHeader - (intptr_t) start) << "\n";
-    std::cout << "Distance from header to data " << (int64_t)((intptr_t) afterData - (intptr_t) afterHeader) << "\n";
   }
 
 public:
@@ -521,7 +517,7 @@ public:
     AMSMsgHeader header(_rank, domain_name.size(), _input_dim, _output_dim);
 
     _total_size = AMSMsgHeader::size() + domain_name.size();
-    std::cout << "Header size is :" << AMSMsgHeader::size() << " and domain size: " << domain_name.size() << "\n";
+
     for (auto& tensor : _inputs)
       _total_size += computeSerializedSize(tensor);
     for (auto& tensor : _outputs)
@@ -1364,7 +1360,7 @@ private:
  * @brief Class that manages a RabbitMQ broker and handles connection, event
  * loop and set up various handlers.
  * @details This class handles a specific type of database backend in AMSLib.
- * Instead of writing inputs/outputs directly to files (CSV or HDF5), we
+ * Instead of writing inputs/outputs directly to files (HDF5), we
  * send these elements (a collection of inputs and their corresponding outputs)
  * to a service called RabbitMQ which is listening on a given IP and port.
  * 
@@ -1783,8 +1779,7 @@ public:
 
     DBG(DBManager, "Instantiating data base");
 
-    if ((dbType == AMSDBType::AMS_CSV || dbType == AMSDBType::AMS_HDF5) &&
-        !fs_interface.isConnected()) {
+    if ((dbType == AMSDBType::AMS_HDF5) && !fs_interface.isConnected()) {
       THROW(std::runtime_error,
             "File System is not configured, Please specify output directory");
     } else if (dbType == AMSDBType::AMS_RMQ && !rmq_interface.isConnected()) {

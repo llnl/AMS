@@ -703,7 +703,7 @@ class Pipeline(ABC):
     """
 
     supported_policies = {"sequential", "thread", "process"}
-    supported_writers = {"shdf5", "dhdf5", "csv"}
+    supported_writers = {"shdf5", "dhdf5"}
 
     def __init__(self, application_name, dest_dir, db_url, db_type="dhdf5"):
         """
@@ -965,7 +965,7 @@ class FSPipeline(Pipeline):
         src_type: The file format of the source data
     """
 
-    supported_readers = ("shdf5", "dhdf5", "csv")
+    supported_readers = ("shdf5", "dhdf5")
 
     def __init__(
         self, application_name, dest_dir, db_url, db_type, src, src_type, pattern

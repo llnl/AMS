@@ -1,7 +1,7 @@
 {
   "db" : {
     "dbType" : "@AMS_DB_TEST_TYPE@",
-    "fs_path" : "@FS_PATH@"
+    @DB_CONFIG@
   },
   "ml_models" : {
     "random_50": {

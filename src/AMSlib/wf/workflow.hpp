@@ -294,7 +294,6 @@ public:
 
     SmallVector<torch::Tensor> InputTensors(Ins.begin(), Ins.end());
     SmallVector<torch::Tensor> OutputTensors(Outs.begin(), Outs.end());
-    CALIPER(CALI_MARK_BEGIN("AMSEvaluate");)
     DBG(Workflow,
         "Entering Workflow with TorchIn:%ld, TorchOut:%ld",
         InputTensors.size(),
@@ -323,6 +322,7 @@ public:
       CALIPER(CALI_MARK_END("PHYSICS MODULE");)
 
       storeComputedData(Ins, PhysicInOutsBefore, Outs, InOuts);
+      CALIPER(CALI_MARK_END("AMSEvaluate");)
       return;
     }
 

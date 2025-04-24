@@ -211,7 +211,6 @@ int main(int argc, char **argv)
                  "-dt",
                  "--dbtype",
                  "Configuration option of the different DB types:\n"
-                 "\t 'csv': use CSV as a back end\n"
                  "\t 'hdf5': use HDF5 as a back end\n"
                  "\t 'rmq': use RabbitMQ as a back end\n");
 
