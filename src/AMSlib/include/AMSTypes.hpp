@@ -14,7 +14,7 @@ typedef enum {
 
 typedef enum { AMS_UBALANCED = 0, AMS_BALANCED } AMSExecPolicy;
 
-typedef enum { AMS_NONE = 0, AMS_CSV, AMS_REDIS, AMS_HDF5, AMS_RMQ } AMSDBType;
+typedef enum { AMS_NONE = 0, AMS_HDF5, AMS_RMQ } AMSDBType;
 
 enum struct AMSUQPolicy {
   AMS_UQ_BEGIN = 0,

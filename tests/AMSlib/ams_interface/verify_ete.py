@@ -9,8 +9,6 @@ from typing import Tuple, Optional
 
 
 def get_suffix(db_type):
-    if db_type == "csv":
-        return "csv"
     if db_type == "none":
         return "none"
     if db_type == "hdf5":

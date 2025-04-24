@@ -1360,7 +1360,7 @@ private:
  * @brief Class that manages a RabbitMQ broker and handles connection, event
  * loop and set up various handlers.
  * @details This class handles a specific type of database backend in AMSLib.
- * Instead of writing inputs/outputs directly to files (CSV or HDF5), we
+ * Instead of writing inputs/outputs directly to files (HDF5), we
  * send these elements (a collection of inputs and their corresponding outputs)
  * to a service called RabbitMQ which is listening on a given IP and port.
  * 
@@ -1779,8 +1779,7 @@ public:
 
     DBG(DBManager, "Instantiating data base");
 
-    if ((dbType == AMSDBType::AMS_CSV || dbType == AMSDBType::AMS_HDF5) &&
-        !fs_interface.isConnected()) {
+    if ((dbType == AMSDBType::AMS_HDF5) && !fs_interface.isConnected()) {
       THROW(std::runtime_error,
             "File System is not configured, Please specify output directory");
     } else if (dbType == AMSDBType::AMS_RMQ && !rmq_interface.isConnected()) {
