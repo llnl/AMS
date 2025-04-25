@@ -280,15 +280,14 @@ jobs:
           export AMS_HDF5_PATH=$(spack location -i hdf5)
           export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
           echo """{
-                \"rabbitmq-name\": \"rabbit\",
                 \"rabbitmq-user\": \"${RABBITMQ_USER}\",
                 \"rabbitmq-password\": \"${RABBITMQ_PASS}\",
                 \"service-port\": ${RABBITMQ_PORT},
                 \"service-host\": \"${RABBITMQ_HOST}\",
                 \"rabbitmq-vhost\": \"/\",
-                \"rabbitmq-outbound-queue\": \"test-ci\",
-                \"rabbitmq-exchange\": \"ams-fanout\",
-                \"rabbitmq-routing-key\": \"training\"
+                \"rabbitmq-queue-physics\": \"test-ci\",
+                \"rabbitmq-exchange-training\": \"ams-fanout\",
+                \"rabbitmq-key-training\": \"training\"
               }""" > rmq.json
           jq < rm.json
           export AMS_RMQ_CONFIG=$(cat ./rmq.json)
