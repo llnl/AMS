@@ -1,13 +1,8 @@
-#ifdef __AMS_ENABLE_MPI__
-#include <mpi.h>
-#endif
 #include <unistd.h>
 
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
-#include <wf/basedb.hpp>
-#include <wf/resource_manager.hpp>
 
 #include "AMS.h"
 

@@ -279,6 +279,18 @@ jobs:
           export AMS_UMPIRE_PATH=$(spack location -i umpire)
           export AMS_HDF5_PATH=$(spack location -i hdf5)
           export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
+          echo """{
+                \"rabbitmq-user\": \"${RABBITMQ_USER}\",
+                \"rabbitmq-password\": \"${RABBITMQ_PASS}\",
+                \"service-port\": ${RABBITMQ_PORT},
+                \"service-host\": \"${RABBITMQ_HOST}\",
+                \"rabbitmq-vhost\": \"/\",
+                \"rabbitmq-queue-physics\": \"test-ci\",
+                \"rabbitmq-exchange-training\": \"ams-fanout\",
+                \"rabbitmq-key-training\": \"training\"
+              }""" > rmq.json
+          jq < rm.json
+          export AMS_RMQ_CONFIG=$(cat ./rmq.json)
           cmake \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
@@ -305,26 +317,6 @@ jobs:
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           # We overwrite the rmq.json created by CMake
-          echo """{
-            \"db\": {
-              \"dbType\": \"rmq\",
-              \"rmq_config\": {
-                \"rabbitmq-name\": \"rabbit\",
-                \"rabbitmq-user\": \"${RABBITMQ_USER}\",
-                \"rabbitmq-password\": \"${RABBITMQ_PASS}\",
-                \"service-port\": ${RABBITMQ_PORT},
-                \"service-host\": \"${RABBITMQ_HOST}\",
-                \"rabbitmq-vhost\": \"/\",
-                \"rabbitmq-outbound-queue\": \"test-ci\",
-                \"rabbitmq-exchange\": \"ams-fanout\",
-                \"rabbitmq-routing-key\": \"training\"
-              },
-              \"update_surrogate\": false
-            },
-            \"ml_models\": {},
-            \"domain_models\": {}
-          }""" > $GITHUB_WORKSPACE/build/tests/AMSlib/rmq.json
-
           ctest --output-on-failure ./
         env:
           RABBITMQ_USER: ams
