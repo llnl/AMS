@@ -56,10 +56,9 @@ jobs:
           export AMS_MFEM_PATH=$(spack location -i mfem)
           export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
           export AMS_FAISS_PATH=$(spack location -i faiss)
-          export AMS_UMPIRE_PATH=$(spack location -i umpire)
           export AMS_HDF5_PATH=$(spack location -i hdf5)
           export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
-          which python
+          echo $AMS_MFEM_PATH
           cmake \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
@@ -70,7 +69,6 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=./install \
             -DCMAKE_BUILD_TYPE=Release \
             -DWITH_CUDA=Off \
-            -DUMPIRE_DIR=$AMS_UMPIRE_PATH \
             -DMFEM_DIR=$AMS_MFEM_PATH \
             -DWITH_FAISS=On \
             -DWITH_MPI=On \
@@ -80,7 +78,6 @@ jobs:
             -DFAISS_DIR=$AMS_FAISS_PATH \
             -DWITH_AMS_DEBUG=On \
             -DWITH_WORKFLOW=On \
-            -DWITH_ADIAK=Off \
             -DWITH_RMQ=On \
             -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
