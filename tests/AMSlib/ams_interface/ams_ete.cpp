@@ -1,20 +1,13 @@
 #include <stdexcept>
-#ifdef __AMS_ENABLE_MPI__
-#include <mpi.h>
-#endif
 #include <unistd.h>
 
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
-#include <wf/basedb.hpp>
-#include <wf/resource_manager.hpp>
 
 #include "../utils.hpp"
 #include "AMS.h"
-#include "ml/surrogate.hpp"
-#include "wf/debug.h"
 
 using namespace ams;
 
@@ -145,13 +138,13 @@ int main(int argc, char **argv)
   char *model_path = argv[4];
   AMSDType data_type = getDataType(argv[5]);
   std::string uq_name = std::string(argv[6]);
-  const AMSUQPolicy uq_policy = UQ::UQPolicyFromStr(uq_name);
+  const AMSUQPolicy uq_policy = UQPolicyFromStr(uq_name);
   float threshold = std::atof(argv[7]);
   int num_iterations = std::atoi(argv[8]);
   int avg_elements = std::atoi(argv[9]);
   std::string db_type_str = std::string(argv[10]);
   std::string fs_path = std::string(argv[11]);
-  AMSDBType db_type = ams::db::getDBType(db_type_str);
+  AMSDBType db_type = getDBType(db_type_str);
   AMSResourceType resource = AMSResourceType::AMS_HOST;
   srand(time(NULL));
 

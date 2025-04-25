@@ -25,6 +25,10 @@ function(BUILD_UNIT_TEST exe source)
     target_link_libraries(${exe} PRIVATE ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
   endif()
 
+  if (WITH_MPI)
+    target_link_libraries(${exe} PRIVATE MPI::MPI_CXX)
+  endif()
+
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
 endfunction()
 
