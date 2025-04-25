@@ -59,6 +59,7 @@ jobs:
           export AMS_UMPIRE_PATH=$(spack location -i umpire)
           export AMS_HDF5_PATH=$(spack location -i hdf5)
           export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
+          which python
           cmake \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
