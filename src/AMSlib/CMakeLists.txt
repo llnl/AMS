@@ -44,7 +44,7 @@ if (WITH_CALIPER)
 endif()
 
 if (WITH_MPI)
-  target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
+       target_link_libraries(AMS PUBLIC MPI::MPI_CXX)
 endif()
 
 if (WITH_RMQ)
