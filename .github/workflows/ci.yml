@@ -323,3 +323,49 @@ jobs:
           RABBITMQ_PASS: ams
           RABBITMQ_HOST: rabbitmq
           RABBITMQ_PORT: 5672
+  sqlite-tests:
+    runs-on: ubuntu-latest
+    container: ghcr.io/llnl/ams-ci-flux-mariadb:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install AMS package (editable)
+        shell: bash -l {0}
+        run: |
+          source /venv/bin/activate
+          pip install -e ./
+
+      - name: Run AMS unittests (SQlite)
+        shell: bash -l {0}
+        run: |
+          source /venv/bin/activate
+          python -m unittest discover -s tests/AMSWorkflow -p "test_*.py" -v
+  mariadb-tests:
+    runs-on: ubuntu-latest
+    container: ghcr.io/llnl/ams-ci-flux-mariadb:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start MariaDB
+        shell: bash -l {0}
+        run: |
+          mysqld_safe --datadir=/var/lib/mysql &
+          echo "Waiting for MariaDB..."
+          until mysqladmin ping -h 127.0.0.1 --silent; do sleep 1; done
+          echo "MariaDB is up"
+
+      - name: Install AMS package (editable)
+        shell: bash -l {0}
+        run: |
+          source /venv/bin/activate
+          pip install -e ./
+
+      - name: Run AMS unittests (MariaDB)
+        env:
+          AMS_DB_URL: "mysql+mysqlconnector://testuser:testpass@127.0.0.1/testdb"
+        shell: bash -l {0}
+        run: |
+          source /venv/bin/activate
+          python -m unittest discover -s tests/AMSWorkflow -p "test_*.py" -v
