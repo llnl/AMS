@@ -36,21 +36,23 @@ if (WITH_CUDA)
 endif()
 
 if (WITH_HDF5)
-  target_link_libraries(AMS PRIVATE ${AMS_HDF5_TARGET})
+  target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:${AMS_HDF5_TARGET}> PRIVATE $<INSTALL_INTERFACE:${AMS_HDF5_TARGET}>)
 endif()
 
 if (WITH_CALIPER)
-  target_link_libraries(AMS PRIVATE caliper)
+  target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:caliper> PRIVATE $<INSTALL_INTERFACE:caliper>)
 endif()
 
 if (WITH_MPI)
-       target_link_libraries(AMS PUBLIC MPI::MPI_CXX)
+  target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:MPI::MPI_CXX> PRIVATE $<INSTALL_INTERFACE:MPI::MPI_CXX>)
 endif()
 
 if (WITH_RMQ)
-  target_link_libraries(AMS PRIVATE amqpcpp)
+  target_link_libraries(AMS PUBLIC  $<BUILD_INTERFACE:amqpcpp> PRIVATE $<INSTALL_INTERFACE:amqpcpp>)
+
   if (OPENSSL_FOUND)
-    target_link_libraries(AMS PRIVATE OpenSSL::SSL OpenSSL::Crypto) 
+    target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:OpenSSL::SSL OpenSSL::Crypto> PRIVATE
+    		$<INSTALL_INTERFACE:OpenSSL::SSL OpenSSL::Crypto>)
   endif()
   # NOTE: We set here the event/event pthreads as public. As there is no easy way
   # to do a find package(libevent) and RMQ is not exposing that properly.
@@ -59,7 +61,9 @@ if (WITH_RMQ)
   target_link_libraries(AMS PUBLIC ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
 endif()
 
-target_link_libraries(AMS PRIVATE stdc++fs torch)
+target_link_libraries(AMS PUBLIC
+    		$<BUILD_INTERFACE:stdc++fs torch> PRIVATE
+    		$<INSTALL_INTERFACE:stdc++fs torch>)
 
 
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS-config.h.in" "${PROJECT_BINARY_DIR}/include/AMS-config.h")
