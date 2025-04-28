@@ -73,7 +73,7 @@ ENV AMS_TORCH_PATH=/app/venv/lib/python3.11/site-packages/torch/share/cmake/Torc
 
 RUN cd /opt/archives/ && \
 	source /app/venv/bin/activate && \
-	git clone --depth 1 https://github.com/LLNL/AMS.git -b features/ams-new-interface && \
+	git clone --depth 1 https://github.com/LLNL/AMS.git -b features/tutorial && \
 	mkdir -p /opt/archives/AMS/build/ && \
 	cd /opt/archives/AMS/build/ && \
 	cmake \
