@@ -1,12 +1,17 @@
 # AMS DataFlow
-AMS (partially) replaces some arbitary function with Machine Learning (Torch) model. 
+AMS (partially) replaces some arbitary function with Machine Learning (Torch) model. The `AMSTensor` provides information to the AMS runtime regarding the memory access pattern of a single memory blob. 
 
-## The AMSTensor
+However, an arbitary function can access multiple memory blobs with different intentions. AMS categorizes intention in 3 categories:
 
-The AMSTensor is a C++ abstraction that associates a contineous memory blob with some access pattern and reshaping. In other words, it represents the memory as a tensor. The AMSTensor is a shim lay on top of the torch tensor representation and currently only isolates the binary linkage of the example/application code to the torch librarry.
+1. Memory locations that are being written by the underlying computation and are considered a result of the function. In the example this would be `out`.
+2. Memory locations that are being read by the underlying computation and is "necessary" for the mathematical formulation of the underlying result. Intermediate inputs or temporal variables can be ignored. In the example this would be `in`.
+3. Memory locations that are being read AND written  by the underlying computation and is "necessary" for the mathematical formulation of the underlying result. Intermediate inputs or temporal variables can be ignored. 
 
+## The SmallVector
 
-### Use AMSTensors in the example code 
+Multiple memory blobs of the same intention can be packed together in a vector. AMS instead of using the `std::vector` uses ams::SmallVector a lightweight C++ vector abstraction (originated from the LLVM project) that can be allocated in the stack and is more efficient. 
+
+### Create a C++ lambda that takes 3 input parameters (1 for each memory category), each of Smallvector type storing the AMSTensors. 
 
 
 
