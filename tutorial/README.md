@@ -27,10 +27,12 @@ Status: Downloaded newer image for ghcr.io/llnl/ams-x86-tutorial:latest
 
 ## Run container interactively
 
+```
 docker run --rm -it \
   -v "$(pwd)":/workspace -w /workspace \
   ghcr.io/llnl/ams-x86-tutorial:latest \
   bash
+```
 
 The command should provide an interactive `bash` shell and the output should look like the following:
 
