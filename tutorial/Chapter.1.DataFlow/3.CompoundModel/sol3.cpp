@@ -18,7 +18,7 @@ void ExampleCompute(double* in, double* out, int size)
   }
 }
 
-void ExampleAMSTensorCompute(ams::AMSTensor& in, ams::AMSTensor& out)
+void ExampleAMSTensorCompute(const ams::AMSTensor& in, ams::AMSTensor& out)
 {
   ExampleCompute(in.data<double>(), out.data<double>(), in.shape()[0]);
 }
@@ -74,15 +74,16 @@ int main(int argc, char* argv[])
   output_tensors.push_back(ams::AMSTensor::view(
       output, {length, 1}, {1, 1}, ams::AMSResourceType::AMS_HOST));
 
-  auto Computation = [&](ams::SmallVector<ams::AMSTensor>& ams_ins,
-                         ams::SmallVector<ams::AMSTensor>& ams_inouts,
-                         ams::SmallVector<ams::AMSTensor>& ams_outs) {
+  EOSLambda Computation = [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
+                              ams::SmallVector<ams::AMSTensor>& ams_inouts,
+                              ams::SmallVector<ams::AMSTensor>& ams_outs) {
     ExampleAMSTensorCompute(ams_ins[0], ams_outs[0]);
   };
 
   AMSExecutor wf = AMSCreateExecutor(model_descr, 0, 1);
-
+  std::cout << "Calling AMS Execute\n";
   AMSExecute(wf, Computation, input_tensors, inout_tensors, output_tensors);
+  std::cout << "Called AMS Execute\n";
 
   auto sum = ComputeSum(output, length);
 

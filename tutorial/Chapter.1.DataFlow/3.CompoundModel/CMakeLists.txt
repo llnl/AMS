@@ -11,7 +11,7 @@ cmake_policy(SET CMP0104 NEW)
 project(EX2 LANGUAGES CXX C)
 
 set(AMS_EXAMPLE_SRC ex3.cpp)
-set(AMS_SOL_SRC ex3.cpp)
+set(AMS_SOL_SRC sol3.cpp)
 
 option(WITH_MPI            "Option to enable MPI" OFF)
 option(WITH_CALIPER        "Use Caliper for Profiling" OFF)
