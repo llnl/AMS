@@ -53,10 +53,11 @@ int main(int argc, char* argv[])
   double* input = new double[length];
   double* output = new double[length];
 
+  AMSConfigureFSDatabase(ams::AMSDBType::AMS_NONE, "");
   InitMemBlob(input, length);
 
   AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
-      "compute", ams::AMSUQPolicy::AMS_RANDOM, -1.0, "", "compute");
+      "compute", ams::AMSUQPolicy::AMS_RANDOM, -1.0, "", "");
 
 
   /*
