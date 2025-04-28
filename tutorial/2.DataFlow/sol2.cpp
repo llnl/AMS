@@ -40,9 +40,9 @@ int main(int argc, char* argv[])
   int length;
   ExampleArgs args;
   args.AddOption(&length,
-                 "-l",
-                 "--length",
-                 "The size of the vectors to be initialized");
+      "-l",
+      "--length",
+      "The size of the vectors to be initialized");
   args.Parse(argc, argv);
   if (!args.Good()) {
     std::cout << "Wrong command line arguments\n";
@@ -61,7 +61,7 @@ int main(int argc, char* argv[])
   auto sum = ComputeSum(output, length);
 
   std::cout << "[Example] Expected output is " << (length * (length - 1)) / 2
-            << " and computed " << sum << "\n";
+    << " and computed " << sum << "\n";
 
 
   delete[] input;

@@ -37,9 +37,9 @@ int main(int argc, char* argv[])
   int length;
   ExampleArgs args;
   args.AddOption(&length,
-                 "-l",
-                 "--length",
-                 "The size of the vectors to be initialized");
+      "-l",
+      "--length",
+      "The size of the vectors to be initialized");
   args.Parse(argc, argv);
   if (!args.Good()) {
     std::cout << "Wrong command line arguments\n";
@@ -60,21 +60,21 @@ int main(int argc, char* argv[])
 
   // We represet both input/output as blobs of lenth 'samples', each sample as 1 element.
   ams::AMSTensor InT = ams::AMSTensor::view(input,
-                                            {length, 1},
-                                            {1, 1},
-                                            ams::AMSResourceType::AMS_HOST);
+      {length, 1},
+      {1, 1},
+      ams::AMSResourceType::AMS_HOST);
 
   ams::AMSTensor OutT = ams::AMSTensor::view(output,
-                                             {length, 1},
-                                             {1, 1},
-                                             ams::AMSResourceType::AMS_HOST);
+      {length, 1},
+      {1, 1},
+      ams::AMSResourceType::AMS_HOST);
 
 
   ExampleAMSTensorCompute(InT, OutT);
   auto sum = ComputeSum(output, length);
 
   std::cout << "[Example] Expected output is " << (length * (length - 1)) / 2
-            << " and computed " << sum << "\n";
+    << " and computed " << sum << "\n";
 
 
   delete[] input;
