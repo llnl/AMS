@@ -34,12 +34,13 @@ double ComputeSum(double* out, int size)
 
 int main(int argc, char* argv[])
 {
+  using namespace ams;
   int length;
   ExampleArgs args;
   args.AddOption(&length,
-      "-l",
-      "--length",
-      "The size of the vectors to be initialized");
+                 "-l",
+                 "--length",
+                 "The size of the vectors to be initialized");
   args.Parse(argc, argv);
   if (!args.Good()) {
     std::cout << "Wrong command line arguments\n";
@@ -54,27 +55,36 @@ int main(int argc, char* argv[])
 
   InitMemBlob(input, length);
 
+  AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
+      "compute", ams::AMSUQPolicy::AMS_RANDOM, -1.0, "", "compute");
+
+
   /*
    * Create AMS tensors for memory blobs
    */
 
   // We represet both input/output as blobs of lenth 'samples', each sample as 1 element.
-  ams::AMSTensor InT = ams::AMSTensor::view(input,
-      {length, 1},
-      {1, 1},
-      ams::AMSResourceType::AMS_HOST);
+  SmallVector<AMSTensor> input_tensors;
+  SmallVector<AMSTensor> inout_tensors;
+  SmallVector<AMSTensor> output_tensors;
 
-  ams::AMSTensor OutT = ams::AMSTensor::view(output,
-      {length, 1},
-      {1, 1},
-      ams::AMSResourceType::AMS_HOST);
+  input_tensors.push_back(ams::AMSTensor::view(
+      input, {length, 1}, {1, 1}, ams::AMSResourceType::AMS_HOST));
 
+  output_tensors.push_back(ams::AMSTensor::view(
+      output, {length, 1}, {1, 1}, ams::AMSResourceType::AMS_HOST));
 
-  ExampleAMSTensorCompute(InT, OutT);
+  auto Computation = [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
+                         ams::SmallVector<ams::AMSTensor>& ams_inouts,
+                         ams::SmallVector<ams::AMSTensor>& ams_outs) {
+    ExampleAMSTensorCompute(ams_ins[0], ams_outs[0]);
+  };
+
+  Computation(input_tensors, output_tensors);
   auto sum = ComputeSum(output, length);
 
   std::cout << "[Example] Expected output is " << (length * (length - 1)) / 2
-    << " and computed " << sum << "\n";
+            << " and computed " << sum << "\n";
 
 
   delete[] input;
