@@ -11,6 +11,7 @@ cmake_policy(SET CMP0104 NEW)
 project(EX1 LANGUAGES CXX C)
 
 set(AMS_EXAMPLE_SRC ex1.cpp)
+set(AMS_SOL_SRC ex1.cpp)
 
 option(WITH_MPI            "Option to enable MPI" OFF)
 option(WITH_CALIPER        "Use Caliper for Profiling" OFF)
@@ -30,8 +31,8 @@ endif()
 
 
 add_executable(EX1 ${AMS_EXAMPLE_SRC})
-target_link_libraries(EX1 PRIVATE ${MFEM_LIBRARIES})
-target_include_directories(EX1 PRIVATE ${MFEM_INCLUDE_DIRS})
 target_link_libraries(EX1 PRIVATE AMS::AMS)
 
+add_executable(SOL1 ${AMS_SOL_SRC})
+target_link_libraries(SOL1 PRIVATE AMS::AMS)
 

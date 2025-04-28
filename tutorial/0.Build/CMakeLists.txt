@@ -31,8 +31,4 @@ endif()
 
 
 add_executable(EX0 ${AMS_EXAMPLE_SRC})
-target_link_libraries(EX0 PRIVATE ${MFEM_LIBRARIES})
-target_include_directories(EX0 PRIVATE ${MFEM_INCLUDE_DIRS})
 target_link_libraries(EX0 PRIVATE AMS::AMS)
-
-

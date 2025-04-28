@@ -5,11 +5,11 @@ We provide an example C++ code and the respective `cmake` file to build and link
 
 ## Include and link with AMS
 
-To use AMS we need to `find_package(AMS REQUIRED)` ([here](./CMakeLists.txt#L22)) and then use the `AMS::AMS` target in the `cmake` function `target_link_libraries`([here](./CMakeLists.txt#L27)).
+To use AMS we need to `find_package(AMS REQUIRED)` ([here](./CMakeLists.txt#L22)) and then use the `AMS::AMS` target in the `cmake` function `target_link_libraries`([here](./CMakeLists.txt#L36)).
 
 ## Example Code 
 
-The [example](./ex0.cpp) code is very simple. The user provides in the *cli* the length of 2 vectors, the example initializes the `input` vector from *0-length-1* values and then assigns these values to the [output vector](./ex0.cpp#L50) finally it computes the sum of all elements in the output vector and prints the sum at the terminal with the expected output value.
+The [example](./ex0.cpp) code is very simple. The user provides in the *cli* the length of 2 vectors, the example initializes the `input` vector from *0-length-1* values and then assigns these values to the [output vector](./ex0.cpp#L52) finally it computes the sum of all elements in the output vector and prints the sum at the terminal with the expected output value.
 
 
 ## Configure and link

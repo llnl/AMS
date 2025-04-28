@@ -18,9 +18,9 @@ void ExampleCompute(double* in, double* out, int size)
   }
 }
 
-void ExampleAMSTensorCompute(ams::AMSTensor& in, ams::AMSTensor& out, int size)
+void ExampleAMSTensorCompute(ams::AMSTensor& in, ams::AMSTensor& out)
 {
-  ExampleCompute(in.data<double>(), out.data<double>(), size);
+  ExampleCompute(in.data<double>(), out.data<double>(), in.shape()[0]);
 }
 
 double ComputeSum(double* out, int size)
@@ -70,7 +70,7 @@ int main(int argc, char* argv[])
                                              ams::AMSResourceType::AMS_HOST);
 
 
-  ExampleAMSTensorCompute(InT, OutT, length);
+  ExampleAMSTensorCompute(InT, OutT);
   auto sum = ComputeSum(output, length);
 
   std::cout << "[Example] Expected output is " << (length * (length - 1)) / 2
