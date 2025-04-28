@@ -18,12 +18,6 @@ void ExampleCompute(double* in, double* out, int size)
   }
 }
 
-void ExampleComputeTensors(double* in, double* out, int size)
-{
-  for (int i = 0; i < size; i++) {
-    out[i] = in[i];
-  }
-}
 
 double ComputeSum(double* out, int size)
 {
@@ -36,7 +30,6 @@ double ComputeSum(double* out, int size)
 
 int main(int argc, char* argv[])
 {
-  using namespace ams;
   int length;
   ExampleArgs args;
   args.AddOption(&length,
@@ -54,7 +47,6 @@ int main(int argc, char* argv[])
 
   double* input = new double[length];
   double* output = new double[length];
-
 
   InitMemBlob(input, length);
   ExampleCompute(input, output, length);
