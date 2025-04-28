@@ -43,6 +43,8 @@ int main(int argc, char* argv[])
     return -1;
   }
 
+  ams::AMSInit();
+
   double* input = new double[length];
   double* output = new double[length];
 
@@ -56,6 +58,7 @@ int main(int argc, char* argv[])
 
   delete[] input;
   delete[] output;
+  ams::AMSFinalize();
 
 
   return 0;

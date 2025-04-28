@@ -39,3 +39,20 @@ And the expected output should be:
 [Example] Expected output is 45 and computed 45
 ```
 
+## Enable Logger
+
+The container's AMS version is linked and working with the AMS logger to enable it you can execute:
+
+```
+AMS_LOG_LEVEL=debug ./EX0 -l 10
+```
+
+The output should look like this:
+
+```
+[AMS:DEBUG:ResourceManager] Initialization of allocators
+[AMS:DEBUG:ResourceManager] Set Allocator [0] to pool with name : HOST
+[Example] Expected output is 45 and computed 45
+[AMS:DEBUG:AMS] Finalization of AMS
+[AMS:DEBUG:AMSDefaultDeviceAllocator] Destroying default host allocator
+```

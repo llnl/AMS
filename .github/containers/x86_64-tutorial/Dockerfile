@@ -82,6 +82,7 @@ RUN cd /opt/archives/ && \
 	  -DWITH_CALIPER=On \
 	  -DWITH_HDF5=On \
           -DWITH_AMS_DEBUG=On \
+	  -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=On \
 	  -DCMAKE_BUILD_TYPE=Release \
 	  -DCMAKE_INSTALL_PREFIX=/usr/local \
 	  -DWITH_CUDA=Off \
