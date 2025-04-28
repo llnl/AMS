@@ -74,13 +74,16 @@ int main(int argc, char* argv[])
   output_tensors.push_back(ams::AMSTensor::view(
       output, {length, 1}, {1, 1}, ams::AMSResourceType::AMS_HOST));
 
-  auto Computation = [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
+  auto Computation = [&](ams::SmallVector<ams::AMSTensor>& ams_ins,
                          ams::SmallVector<ams::AMSTensor>& ams_inouts,
                          ams::SmallVector<ams::AMSTensor>& ams_outs) {
     ExampleAMSTensorCompute(ams_ins[0], ams_outs[0]);
   };
 
-  Computation(input_tensors, output_tensors);
+  AMSExecutor wf = AMSCreateExecutor(model_descr, 0, 1);
+
+  AMSExecute(wf, Computation, input_tensors, inout_tensors, output_tensors);
+
   auto sum = ComputeSum(output, length);
 
   std::cout << "[Example] Expected output is " << (length * (length - 1)) / 2
