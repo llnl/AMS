@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.10)
 cmake_policy(SET CMP0104 NEW)
 
 # Define the project
-project(EX0 LANGUAGES CXX)
+project(EX0 LANGUAGES CXX C)
 
 set(AMS_EXAMPLE_SRC ex0.cpp)
 
