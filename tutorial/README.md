@@ -50,5 +50,5 @@ Root password set to 'root'
     1. [Build](./Chapter.1.DataFlow/0.Build)
     2. [AMSTensor](./Chapter.1.DataFlow/1.AMSTensor)
     3. [DataFlow](./Chapter.1.DataFlow/2.DataFlow)
-    4. [AbstractCompoundModel](./Chapter.1.Dataflow/3.CompoundModel/)
+    4. [AbstractCompoundModel](./Chapter.1.DataFlow/3.CompoundModel/)
 2. [AMS Data Collection](./Chapter.2.DB)
