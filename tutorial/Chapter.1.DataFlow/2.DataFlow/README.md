@@ -11,7 +11,15 @@ However, an arbitary function can access multiple memory blobs with different in
 
 Multiple memory blobs of the same intention can be packed together in a vector. AMS instead of using the `std::vector` uses ams::SmallVector a lightweight C++ vector abstraction (originated from the LLVM project) that can be allocated in the stack and is more efficient. 
 
-### Create a C++ lambda that takes 3 input parameters (1 for each memory category), each of Smallvector type storing the AMSTensors. 
+### Extend the example code to define a EOSLambda.
+
+Create a C++ lambda that takes 3 input parameters (1 for each memory category), each of Smallvector type storing the AMSTensors. The signature of the lambda should look like this:
+
+```cpp
+auto compute = [&](const ams::SmallVector<ams::AMSTensor> &,
+        ams::SmallVector<ams::AMSTensor> &,
+        ams::SmallVector<ams::AMSTensor> &);
+```
 
 
 
