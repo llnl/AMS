@@ -32,7 +32,9 @@ class UQModel(nn.Module):
     def forward(self, x):
         uncertainty = x / 1000
         out = self.base(x)
-        return out, uncertainty
+        # AMS Uncertainty requires that the uncertainty will have the same shape as
+        # the output. So we have a value for every partial component (dimension) of the output
+        return out, torch.abs(x-out) 
 
 
 def main():
