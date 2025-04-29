@@ -63,8 +63,8 @@ def main():
 
             epoch_loss = running_loss / len(loader.dataset)
             print(f"Epoch {epoch:2d}/{args.epochs} — Loss: {epoch_loss:.4f}")
-        model = model.double()  # Set to double precision (float64)
-        prec = torch.float64
+        model = model.float()  # Set to double precision (float64)
+        prec = torch.float32
         example_input = torch.randn(1, 1, device=device, dtype=prec)
 
         # Trace the model
