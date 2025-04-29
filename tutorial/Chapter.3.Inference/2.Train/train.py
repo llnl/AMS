@@ -28,7 +28,7 @@ def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Train and store a model.")
     parser.add_argument("--filename", "-fn", type=str, required=True, help="The file containing the data to train on")
-    parser.add_argument("--epochs", "-e", help="Number of epochs", default=10)
+    parser.add_argument("--epochs", "-e", type=int, help="Number of epochs", default=10)
     parser.add_argument("--model-file", "-m", help="Filename of model", default="model")
     args = parser.parse_args()
     if not Path(args.filename).exists():
@@ -63,7 +63,7 @@ def main():
 
             epoch_loss = running_loss / len(loader.dataset)
             print(f"Epoch {epoch:2d}/{args.epochs} — Loss: {epoch_loss:.4f}")
-        model = model.float()  # Set to double precision (float64)
+        model = model.float()
         prec = torch.float32
         example_input = torch.randn(1, 1, device=device, dtype=prec)
 
