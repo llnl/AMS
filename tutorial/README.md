@@ -47,7 +47,7 @@ Root password set to 'root'
 ## Contents
 
 1. [Basic API](./Chapter.1.DataFlow/)
-    a. [Build](./Chapter.1.DataFlow/0.Build)
-    b. [AMSTensor](./Chapter.1.DataFlow/2.Dataflow)
-    c. [AbstractCompoundModel](./Chapter.1.Dataflow/3.CompoundModel)
+    1. [Build](./Chapter.1.DataFlow/0.Build)
+    2. [AMSTensor](./Chapter.1.DataFlow/2.Dataflow)
+    3. [AbstractCompoundModel](./Chapter.1.Dataflow/3.CompoundModel)
 2. [AMS Data Collection](./Chapter.2.DB)
