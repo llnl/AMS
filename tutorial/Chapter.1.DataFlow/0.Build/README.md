@@ -11,7 +11,6 @@ To use AMS we need to `find_package(AMS REQUIRED)` ([here](./CMakeLists.txt#L22)
 
 The [example](./ex0.cpp) code is very simple. The user provides in the *cli* the length of 2 vectors, the example initializes the `input` vector from *0-length-1* values and then assigns these values to the [output vector](./ex0.cpp#L52) finally it computes the sum of all elements in the output vector and prints the sum at the terminal with the expected output value.
 
-
 ## Configure and link
 
 To configure the example please provide these commands:
@@ -56,3 +55,5 @@ The output should look like this:
 [AMS:DEBUG:AMS] Finalization of AMS
 [AMS:DEBUG:AMSDefaultDeviceAllocator] Destroying default host allocator
 ```
+
+There are the following log levels, debug, info, warning.
