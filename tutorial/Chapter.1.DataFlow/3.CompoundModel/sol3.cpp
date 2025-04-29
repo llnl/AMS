@@ -59,7 +59,6 @@ int main(int argc, char* argv[])
   AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
       "compute", ams::AMSUQPolicy::AMS_RANDOM, -1.0, "", "");
 
-
   /*
    * Create AMS tensors for memory blobs
    */

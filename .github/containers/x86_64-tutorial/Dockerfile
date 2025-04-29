@@ -74,17 +74,17 @@ ENV AMS_TORCH_PATH=/app/venv/lib/python3.11/site-packages/torch/share/cmake/Torc
 RUN cd /opt/archives/ && \
 	source /app/venv/bin/activate && \
 	git clone --depth 1 https://github.com/LLNL/AMS.git -b features/tutorial && \
-	mkdir -p /opt/archives/AMS/build-ams/ && \
-	cd /opt/archives/AMS/build-ams/ && \
+	mkdir -p /opt/archives/AMS/build/ && \
+	cd /opt/archives/AMS/build/ && \
 	cmake \
-	  -DBUILD_SHARED_LIBS=On \
 	  -DWITH_RMQ=On \
+	  -DBUILD_SHARED_LIBS=On \
 	  -DWITH_CALIPER=On \
 	  -DWITH_HDF5=On \
           -DWITH_AMS_DEBUG=On \
 	  -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=On \
-	  -DCMAKE_BUILD_TYPE=Release \
 	  -DCMAKE_INSTALL_PREFIX=/usr/local \
+	  -DCMAKE_BUILD_TYPE=Release \
 	  -DWITH_CUDA=Off \
 	  -DMFEM_DIR=$AMS_MFEM_PATH \
 	  -DWITH_MPI=On \
