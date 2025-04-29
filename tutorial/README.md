@@ -55,3 +55,6 @@ Root password set to 'root'
     1. [HDF5](./Chapter.2.DB/1.HDF5/)
 3. [AMS Model Serving](./Chapter.3.Inference)
     1. [Data Collection](./Chapter.3.Inference/1.HDF5)
+    2. [Train](./Chapter.3.Inference/2.Train)
+    3. [Serve Inference](./Chapter.3.Inference/3.Serve)
+    4. [UQ](./Chapter.3.Inference/4.UQ)
