@@ -5,6 +5,7 @@
 
 cmake_minimum_required(VERSION 3.18)
 project(AMS VERSION 0.1.1 LANGUAGES CXX C)
+
 cmake_policy(SET CMP0074 NEW)
 
 # NOTE: This may break some of our integrations with the applications. But flux requires > C++20, RMQ requires C++17 and although AMS does not have 
