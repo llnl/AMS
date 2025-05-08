@@ -403,15 +403,21 @@ public:
                         PhysicInOuts);
     }
 
-
     DBG(Workflow, "Finished AMSExecution")
+
+    auto sizePhysics = (PhysicIns.size() > 0) ? PhysicIns[0].sizes()[0] : 0;
+    auto sizeInput = (InputTensors.size() > 0) ? InputTensors[0].sizes()[0] : 0;
+    float ratioComputedPhysics = 0.0;
+    if (sizePhysics > 0 && sizeInput > 0)
+      ratioComputedPhysics = (float)(PhysicIns[0].sizes()[0]) / float(InputTensors[0].sizes()[0]);
+
     CINFO(Workflow,
           rId == 0,
-          "Computed %ld "
+          "Computed %ld elems"
           "using physics out of the %ld items (%.2f)",
-          PhysicIns[0].sizes()[0],
-          InputTensors[0].sizes()[0],
-          (float)(PhysicIns[0].sizes()[0]) / float(InputTensors[0].sizes()[0]));
+          sizePhysics,
+          sizeInput,
+          ratioComputedPhysics);
 
     REPORT_MEM_USAGE(Workflow, "End")
     CALIPER(CALI_MARK_END("AMSEvaluate");)
