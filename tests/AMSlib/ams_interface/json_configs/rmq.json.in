@@ -20,70 +20,69 @@
       "uq_type": "random",
       "model_path": "@TORCH_MODEL_DIR@/linear_scripted_single_cpu_random.pt",
       "uq_aggregate": "mean",
-      "threshold": 0.5,
-      "db_label" : "random_50"
+      "threshold": 0.5
     }, 
     "random_10": {
       "uq_type": "random",
       "model_path": "@TORCH_MODEL_DIR@/linear_scripted_single_cpu_random.pt",
       "uq_aggregate": "mean",
-      "threshold": 0.1,
-      "db_label" : "random_10"
+      "threshold": 0.1
     }, 
     "duq_mean": {
       "uq_type": "deltaUQ",
       "model_path": "@TORCH_MODEL_DIR@/double_cpu_duq_mean.pt",
       "uq_aggregate": "mean",
-      "threshold": 0.5,
-      "db_label" : "duq_mean"
+      "threshold": 0.5
     },
     "duq_max": {
       "uq_type": "deltaUQ",
       "model_path": "@TORCH_MODEL_DIR@/double_cpu_duq_max.pt",
       "uq_aggregate": "max",
-      "threshold": 0.5,
-      "db_label" : "duq_max"
+      "threshold": 0.5
     },
     "random_no_db_10": {
       "uq_type": "random",
       "model_path": "@TORCH_MODEL_DIR@/linear_scripted_single_cpu_random.pt",
       "uq_aggregate": "mean",
       "threshold": 0.1,
-      "db_label" : ""
+      "store": false
+
     },
     "random_no_db_50": {
       "uq_type": "random",
       "model_path": "@TORCH_MODEL_DIR@/linear_scripted_single_cpu_random.pt",
       "uq_aggregate": "mean",
       "threshold": 0.5,
-      "db_label" : ""
+      "store": false
+
     },
     "duq_mean_no_db": {
       "uq_type": "deltaUQ",
       "model_path": "@TORCH_MODEL_DIR@/double_cpu_duq_mean.pt",
       "uq_aggregate": "mean",
       "threshold": 0.5,
-      "db_label" : ""
+      "store": false
+
     },
     "duq_max_no_db": {
       "uq_type": "deltaUQ",
       "model_path": "@TORCH_MODEL_DIR@/double_cpu_duq_max.pt",
       "uq_aggregate": "max",
       "threshold": 0.5,
-      "db_label" : ""
+      "store": false
+
     },
     "no_model": {
       "uq_type": "random",
       "model_path": "",
       "uq_aggregate": "mean",
-      "threshold": 0.5,
-      "db_label" : "no_model"
+      "threshold": 0.5
     },
     "no_model_no_db": {
       "uq_type": "random",
       "uq_aggregate": "mean",
       "threshold": 0.5,
-      "db_label" : ""
+      "store": false
     }
   },
   "domain_models" : {

@@ -311,9 +311,10 @@ def get_rmq_data(ams_config, domain_names, num_iterations, timeout=1):
             threshold = 0.0
 
         print("Type for domain", d, type(_data[d]), len(_data[d]))
-        if model["db_label"] == "" and len(_data[d][0]) != 0:
+        store_data = model.get("store", True)
+        if store_data == False and len(_data[d][0]) != 0:
             raise RuntimeError("Expected data to not exist")
-        elif model["db_label"] != "":
+        elif store_data:
             inputs = np.vstack(_data[d][0])
             outputs = np.vstack(_data[d][1])
             sim_data[d] = (inputs, outputs, threshold, uq_type)
@@ -349,14 +350,16 @@ def from_json(argv):
             ml_id = data["domain_models"][m]
             model = data["ml_models"][ml_id]
             uq_type = model["uq_type"]
+            store_data = model.get("store", True)
             if "uq_aggregate" in model:
                 uq_type += " ({0})".format(model["uq_aggregate"])
 
             threshold = model["threshold"]
-            db_label = model["db_label"]
             model_path = model.get("model_path", None)
 
-            (_in, _out), thresh, has_error = get_fs_data(db_type, db_path, model_path, threshold, model["db_label"])
+            (_in, _out), thresh, has_error = get_fs_data(
+                db_type, db_path, model_path, threshold, m if store_data else ""
+            )
 
             if has_error:
                 return 1

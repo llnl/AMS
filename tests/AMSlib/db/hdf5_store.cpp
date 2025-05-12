@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -84,14 +85,6 @@ int testReadHDF5Dataset(const std::string& filePath,
   std::cout << "Read: " << std::string(data.begin(), data.end());
   return (data == correct_contents) ? 0 : -1;
 }
-
-
-#include <hdf5.h>
-#include <torch/torch.h>
-
-#include <iostream>
-#include <stdexcept>
-#include <vector>
 
 // Function to read a dataset and compare it with the expected tensor
 bool verifyDatasetContents(const std::string& fileName,
@@ -182,21 +175,19 @@ bool verifyDatasetContents(const std::string& fileName,
 
 int main(int argc, char* argv[])
 {
-  if (argc != 4) {
+  if (argc != 3) {
     std::cerr << "Wrong command line, correct one should be:\n";
-    std::cerr << argv[0]
-              << " <path-to-directory> <domain-name> <filename> <rid>";
+    std::cerr << argv[0] << " <path-to-directory> <domain-name> <rid>";
   }
   std::string directory(argv[1]);
   std::string domain_name(argv[2]);
-  std::string file_prefix(argv[3]);
   std::string filename;
 
   std::vector<torch::Tensor> inputTensors, outputTensors;
   for (int i = 0; i < 2; i++) {
     {
       // Scope it to automatically close C++ deconstructor and close file
-      auto db = ams::db::hdf5DB(directory, domain_name, file_prefix, 0);
+      auto db = ams::db::hdf5DB(directory, domain_name, 0);
       torch::Tensor IData =
           torch::rand({21, 4}, torch::TensorOptions().dtype(torch::kFloat));
       torch::Tensor OData =

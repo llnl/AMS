@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
                   std::string("domain_2"),
                   std::string("domain_1"),
                   std::string("domain_2")}) {
-    auto file_db = db_instance.getDB(dn, dn);
+    auto file_db = db_instance.getDB(dn);
   }
 
   if (db_instance.getNumInstances() != 2) {

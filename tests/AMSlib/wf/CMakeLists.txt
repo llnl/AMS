@@ -1,6 +1,6 @@
 function(ADD_WORKFLOW_UNIT_TEST name exec)
   string(JOIN " " args ${ARGN})
-  add_test(NAME ${name} COMMAND bash -c "rm -f ${CMAKE_CURRENT_BINARY_DIR}/db_label*.h5; ${CMAKE_CURRENT_BINARY_DIR}/${exec} ${args}")
+  add_test(NAME ${name} COMMAND bash -c "rm -f ${CMAKE_CURRENT_BINARY_DIR}/*.h5; ${CMAKE_CURRENT_BINARY_DIR}/${exec} ${args}")
   set_tests_properties(${name} PROPERTIES LABELS WORKFLOW_UNIT_TEST)
 endfunction()
 
