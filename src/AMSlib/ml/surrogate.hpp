@@ -191,8 +191,14 @@ public:
   //  }
 
   //  AMSResourceType getModelResource() const { return model_device; }
-  std::tuple<ams::AMSResourceType, torch::DeviceType> getModelResourceType();
-  std::tuple<ams::AMSDType, torch::Dtype> getModelDataType();
+  std::tuple<ams::AMSResourceType, torch::DeviceType> convertModelResourceType(
+      std::string& device);
+  std::tuple<ams::AMSDType, torch::Dtype> convertModelDataType(
+      std::string& type);
+
+  std::tuple<ams::AMSResourceType, torch::DeviceType> getModelResourceType()
+      const;
+  std::tuple<ams::AMSDType, torch::Dtype> getModelDataType() const;
 };
 
 #endif

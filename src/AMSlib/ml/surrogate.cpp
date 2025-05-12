@@ -65,104 +65,76 @@ SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
   } catch (const c10::Error& e) {
     printf("Error opening %s\n", model_path.c_str());
   }
-  std::tie(model_device, torch_device) = getModelResourceType();
-  std::tie(model_dtype, torch_dtype) = getModelDataType();
+
+  auto method_ptr = module.find_method("get_ams_info");
+  if (!method_ptr) {
+    FATAL(Surrogate,
+          "The Surrogate %s is not a valid AMSModel",
+          model_path.c_str());
+  }
+
+  torch::IValue meta_ivalue = module.run_method("get_ams_info");
+  auto meta_dict = meta_ivalue.toGenericDict();
+
+  for (const auto& item : meta_dict) {
+    std::string key = item.key().toStringRef();
+    std::string value = item.value().toStringRef();
+    if (key == "ams_type") {
+      std::tie(model_dtype, torch_dtype) = convertModelDataType(value);
+    } else if (key == "ams_device") {
+      std::tie(model_device, torch_device) = convertModelResourceType(value);
+    }
+    std::cout << "  " << key << " : " << value << "\n";
+  }
+
   DBG(SurrogateModel,
       "Loaded model with type %s on device %s",
       getAMSDTypeAsString(model_dtype).c_str(),
       getAMSResourceTypeAsString(model_device).c_str());
 }
 
-std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
-    getModelResourceType()
+
+std::tuple<ams::AMSDType, torch::Dtype> SurrogateModel::getModelDataType() const
 {
-  // Iterate through the parameters to determine the device
-  for (const auto& parameter : module.parameters()) {
-    // Return the device of the first parameter found
-    switch (parameter.device().type()) {
-      case c10::DeviceType::CUDA:
-      case c10::DeviceType::HIP:
-        return std::make_tuple(AMS_DEVICE, parameter.device().type());
-      case c10::DeviceType::CPU:
-        return std::make_tuple(AMS_HOST, parameter.device().type());
-      default:
-        continue;
-    }
-  }
+  return std::make_tuple(model_dtype, torch_dtype);
+}
 
-  // If no parameters are found, check the buffers
-  for (const auto& buffer : module.buffers()) {
-    switch (buffer.device().type()) {
-      case c10::DeviceType::CUDA:
-      case c10::DeviceType::HIP:
-        return std::make_tuple(AMS_DEVICE, buffer.device().type());
-      case c10::DeviceType::CPU:
-        return std::make_tuple(AMS_HOST, buffer.device().type());
-      default:
-        continue;
-    }
-  }
+std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
+    getModelResourceType() const
+{
+  return std::make_tuple(model_device, torch_device);
+}
 
+std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
+    convertModelResourceType(std::string& value)
+{
+
+  if (value == "cpu") {
+    return std::make_tuple(AMS_HOST, c10::DeviceType::CPU);
+  } else if (value == "cuda") {
+    return std::make_tuple(AMS_DEVICE, c10::DeviceType::CUDA);
+  } else if (value == "hip") {
+    return std::make_tuple(AMS_DEVICE, c10::DeviceType::CUDA);
+  }
   // If no parameters or buffers are found, default to unknown
-  FATAL(Surrogate,
-        "Cannot determine device type of model %s",
-        _model_path.c_str());
+  FATAL(Surrogate, "Cannot determine device type of model %s", value.c_str());
   return std::make_tuple(AMS_UNKNOWN,
                          c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES);
 }
 
-std::tuple<AMSDType, torch::Dtype> SurrogateModel::getModelDataType()
+std::tuple<AMSDType, torch::Dtype> SurrogateModel::convertModelDataType(
+    std::string& type)
 {
   AMSDType dParamType = AMSDType::AMS_DOUBLE;
   torch::Dtype torchType = at::kDouble;
-  for (const auto& parameter : module.parameters()) {
-    // Return the device of the first parameter found
-    if (parameter.dtype() == at::kFloat) {
-      dParamType = AMS_SINGLE;
-      torchType = at::kFloat;
-    } else if (parameter.dtype() == at::kDouble) {
-      dParamType = AMS_DOUBLE;
-      torchType = at::kDouble;
-    } else {
-      throw std::runtime_error(std::string("Invalid datatype ") +
-                               std::string(parameter.dtype().name()));
-    }
+  if (type == "float32") {
+    return std::make_tuple(AMSDType::AMS_SINGLE, at ::kFloat);
+  } else if (type == "float64") {
+    return std::make_tuple(AMSDType::AMS_DOUBLE, at ::kDouble);
   }
 
-  // Verify
-  for (const auto& parameter : module.parameters()) {
-    if (parameter.dtype() != torchType)
-      throw std::runtime_error("Provided model has mixed data types");
-  }
+  FATAL(Surrogate, "unknown data type of model %s", type.c_str());
 
-  AMSDType dBufferType = dParamType;
-  for (const auto& buffer : module.buffers()) {
-    // Return the device of the first parameter found
-    if (buffer.dtype() == at::kFloat) {
-      dBufferType = AMS_SINGLE;
-      torchType = at::kFloat;
-    } else if (buffer.dtype() == at::kDouble) {
-      dBufferType = AMS_DOUBLE;
-      torchType = at::kDouble;
-    } else {
-      throw std::runtime_error(std::string("Invalid datatype ") +
-                               std::string(buffer.dtype().name()));
-    }
-  }
-  // Verify
-  for (const auto& buffer : module.buffers()) {
-    if (buffer.dtype() != torchType)
-      throw std::runtime_error("Provided model has mixed data types");
-  }
-
-  if (dParamType != dBufferType)
-    throw std::runtime_error(
-        "Provided model has mixed data types between parameters and buffers");
-
-  DBG(Surrogate,
-      "Detected model data type %s %s",
-      getDTypeAsString(torchType).c_str(),
-      getAMSDTypeAsString(dParamType).c_str());
   return std::make_tuple(dParamType, torchType);
 }
 
