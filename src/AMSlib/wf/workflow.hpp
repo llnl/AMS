@@ -320,8 +320,7 @@ public:
       CALIPER(CALI_MARK_BEGIN("PHYSICS MODULE");)
       callApplication(CallBack, Ins, InOuts, Outs);
       CALIPER(CALI_MARK_END("PHYSICS MODULE");)
-
-      storeComputedData(Ins, PhysicInOutsBefore, Outs, InOuts);
+      if (DB) storeComputedData(Ins, PhysicInOutsBefore, Outs, InOuts);
       CALIPER(CALI_MARK_END("AMSEvaluate");)
       return;
     }
