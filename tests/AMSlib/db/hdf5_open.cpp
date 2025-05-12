@@ -87,18 +87,16 @@ int testReadHDF5Dataset(const std::string& filePath,
 
 int main(int argc, char* argv[])
 {
-  if (argc != 4) {
+  if (argc != 3) {
     std::cerr << "Wrong command line, correct one should be:\n";
-    std::cerr << argv[0]
-              << " <path-to-directory> <domain-name> <filename> <rid>";
+    std::cerr << argv[0] << " <path-to-directory> <domain-name> <rid>";
   }
   std::string directory(argv[1]);
   std::string domain_name(argv[2]);
-  std::string file_prefix(argv[3]);
   std::string filename;
   {
     // Open non existing file
-    auto db = ams::db::hdf5DB(directory, domain_name, file_prefix, 0);
+    auto db = ams::db::hdf5DB(directory, domain_name, 0);
     filename = db.getFilename();
   }
 
@@ -111,7 +109,7 @@ int main(int argc, char* argv[])
 
   // Open existing file
   {
-    auto db = ams::db::hdf5DB(directory, domain_name, file_prefix, 0);
+    auto db = ams::db::hdf5DB(directory, domain_name, 0);
     filename = db.getFilename();
   }
   if (!std::filesystem::exists(filename)) {

@@ -276,14 +276,11 @@ public:
   /**
    * @brief constructs the class and opens the hdf5 file to write to
    * @param[in] path path to directory to open/create the file 
-   * @param[in] fn Name of the file to store the data to
+   * @param[in] domain_name The 'string' handler of the domain we will store data to.
    * @param[in] rId a unique Id for each process taking part in a distributed
    * execution (rank-id)
    */
-  hdf5DB(std::string path,
-         std::string domain_name,
-         std::string fn,
-         uint64_t rId);
+  hdf5DB(std::string path, std::string domain_name, uint64_t rId);
 
   /**
    * @brief deconstructs the class and closes the file
@@ -1765,14 +1762,11 @@ public:
   * This should never be used for large scale simulations as txt/csv format will
   * be extremely slow.
   * @param[in] domainName name of the domain model to store data for
-  * @param[in] dbLabel filename to store data to (used only for hdf5)
   * @param[in] dbType Type of the database to create
   * @param[in] rId a unique Id for each process taking part in a distributed
-  * @param[in] isDebug Whether this db will store both ml and physics predictions with the associated predicate
   * execution (rank-id)
   */
   std::shared_ptr<BaseDB> createDB(std::string& domainName,
-                                   std::string& dbLabel,
                                    AMSDBType dbType,
                                    uint64_t rId = 0)
   {
@@ -1789,10 +1783,7 @@ public:
     switch (dbType) {
 #ifdef __AMS_ENABLE_HDF5__
       case AMSDBType::AMS_HDF5:
-        return std::make_shared<hdf5DB>(fs_interface.path(),
-                                        domainName,
-                                        dbLabel,
-                                        rId);
+        return std::make_shared<hdf5DB>(fs_interface.path(), domainName, rId);
 #endif
 #ifdef __AMS_ENABLE_RMQ__
       case AMSDBType::AMS_RMQ:
@@ -1811,32 +1802,25 @@ public:
   * @brief get a data base object referred by this string.
   * This should never be used for large scale simulations as txt/csv format will
   * be extremely slow.
-  * @param[in] domainName name of the domain model to store data for
-  * @param[in] dbLabel filename to store data to 
+  * @param[in] domainName name of the domain model to store data for. 
   * @param[in] rId a unique Id for each process taking part in a distributed
   * execution (rank-id)
   */
-  std::shared_ptr<BaseDB> getDB(std::string& domainName,
-                                std::string& dbLabel,
-                                uint64_t rId = 0)
+  std::shared_ptr<BaseDB> getDB(std::string& domainName, uint64_t rId = 0)
   {
     DBG(DBManager,
-        "Requested DB for domain: '%s' Under Name: '%s' DB Configured to "
+        "Requested DB for domain: '%s' DB Configured to "
         "operate with '%s'",
         domainName.c_str(),
-        dbLabel.c_str(),
         getDBTypeAsStr(dbType).c_str())
 
     if (dbType == AMSDBType::AMS_NONE) return nullptr;
 
-    if (dbLabel.empty()) return nullptr;
-
     std::string key = domainName;
-    if (dbType == AMSDBType::AMS_HDF5) key = dbLabel;
 
     auto db_iter = db_instances.find(std::string(key));
     if (db_iter == db_instances.end()) {
-      auto db = createDB(domainName, dbLabel, dbType, rId);
+      auto db = createDB(domainName, dbType, rId);
       db_instances.insert(std::make_pair(std::string(domainName), db));
       DBG(DBManager,
           "Creating new Database writting to file: %s",

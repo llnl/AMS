@@ -349,14 +349,16 @@ def from_json(argv):
             ml_id = data["domain_models"][m]
             model = data["ml_models"][ml_id]
             uq_type = model["uq_type"]
+            store_data = model.get("store", True)
             if "uq_aggregate" in model:
                 uq_type += " ({0})".format(model["uq_aggregate"])
 
             threshold = model["threshold"]
-            db_label = model["db_label"]
             model_path = model.get("model_path", None)
 
-            (_in, _out), thresh, has_error = get_fs_data(db_type, db_path, model_path, threshold, model["db_label"])
+            (_in, _out), thresh, has_error = get_fs_data(
+                db_type, db_path, model_path, threshold, m if store_data else ""
+            )
 
             if has_error:
                 return 1
