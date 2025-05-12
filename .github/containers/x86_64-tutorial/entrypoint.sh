@@ -15,10 +15,20 @@ while ! mysqladmin ping -uroot --silent; do
 done
 echo "MariaDB is up!"
 
+: "${MYSQL_ROOT_PASSWORD:=root}"     # default, if not passed-in
+mysql -uroot <<-EOSQL
+  ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
+  FLUSH PRIVILEGES;
+EOSQL
+echo "Root password set to '${MYSQL_ROOT_PASSWORD}'"
+
 # 4) start RabbitMQ in detached mode
 rabbitmq-server -detached
 
-# 5) drop into a shell (or run passed-in command)
+# 5) Load the python venv
+source /app/venv/bin/activate
+
+# 6) drop into a shell (or run passed-in command)
 if [ $# -gt 0 ]; then
   exec "$@"
 else
