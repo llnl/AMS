@@ -311,9 +311,10 @@ def get_rmq_data(ams_config, domain_names, num_iterations, timeout=1):
             threshold = 0.0
 
         print("Type for domain", d, type(_data[d]), len(_data[d]))
-        if model["db_label"] == "" and len(_data[d][0]) != 0:
+        store_data = model.get("store", True)
+        if store_data == False and len(_data[d][0]) != 0:
             raise RuntimeError("Expected data to not exist")
-        elif model["db_label"] != "":
+        elif store_data:
             inputs = np.vstack(_data[d][0])
             outputs = np.vstack(_data[d][1])
             sim_data[d] = (inputs, outputs, threshold, uq_type)
