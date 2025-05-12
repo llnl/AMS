@@ -121,7 +121,7 @@ struct Problem {
             resource));
       }
 
-      EOSLambda OrigComputation = [&](const ams::SmallVector<ams::AMSTensor>
+      DomainLambda OrigComputation = [&](const ams::SmallVector<ams::AMSTensor>
                                           &ams_ins,
                                       ams::SmallVector<ams::AMSTensor>
                                           &ams_inouts,

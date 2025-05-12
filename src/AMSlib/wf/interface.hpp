@@ -9,14 +9,14 @@ namespace ams
 class AMSWorkflow;
 }
 
-void callApplication(ams::EOSLambda CallBack,
+void callApplication(ams::DomainLambda CallBack,
                      ams::MutableArrayRef<torch::Tensor> Ins,
                      ams::MutableArrayRef<torch::Tensor> InOuts,
                      ams::MutableArrayRef<torch::Tensor> Outs);
 
 
 void callAMS(ams::AMSWorkflow *executor,
-             ams::EOSLambda Physics,
+             ams::DomainLambda Physics,
              const ams::SmallVector<ams::AMSTensor> &ins,
              ams::SmallVector<ams::AMSTensor> &inouts,
              ams::SmallVector<ams::AMSTensor> &outs);

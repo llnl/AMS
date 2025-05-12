@@ -64,11 +64,19 @@ AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
   if constexpr ((std::is_same_v<FPType, float>) ||
                 (std::is_same_v<FPType, const float>)) {
     float* _data = rm.allocate<float>(numElements, location, sizeof(float));
-    return AMSTensor((uint8_t*)_data, shapes, strides, AMS_SINGLE, location);
+    return AMSTensor(reinterpret_cast<uint8_t*>(_data),
+                     shapes,
+                     strides,
+                     AMS_SINGLE,
+                     location);
   } else if constexpr ((std::is_same_v<FPType, double>) ||
                        (std::is_same_v<FPType, const double>)) {
     double* _data = rm.allocate<double>(numElements, location, sizeof(double));
-    return AMSTensor((uint8_t*)_data, shapes, strides, AMS_DOUBLE, location);
+    return AMSTensor(reinterpret_cast<uint8_t*>(_data),
+                     shapes,
+                     strides,
+                     AMS_DOUBLE,
+                     location);
   } else {
     // This should never happen due to the type restriction
     static_assert(std::is_same_v<FPType, float> ||
@@ -185,7 +193,8 @@ AMSTensor AMSTensor::transpose(AMSTensor::IntDimType axis1,
     return view((double*)_data, newShape, newStrides, _location);
   else if (dType() == AMSDType::AMS_SINGLE)
     return view((float*)_data, newShape, newStrides, _location);
-
+  // NOTE: Use defensive programming here and just crash. We can fix a better interface later
+  // for error handling.
   throw std::runtime_error("Unknow data type in transpose\n");
 }
 

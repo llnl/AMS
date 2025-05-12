@@ -80,7 +80,7 @@ void eval_ams(AMSExecutor &wf,
                       AMSResourceType::AMS_HOST));
 
 
-  EOSLambda OrigComputation = [&](const ams::SmallVector<ams::AMSTensor>
+  DomainLambda OrigComputation = [&](const ams::SmallVector<ams::AMSTensor>
                                       &ams_ins,
                                   ams::SmallVector<ams::AMSTensor> &ams_inouts,
                                   ams::SmallVector<ams::AMSTensor> &ams_outs) {
