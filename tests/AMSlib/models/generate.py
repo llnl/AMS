@@ -3,7 +3,7 @@ import sys
 import torch.nn as nn
 import argparse
 from torch import Tensor
-from typing import Tuple
+from typing import Tuple, Dict
 
 
 # Ugly code that expands the fake_uq to the shape we need as an output
@@ -59,6 +59,47 @@ class SimpleModel(nn.Module):
         return self.fc(x)
 
 
+class AMSModel(nn.Module):
+    ams_info: Dict[str, str]
+
+    def __init__(self, model, meta: Dict[str, str]):
+        super(AMSModel, self).__init__()
+        self._model = model
+        self.ams_info = meta
+
+    @torch.jit.export
+    def get_ams_info(self) -> Dict[str, str]:
+        return self.ams_info
+
+    def forward(self, x):
+        return self._model(x)
+
+
+def create_ams_model(model, trace_input, device, precision):
+    if not isinstance(device, torch.device):
+        raise RuntimeError(f"Expected a model to be of type torch.device instead got {type(device)}")
+
+    if not isinstance(precision, torch.dtype):
+        raise RuntimeError(f"Expected a model precision of type torch.dtype instead got {type(precision)}")
+
+    ams_device = device.type
+
+    if precision == torch.float32:
+        ams_dtype = "float32"
+    elif precision == torch.float64:
+        ams_dtype = "float64"
+    else:
+        raise RuntimeError(f"AMS library does not support type of {dtype}")
+
+    model = model.to(device, dtype=precision)
+    inp = trace_input.to(device, dtype=precision)
+    ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
+
+    # Trace the model
+    scripted_model = torch.jit.trace(ams_model, inp)
+    return scripted_model
+
+
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Generate and save a scripted model.")
@@ -91,10 +132,8 @@ def main():
 
     # Set the precision based on command-line argument
     if args.precision == "single":
-        model = model.float()  # Set to single precision (float32)
         prec = torch.float32
     elif args.precision == "double":
-        model = model.double()  # Set to double precision (float64)
         prec = torch.float64
 
     # Set the device based on command-line argument
@@ -103,14 +142,11 @@ def main():
     else:
         device = torch.device("cpu")
 
-    # Move model to the appropriate device
-    model.to(device)
-
     # Create example input tensor
-    example_input = torch.randn(2, 8, device=device, dtype=prec)
+    example_input = torch.randn(2, 8)
+    scripted_model = create_ams_model(model, example_input, device, prec)
 
-    # Trace the model
-    scripted_model = torch.jit.trace(model, example_input)
+    # Move model to the appropriate device
 
     # Generate the file name
     file_name = f"{args.precision}_{args.device}_{args.uq}.pt"
