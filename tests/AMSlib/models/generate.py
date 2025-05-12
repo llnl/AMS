@@ -91,12 +91,13 @@ def create_ams_model(model, trace_input, device, precision):
     else:
         raise RuntimeError(f"AMS library does not support type of {dtype}")
 
-    model = model.to(device, dtype=precision)
-    inp = trace_input.to(device, dtype=precision)
-    ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
+    with torch.jit.optimized_execution(True):
+        model = model.to(device, dtype=precision)
+        inp = trace_input.to(device, dtype=precision)
+        ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
 
-    # Trace the model
-    scripted_model = torch.jit.trace(ams_model, inp)
+        # Trace the model
+        scripted_model = torch.jit.trace(ams_model, inp)
     return scripted_model
 
 
