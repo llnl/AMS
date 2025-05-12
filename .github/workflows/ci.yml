@@ -289,7 +289,7 @@ jobs:
                 \"rabbitmq-exchange-training\": \"ams-fanout\",
                 \"rabbitmq-key-training\": \"training\"
               }""" > rmq.json
-          jq < rm.json
+          jq < rmq.json
           export AMS_RMQ_CONFIG=$(cat ./rmq.json)
           cmake \
             -DBUILD_SHARED_LIBS=On \

@@ -15,8 +15,9 @@ static AMSResourceType torchDeviceToAMSDevice(c10::DeviceType dType)
 {
   switch (dType) {
     case c10::DeviceType::CUDA:
-    case c10::DeviceType::HIP:
       return AMSResourceType::AMS_DEVICE;
+    case c10::DeviceType::HIP:
+      return AMSResourceType::AMS_UNKNOWN;
     case c10::DeviceType::CPU:
       return AMSResourceType::AMS_HOST;
     default:
@@ -114,7 +115,7 @@ static ams::SmallVector<torch::Tensor> amsToTorchTensors(
   return std::move(ams_tensors);
 }
 
-void callApplication(ams::EOSLambda CallBack,
+void callApplication(ams::DomainLambda CallBack,
                      ams::MutableArrayRef<torch::Tensor> Ins,
                      ams::MutableArrayRef<torch::Tensor> InOuts,
                      ams::MutableArrayRef<torch::Tensor> Outs)
@@ -127,7 +128,7 @@ void callApplication(ams::EOSLambda CallBack,
 }
 
 void callAMS(ams::AMSWorkflow *executor,
-             EOSLambda Physics,
+             DomainLambda Physics,
              const ams::SmallVector<ams::AMSTensor> &ins,
              ams::SmallVector<ams::AMSTensor> &inouts,
              ams::SmallVector<ams::AMSTensor> &outs)

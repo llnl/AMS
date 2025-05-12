@@ -9,7 +9,6 @@
 #define __AMS_BASE_DB__
 
 #include <ATen/core/TensorBody.h>
-#include <H5Ipublic.h>
 #include <torch/torch.h>
 
 #include <cstdint>
@@ -444,12 +443,9 @@ private:
 
   static void serializeTensor(const torch::Tensor& tensor, uint8_t*& blob)
   {
-    auto start = blob;
     serializeTensorHeader(tensor, blob);
-    auto afterHeader = blob;
     std::memcpy(blob, tensor.data_ptr(), tensor.nbytes());
     blob += tensor.nbytes();
-    auto afterData = blob;
   }
 
 public:

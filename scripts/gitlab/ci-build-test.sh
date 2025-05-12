@@ -25,7 +25,7 @@ build_and_test() {
   echo "Build configuration" \
     "WITH_HDF5 ${WITH_HDF5}" \
     "WITH_MPI ${WITH_MPI}" \
-    "WITH_MPI ${WITH_WORKFLOW}" \
+    "WITH_WORKFLOW ${WITH_WORKFLOW}" \
     "WITH_CUDA ${WITH_CUDA}"
   echo "*******************************************************************************************"
 

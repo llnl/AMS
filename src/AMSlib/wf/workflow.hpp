@@ -261,7 +261,7 @@ public:
      * This transformation can exploit the parallel nature of all the required
      * steps.
      */
-  void evaluate(EOSLambda CallBack,
+  void evaluate(DomainLambda CallBack,
                 ams::MutableArrayRef<torch::Tensor> Ins,
                 ams::MutableArrayRef<torch::Tensor> InOuts,
                 ams::MutableArrayRef<torch::Tensor> Outs)

@@ -14,7 +14,7 @@
 namespace ams
 {
 
-using EOSLambda =
+using DomainLambda =
     std::function<void(const ams::SmallVector<ams::AMSTensor> & /*inputs */,
                        ams::SmallVector<ams::AMSTensor> & /*input - outputs */,
                        ams::SmallVector<ams::AMSTensor> & /* outputs */)>;
@@ -45,7 +45,7 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
 AMSCAbstrModel AMSQueryModel(const char *domain_model);
 
 void AMSExecute(AMSExecutor executor,
-                EOSLambda &OrigComputation,
+                DomainLambda &OrigComputation,
                 const ams::SmallVector<ams::AMSTensor> &ins,
                 ams::SmallVector<ams::AMSTensor> &inouts,
                 ams::SmallVector<ams::AMSTensor> &outs);

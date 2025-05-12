@@ -57,7 +57,7 @@ void AMSEOS<FPType>::Eval(const int length,
   outputs.push_back(
       std::move(AMSTensor::view(temperature, {length, 1}, {1, 1}, res_)));
 
-  EOSLambda OrigComputation = [&, this](const SmallVector<AMSTensor> &ams_ins,
+  DomainLambda OrigComputation = [&, this](const SmallVector<AMSTensor> &ams_ins,
                                         SmallVector<AMSTensor> &ams_inouts,
                                         SmallVector<AMSTensor> &ams_outs) {
     std::cout << "Shape is " << ams_ins[0].shape()[0] << ", "

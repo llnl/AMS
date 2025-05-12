@@ -232,7 +232,7 @@ void BinomialOptions::run(real *callValue,
 
   outputs.push_back(std::move(AMSTensor::view(d_CallValue, {static_cast<long>(optN), 1}, {1, 1}, AMSResourceType::AMS_DEVICE)));
 
-  EOSLambda OrigComputation = [&, this](const SmallVector<AMSTensor> &ams_ins,
+  DomainLambda OrigComputation = [&, this](const SmallVector<AMSTensor> &ams_ins,
                                         SmallVector<AMSTensor> &ams_inouts,
                                         SmallVector<AMSTensor> &ams_outs) {
   binomialOptionsGPU(ams_outs[0].data<real>(),

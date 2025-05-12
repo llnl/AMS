@@ -506,7 +506,7 @@ AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
 
 
 void AMSExecute(AMSExecutor executor,
-                EOSLambda &OrigComputation,
+                DomainLambda &OrigComputation,
                 const ams::SmallVector<ams::AMSTensor> &ins,
                 ams::SmallVector<ams::AMSTensor> &inouts,
                 ams::SmallVector<ams::AMSTensor> &outs)
@@ -535,7 +535,7 @@ void AMSCExecute(AMSExecutor executor,
 {
 
   // Define the lambda and let the compiler deduce the type conversion to std::function
-  EOSLambda OrigComputation =
+  DomainLambda OrigComputation =
       [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
           ams::SmallVector<ams::AMSTensor> &ams_inouts,
           ams::SmallVector<ams::AMSTensor> &ams_outs) {

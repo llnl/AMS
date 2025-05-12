@@ -1,4 +1,3 @@
-
 #include <c10/core/ScalarTypeToTypeMeta.h>
 #include <torch/script.h>
 
@@ -84,7 +83,6 @@ SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
     } else if (key == "ams_device") {
       std::tie(model_device, torch_device) = convertModelResourceType(value);
     }
-    std::cout << "  " << key << " : " << value << "\n";
   }
 
   DBG(SurrogateModel,
@@ -255,52 +253,3 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
 
 std::unordered_map<std::string, std::shared_ptr<SurrogateModel>>
     SurrogateModel::instances;
-
-#if 0
-//#include <wf/resource_manager.hpp>
-
-//#include <c10/core/Allocator.h>
-//#include <c10/core/CPUAllocator.h>
-//#include <c10/core/DeviceType.h>
-//#include <c10/core/ScalarType.h>
-//#include <torch/script.h>  // One-stop header.
-// #include <wf/debug.h>
-
-
-//struct C10_API AMSCPUAllocator final : at::Allocator {
-//  AMSCPUAllocator() = default;
-//  at::DataPtr allocate(size_t nbytes) const override
-//  {
-//    auto& rm = ams::ResourceManager::getInstance();
-//    uint8_t* data = rm.allocate<uint8_t>(nbytes, AMSResourceType::AMS_HOST);
-//
-//    return {(void*)data,
-//            (void*)data,
-//            &ReportAndDelete,
-//            at::Device(at::DeviceType::CPU)};
-//  }
-//
-//  static void ReportAndDelete(void* ptr)
-//  {
-//    if (!ptr) {
-//      return;
-//    }
-//    auto& rm = ams::ResourceManager::getInstance();
-//    rm.deallocate(ptr, AMSResourceType::AMS_HOST);
-//  }
-//
-//  at::DeleterFnPtr raw_deleter() const override { return &ReportAndDelete; }
-//};
-//
-//
-//AMSCPUAllocator ams_torch;
-//
-//
-//void set_cpu_torch_allocator()
-//{
-//  SetAllocator(c10::DeviceType::CPU, &ams_torch, (uint8_t)(2 ^ 8 - 1));
-//  SetCPUAllocator(&ams_torch, (uint8_t)(2 ^ 8 - 1));
-//}
-//
-//
-#endif

@@ -169,28 +169,8 @@ public:
     return model_dtype == dType;
   }
 
-
-  //
   bool is_DeltaUQ() { return _is_DeltaUQ; }
-  //
-  //  void update(const std::string& new_path)
-  //  {
-  //    /* This function updates the underlying torch model,
-  //     * with a new one pointed at location modelPath. The previous
-  //     * one is destructed automatically.
-  //     *
-  //     * TODO: I decided to not update the model path on the ``instances''
-  //     * map. As we currently expect this change will be agnostic to the application
-  //     * user. But, in any case we should keep track of which model has been used at which
-  //     * invocation. This is currently not done.
-  //     */
-  //    //if (model_device != AMSResourceType::AMS_DEVICE)
-  //    //  _load<TypeInValue>(new_path, "cpu");
-  //    //else
-  //    //  _load<TypeInValue>(new_path, "cuda");
-  //  }
 
-  //  AMSResourceType getModelResource() const { return model_device; }
   std::tuple<ams::AMSResourceType, torch::DeviceType> convertModelResourceType(
       std::string& device);
   std::tuple<ams::AMSDType, torch::Dtype> convertModelDataType(

@@ -93,7 +93,7 @@ struct Problem {
             resource));
       }
 
-      EOSLambda OrigComputation =
+      DomainLambda OrigComputation =
           [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
               ams::SmallVector<ams::AMSTensor> &ams_inouts,
               ams::SmallVector<ams::AMSTensor> &ams_outs) {
@@ -192,7 +192,8 @@ int main(int argc, char **argv)
   args.AddOption(&sleep_msec,
                  "-ms",
                  "--msleep",
-                 "Sleep for x milliseconds for each iteration");
+                 "Sleep for x milliseconds for each iteration (default: 0)",
+                 false);
 
   // data parameters
   args.AddOption(&num_elems,
@@ -205,7 +206,7 @@ int main(int argc, char **argv)
   args.AddOption(&num_iterations, "-i", "--num-iter", "Number of iterations");
 
   // random speed and packing
-  args.AddOption(&seed, "-s", "--seed", "Seed for rand (default 0)");
+  args.AddOption(&seed, "-s", "--seed", "Seed for rand (default 0)", false);
 
   args.AddOption(&db_type,
                  "-dt",
@@ -214,7 +215,8 @@ int main(int argc, char **argv)
                  "\t 'hdf5': use HDF5 as a back end\n"
                  "\t 'rmq': use RabbitMQ as a back end\n");
 
-  args.AddOption(&verbose, "-v", "--verbose", "Enable more verbose benchmark");
+  args.AddOption(
+      &verbose, "-v", "--verbose", "Enable more verbose benchmark", false);
 
   // -------------------------------------------------------------------------
   // parse arguments
@@ -251,7 +253,7 @@ int main(int argc, char **argv)
   // AMS allocators setup
   // -------------------------------------------------------------------------
   AMSResourceType resource = AMSResourceType::AMS_HOST;
-  const bool use_device = device_name == "cpu";
+  const bool use_device = device_name == "cuda";
   if (use_device) {
 #ifdef __AMS_ENABLE_CUDA__
     resource = AMSResourceType::AMS_DEVICE;
