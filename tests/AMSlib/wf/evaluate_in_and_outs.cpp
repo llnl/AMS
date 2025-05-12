@@ -273,16 +273,13 @@ int main(int argc, char* argv[])
 
   if (device.compare("cuda") == 0) dev = c10::DeviceType::CUDA;
   std::string domain_name("test");
-  std::string db_label("db_label");
-
 
   auto tOptions = torch::TensorOptions().dtype(DType).device(dev);
   std::string filename;
 
   {
-    ams::AMSWorkflow wf = ams::AMSWorkflow(
-        model_path, domain_name, db_label, threshold, duq, 0, 1);
-
+    ams::AMSWorkflow wf =
+        ams::AMSWorkflow(model_path, domain_name, threshold, duq, 0, 1);
 
     filename = wf.getDBFilename();
 

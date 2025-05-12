@@ -42,10 +42,9 @@ struct AMSAbstractModel {
 
 public:
   std::string SPath;
-  std::string DBLabel;
-  bool DebugDB;
   double threshold;
   AMSUQPolicy uqPolicy;
+  bool storeData;
 
   static AMSUQPolicy getUQType(std::string type)
   {
@@ -54,7 +53,7 @@ public:
     } else if (type.compare("random") == 0) {
       return AMSUQPolicy::AMS_RANDOM;
     } else {
-      THROW(std::runtime_error, "Unknown uq type " + type);
+      THROW(std::runtime_error, ("Unknown uq type " + type).c_str());
     }
     return AMSUQPolicy::AMS_UQ_END;
   }
@@ -68,24 +67,14 @@ public:
     return UQAggrType::Unknown;
   }
 
-  std::string parseDBLabel(nlohmann::json &value)
+  bool parseStoreData(nlohmann::json &value)
   {
-    if (!value.contains("db_label")) {
-      THROW(std::runtime_error, "ml model must contain <db_label> entry");
+    if (!value.contains("store")) {
+      return true;
     }
 
-    return value["db_label"].get<std::string>();
+    return value["store"].get<bool>();
   }
-
-  bool parseDebugDB(nlohmann::json &value)
-  {
-    if (!value.contains("debug_db")) {
-      return false;
-    }
-
-    return value["debug_db"].get<bool>();
-  }
-
 
   std::string parseSurrogatePaths(nlohmann::json &jRoot)
   {
@@ -162,26 +151,16 @@ public:
     }
     threshold = value["threshold"].get<float>();
     SPath = parseSurrogatePaths(value);
-    DBLabel = parseDBLabel(value);
-    DebugDB = parseDebugDB(value);
-
-    CFATAL(AMS,
-           DebugDB && (SPath.empty()),
-           "To store predicates in dabase, a surrogate model field is "
-           "mandatory");
+    storeData = parseStoreData(value);
   }
 
 
   AMSAbstractModel(AMSUQPolicy uq_policy,
                    const char *surrogate_path,
-                   const char *db_label,
-                   double threshold)
+                   double threshold,
+                   bool store_data = true)
   {
-    DebugDB = false;
-    if (db_label == nullptr)
-      FATAL(AMS, "registering model without a database identifier\n");
-
-    DBLabel = std::string(db_label);
+    storeData = store_data;
 
     if (!UQ::isUQPolicy(uq_policy)) {
       FATAL(AMS, "Invalid UQ policy %d", uq_policy)
@@ -203,10 +182,10 @@ public:
   {
     if (!SPath.empty()) DBG(AMS, "Surrogate Model Path: %s", SPath.c_str());
     DBG(AMS,
-        "db-Label: %s threshold %f UQ-Policy: %u",
-        DBLabel.c_str(),
+        "Threshold %f UQ-Policy: %u StoreData: %s",
         threshold,
-        uqPolicy);
+        uqPolicy,
+        storeData ? "true" : "false");
   }
 };
 
@@ -424,7 +403,7 @@ public:
                      AMSUQPolicy uq_policy,
                      double threshold,
                      const char *surrogate_path,
-                     const char *db_label)
+                     bool store_data = true)
   {
     auto model = ams_candidate_models.find(domain_name);
     if (model != ams_candidate_models.end()) {
@@ -436,7 +415,7 @@ public:
     }
     registered_models.push_back(std::make_pair(
         std::string(domain_name),
-        AMSAbstractModel(uq_policy, surrogate_path, db_label, threshold)));
+        AMSAbstractModel(uq_policy, surrogate_path, threshold, store_data)));
     ams_candidate_models.emplace(std::string(domain_name),
                                  registered_models.size() - 1);
     return registered_models.size() - 1;
@@ -481,11 +460,11 @@ ams::AMSWorkflow *_AMSCreateExecutor(AMSCAbstrModel model,
 
   ams::AMSWorkflow *WF = new ams::AMSWorkflow(model_descr.second.SPath,
                                               model_descr.first,
-                                              model_descr.second.DBLabel,
                                               model_descr.second.threshold,
                                               model_descr.second.uqPolicy,
                                               process_id,
-                                              world_size);
+                                              world_size,
+                                              model_descr.second.storeData);
   return WF;
 }
 
@@ -596,13 +575,13 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         AMSUQPolicy uq_policy,
                                         double threshold,
                                         const char *surrogate_path,
-                                        const char *db_label)
+                                        bool store_data)
 {
   CFATAL(AMS, !_amsWrap, "AMSInit has not been called.")
   auto id = _amsWrap->get_model_index(domain_name);
   if (id == -1) {
     id = _amsWrap->register_model(
-        domain_name, uq_policy, threshold, surrogate_path, db_label);
+        domain_name, uq_policy, threshold, surrogate_path, store_data);
   }
 
   return id;

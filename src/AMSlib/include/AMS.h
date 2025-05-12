@@ -40,7 +40,7 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         AMSUQPolicy uq_policy,
                                         double threshold,
                                         const char *surrogate_path,
-                                        const char *db_label);
+                                        bool store_data = true);
 
 AMSCAbstrModel AMSQueryModel(const char *domain_model);
 
