@@ -1,3 +1,5 @@
+#include "surrogate.hpp"
+
 #include <c10/core/ScalarTypeToTypeMeta.h>
 #include <torch/script.h>
 
@@ -8,7 +10,6 @@
 #include <tuple>
 
 #include "AMS.h"
-#include "surrogate.hpp"
 #include "wf/debug.h"
 #include "wf/utils.hpp"
 
@@ -84,6 +85,11 @@ SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
       std::tie(model_device, torch_device) = convertModelResourceType(value);
     }
   }
+
+  CFATAL(SurrogateModel,
+         model_dtype == ams::AMS_UNKNOWN_TYPE &&
+             model_device == ams::AMSResourceType::AMS_UNKNOWN,
+         "Model has unknown datatype or device");
 
   DBG(SurrogateModel,
       "Loaded model with type %s on device %s",
