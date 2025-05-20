@@ -14,7 +14,8 @@
 #include "wf/utils.hpp"
 
 using namespace ams;
-static std::string getDTypeAsString(torch::Dtype dtype)
+static std::string getDTypeAsString(
+    torch::Dtype dtype)
 {
   if (dtype == torch::kFloat32) return "float32";
   if (dtype == torch::kFloat64) return "float64";
@@ -28,7 +29,8 @@ static std::string getDTypeAsString(torch::Dtype dtype)
   return "unknown";
 }
 
-static std::string getAMSDTypeAsString(AMSDType dType)
+static std::string getAMSDTypeAsString(
+    AMSDType dType)
 {
   if (dType == AMS_SINGLE)
     return "float32";
@@ -37,7 +39,8 @@ static std::string getAMSDTypeAsString(AMSDType dType)
   return "unknown";
 }
 
-static std::string getAMSResourceTypeAsString(AMSResourceType res)
+static std::string getAMSResourceTypeAsString(
+    AMSResourceType res)
 {
   if (res == ams::AMS_DEVICE)
     return "device";
@@ -47,215 +50,293 @@ static std::string getAMSResourceTypeAsString(AMSResourceType res)
 }
 
 
-SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
-    : _model_path(model_path), _is_DeltaUQ(isDeltaUQ)
+SurrogateModel::SurrogateModel(
+    std::string& model_path,
+    bool isDeltaUQ)
+    : _model_path(model_path),
+      _is_DeltaUQ(isDeltaUQ)
 {
 
-  std::experimental::filesystem::path Path(model_path);
+  std::experimental::filesystem::path Path(
+      model_path);
   std::error_code ec;
 
-  if (!std::experimental::filesystem::exists(Path, ec)) {
+  if (!std::experimental::filesystem::exists(
+          Path, ec)) {
     FATAL(Surrogate,
-          "Path to Surrogate Model (%s) Does not exist",
+          "Path to Surrogate Model (%s) Does not "
+          "exist",
           model_path.c_str())
   }
 
   try {
     module = torch::jit::load(model_path);
   } catch (const c10::Error& e) {
-    printf("Error opening %s\n", model_path.c_str());
+    printf("Error opening %s\n",
+           model_path.c_str());
   }
 
-  auto method_ptr = module.find_method("get_ams_info");
+  auto method_ptr =
+      module.find_method("get_ams_info");
   if (!method_ptr) {
     FATAL(Surrogate,
-          "The Surrogate %s is not a valid AMSModel",
+          "The Surrogate %s is not a valid "
+          "AMSModel",
           model_path.c_str());
   }
 
-  torch::IValue meta_ivalue = module.run_method("get_ams_info");
+  torch::IValue meta_ivalue =
+      module.run_method("get_ams_info");
   auto meta_dict = meta_ivalue.toGenericDict();
 
   for (const auto& item : meta_dict) {
     std::string key = item.key().toStringRef();
-    std::string value = item.value().toStringRef();
+    std::string value =
+        item.value().toStringRef();
     if (key == "ams_type") {
-      std::tie(model_dtype, torch_dtype) = convertModelDataType(value);
+      std::tie(model_dtype, torch_dtype) =
+          convertModelDataType(value);
     } else if (key == "ams_device") {
-      std::tie(model_device, torch_device) = convertModelResourceType(value);
+      std::tie(model_device, torch_device) =
+          convertModelResourceType(value);
     }
   }
 
-  CFATAL(SurrogateModel,
-         model_dtype == ams::AMS_UNKNOWN_TYPE ||
-             model_device == ams::AMSResourceType::AMS_UNKNOWN,
-         "Model has unknown datatype or device");
+  CFATAL(
+      SurrogateModel,
+      model_dtype == ams::AMS_UNKNOWN_TYPE ||
+          model_device ==
+              ams::AMSResourceType::AMS_UNKNOWN,
+      "Model has unknown datatype or device");
 
   DBG(SurrogateModel,
       "Loaded model with type %s on device %s",
       getAMSDTypeAsString(model_dtype).c_str(),
-      getAMSResourceTypeAsString(model_device).c_str());
+      getAMSResourceTypeAsString(model_device)
+          .c_str());
 }
 
 
-std::tuple<ams::AMSDType, torch::Dtype> SurrogateModel::getModelDataType() const
+std::tuple<ams::AMSDType, torch::Dtype>
+SurrogateModel::getModelDataType() const
 {
-  return std::make_tuple(model_dtype, torch_dtype);
+  return std::make_tuple(model_dtype,
+                         torch_dtype);
 }
 
-std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
-    getModelResourceType() const
+std::tuple<AMSResourceType, torch::DeviceType>
+SurrogateModel::getModelResourceType() const
 {
-  return std::make_tuple(model_device, torch_device);
+  return std::make_tuple(model_device,
+                         torch_device);
 }
 
-std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
-    convertModelResourceType(std::string& value)
+std::tuple<AMSResourceType, torch::DeviceType>
+SurrogateModel::convertModelResourceType(
+    std::string& value)
 {
 
   if (value == "cpu") {
-    return std::make_tuple(AMS_HOST, c10::DeviceType::CPU);
+    return std::make_tuple(AMS_HOST,
+                           c10::DeviceType::CPU);
   } else if (value == "cuda") {
-    return std::make_tuple(AMS_DEVICE, c10::DeviceType::CUDA);
+    return std::make_tuple(AMS_DEVICE,
+                           c10::DeviceType::CUDA);
   } else if (value == "hip") {
-    return std::make_tuple(AMS_DEVICE, c10::DeviceType::CUDA);
+    return std::make_tuple(AMS_DEVICE,
+                           c10::DeviceType::CUDA);
   }
   // If no parameters or buffers are found, default to unknown
-  FATAL(Surrogate, "Cannot determine device type of model %s", value.c_str());
-  return std::make_tuple(AMS_UNKNOWN,
-                         c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES);
+  FATAL(Surrogate,
+        "Cannot determine device type of model "
+        "%s",
+        value.c_str());
+  return std::make_tuple(
+      AMS_UNKNOWN,
+      c10::DeviceType::
+          COMPILE_TIME_MAX_DEVICE_TYPES);
 }
 
-std::tuple<AMSDType, torch::Dtype> SurrogateModel::convertModelDataType(
+std::tuple<AMSDType, torch::Dtype>
+SurrogateModel::convertModelDataType(
     std::string& type)
 {
   AMSDType dParamType = AMSDType::AMS_DOUBLE;
   torch::Dtype torchType = at::kDouble;
   if (type == "float32") {
-    return std::make_tuple(AMSDType::AMS_SINGLE, at ::kFloat);
+    return std::make_tuple(AMSDType::AMS_SINGLE,
+                           at ::kFloat);
   } else if (type == "float64") {
-    return std::make_tuple(AMSDType::AMS_DOUBLE, at ::kDouble);
+    return std::make_tuple(AMSDType::AMS_DOUBLE,
+                           at ::kDouble);
   }
 
-  FATAL(Surrogate, "unknown data type of model %s", type.c_str());
+  FATAL(Surrogate,
+        "unknown data type of model %s",
+        type.c_str());
 
   return std::make_tuple(dParamType, torchType);
 }
 
 
-std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_computeDetlaUQ(
+std::tuple<torch::Tensor, torch::Tensor>
+SurrogateModel::_computeDetlaUQ(
     c10::IValue& deltaUQTuple,
     AMSUQPolicy policy,
     float threshold)
 {
-  at::Tensor output_mean_tensor = deltaUQTuple.toTuple()
-                                      ->elements()[0]
-                                      .toTensor()
-                                      .set_requires_grad(false)
-                                      .detach();
-  at::Tensor output_stdev_tensor = deltaUQTuple.toTuple()
-                                       ->elements()[1]
-                                       .toTensor()
-                                       .set_requires_grad(false)
-                                       .detach();
-  auto outer_dim = output_stdev_tensor.sizes().size() - 1;
+  at::Tensor output_mean_tensor =
+      deltaUQTuple.toTuple()
+          ->elements()[0]
+          .toTensor()
+          .set_requires_grad(false)
+          .detach();
+  at::Tensor output_stdev_tensor =
+      deltaUQTuple.toTuple()
+          ->elements()[1]
+          .toTensor()
+          .set_requires_grad(false)
+          .detach();
+  auto outer_dim =
+      output_stdev_tensor.sizes().size() - 1;
   if (policy != AMSUQPolicy::AMS_DELTAUQ_MAX &&
       policy != AMSUQPolicy::AMS_DELTAUQ_MEAN)
-    throw std::runtime_error("Invalid DELTA_UQ policy");
+    throw std::runtime_error(
+        "Invalid DELTA_UQ policy");
 
   if (policy == AMSUQPolicy::AMS_DELTAUQ_MEAN) {
-    auto mean = output_stdev_tensor.mean(outer_dim);
+    auto mean =
+        output_stdev_tensor.mean(outer_dim);
     auto predicate = mean < threshold;
-    return std::make_tuple(std::move(output_mean_tensor), std::move(predicate));
-  } else if (policy == AMSUQPolicy::AMS_DELTAUQ_MAX) {
+    return std::make_tuple(
+        std::move(output_mean_tensor),
+        std::move(predicate));
+  } else if (policy ==
+             AMSUQPolicy::AMS_DELTAUQ_MAX) {
     auto tmp = output_stdev_tensor.max(outer_dim);
     torch::Tensor max = std::get<0>(tmp);
     auto predicate = max < threshold;
-    return std::make_tuple(std::move(output_mean_tensor), std::move(predicate));
+    return std::make_tuple(
+        std::move(output_mean_tensor),
+        std::move(predicate));
   }
-  throw std::runtime_error("Invalid DELTA_UQ policy");
+  throw std::runtime_error(
+      "Invalid DELTA_UQ policy");
 }
 
 
-std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_evaluate(
-    torch::Tensor& inputs,
-    AMSUQPolicy policy,
-    float threshold)
+std::tuple<torch::Tensor, torch::Tensor>
+SurrogateModel::_evaluate(torch::Tensor& inputs,
+                          AMSUQPolicy policy,
+                          float threshold)
 {
   if (inputs.dtype() != torch_dtype) {
     throw std::runtime_error(
-        "Received inputs of wrong dType. Model is expecting " +
-        getDTypeAsString(torch::typeMetaToScalarType(inputs.dtype())) +
-        " and model is " + getDTypeAsString(torch_dtype));
+        "Received inputs of wrong dType. Model "
+        "is expecting " +
+        getDTypeAsString(
+            torch::typeMetaToScalarType(
+                inputs.dtype())) +
+        " and model is " +
+        getDTypeAsString(torch_dtype));
   }
   c10::InferenceMode guard(true);
   auto out = module.forward({inputs});
   if (_is_DeltaUQ) {
-    return _computeDetlaUQ(out, policy, threshold);
+    return _computeDetlaUQ(out,
+                           policy,
+                           threshold);
   }
 
-  at::Tensor output_tensor = out.toTensor().set_requires_grad(false).detach();
+  at::Tensor output_tensor =
+      out.toTensor()
+          .set_requires_grad(false)
+          .detach();
   // Randomly select indices to set to True
   torch::Tensor predicate =
-      torch::zeros({output_tensor.sizes()[0], 1}, torch::kBool);
-  auto indices = torch::randperm(output_tensor.sizes()[0])
-                     .slice(0, 0, threshold * output_tensor.sizes()[0]);
+      torch::zeros({output_tensor.sizes()[0], 1},
+                   torch::kBool);
+  auto indices =
+      torch::randperm(output_tensor.sizes()[0])
+          .slice(0,
+                 0,
+                 threshold *
+                     output_tensor.sizes()[0]);
 
   // Set selected indices to True
   predicate.index_put_({indices, 0}, true);
-  return std::make_tuple(std::move(output_tensor), std::move(predicate));
+  return std::make_tuple(std::move(output_tensor),
+                         std::move(predicate));
 }
 
 
-std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
+std::tuple<torch::Tensor, torch::Tensor>
+SurrogateModel::evaluate(
     ams::MutableArrayRef<at::Tensor> Inputs,
     AMSUQPolicy policy,
     float threshold)
 {
   if (Inputs.size() == 0) {
     throw std::invalid_argument(
-        "Input Vector should always contain at least one tensor");
+        "Input Vector should always contain at "
+        "least one tensor");
   }
 
-  torch::DeviceType InputDevice = Inputs[0].device().type();
-  torch::Dtype InputDType = torch::typeMetaToScalarType(Inputs[0].dtype());
+  torch::DeviceType InputDevice =
+      Inputs[0].device().type();
+  torch::Dtype InputDType =
+      torch::typeMetaToScalarType(
+          Inputs[0].dtype());
   auto CAxis = Inputs[0].sizes().size() - 1;
 
   // Verify input/device matching
   for (auto& In : Inputs) {
     if (InputDevice != In.device().type()) {
       throw std::invalid_argument(
-          "Unsupported feature, application domain tensors are on different "
+          "Unsupported feature, application "
+          "domain tensors are on different "
           "devices\n");
     }
-    if (InputDType != torch::typeMetaToScalarType(In.dtype())) {
+    if (InputDType !=
+        torch::typeMetaToScalarType(In.dtype())) {
       throw std::invalid_argument(
-          "Unsupported feature, application domain tensors have different data "
+          "Unsupported feature, application "
+          "domain tensors have different data "
           "types\n");
     }
   }
-  c10::SmallVector<torch::Tensor> ConvertedInputs(Inputs.begin(), Inputs.end());
+  c10::SmallVector<torch::Tensor> ConvertedInputs(
+      Inputs.begin(), Inputs.end());
   // If either the model's execution device or the data type differ
   // in respect to the inputs we need to handle this separately.
-  if (InputDevice != torch_device || InputDType != torch_dtype) {
-    for (int i = 0; i < ConvertedInputs.size(); i++) {
-      ConvertedInputs[i] = ConvertedInputs[i].to(torch_device, torch_dtype);
+  if (InputDevice != torch_device ||
+      InputDType != torch_dtype) {
+    for (int i = 0; i < ConvertedInputs.size();
+         i++) {
+      ConvertedInputs[i] =
+          ConvertedInputs[i].to(torch_device,
+                                torch_dtype);
     }
   }
 
-  auto ITensor = torch::cat(ConvertedInputs, CAxis);
+  auto ITensor =
+      torch::cat(ConvertedInputs, CAxis);
   DBG(Surrogate,
       "Input concatenated tensor is %s",
       shapeToString(ITensor).c_str());
 
-  auto [OTensor, Predicate] = _evaluate(ITensor, policy, threshold);
+  auto [OTensor, Predicate] =
+      _evaluate(ITensor, policy, threshold);
   if (InputDevice != torch_device) {
     OTensor = OTensor.to(InputDevice);
     Predicate = Predicate.to(InputDevice);
   }
-  return std::make_tuple(std::move(OTensor), std::move(Predicate));
+  return std::make_tuple(std::move(OTensor),
+                         std::move(Predicate));
 }
 
 
-std::unordered_map<std::string, std::shared_ptr<SurrogateModel>>
+std::unordered_map<
+    std::string,
+    std::shared_ptr<SurrogateModel>>
     SurrogateModel::instances;
