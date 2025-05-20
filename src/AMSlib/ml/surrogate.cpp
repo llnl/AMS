@@ -37,8 +37,7 @@ static std::string getAMSDTypeAsString(AMSDType dType)
   return "unknown";
 }
 
-static std::string getAMSResourceTypeAsString(
-    AMSResourceType res)
+static std::string getAMSResourceTypeAsString(AMSResourceType res)
 {
   if (res == ams::AMS_DEVICE)
     return "device";
