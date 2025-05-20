@@ -47,11 +47,8 @@ static std::string getAMSResourceTypeAsString(AMSResourceType res)
 }
 
 
-SurrogateModel::SurrogateModel(
-    std::string& model_path,
-    bool isDeltaUQ)
-    : _model_path(model_path),
-      _is_DeltaUQ(isDeltaUQ)
+SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
+    : _model_path(model_path), _is_DeltaUQ(isDeltaUQ)
 {
 
   std::experimental::filesystem::path Path(
