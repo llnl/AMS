@@ -14,14 +14,9 @@ jobs:
         shell: bash -el {0}
     steps:
       - uses: actions/checkout@v4
-      - name: Setup conda
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          conda-remove-defaults: true
-      # Install Clang/LLVM using conda
       - name: Install deps (APT) 
         run: |
-          sudo apt-get update && sudo apt-get update && apt-get install -y lsb-release \
+          sudo apt-get update && sudo apt-get update && sudo apt-get install -y lsb-release \
                 gnupg software-properties-common  git python3 python3-pip mariadb-server \
                 mariadb-client curl rabbitmq-server supervisor python3-venv nlohmann-json3-dev \
                 build-essential cmake libopenmpi-dev libmetis-dev libhypre-dev libblas-dev \ 
