@@ -28,8 +28,7 @@ static std::string getDTypeAsString(torch::Dtype dtype)
   return "unknown";
 }
 
-static std::string getAMSDTypeAsString(
-    AMSDType dType)
+static std::string getAMSDTypeAsString(AMSDType dType)
 {
   if (dType == AMS_SINGLE)
     return "float32";
