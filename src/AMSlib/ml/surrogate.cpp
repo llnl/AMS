@@ -87,7 +87,7 @@ SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
   }
 
   CFATAL(SurrogateModel,
-         model_dtype == ams::AMS_UNKNOWN_TYPE &&
+         model_dtype == ams::AMS_UNKNOWN_TYPE ||
              model_device == ams::AMSResourceType::AMS_UNKNOWN,
          "Model has unknown datatype or device");
 
