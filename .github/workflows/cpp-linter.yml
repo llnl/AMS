@@ -59,7 +59,7 @@ jobs:
           git clone --depth 1 https://github.com/LLNL/Caliper.git
           cd Caliper 
           mkdir build && cd build 
-          cmake .. \
+          cmake ..
           make  && sudo make install
       - name: Install Torch and HDF5
         run: |
@@ -67,11 +67,12 @@ jobs:
           pip3 install h5py
       - name: Install AMS
         run: |
-          cmake -DWITH_RMQ=On 
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=on
+          cmake -DWITH_RMQ=On \ 
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
+            -DTorch_DIR=$(python -c 'import torch; print(torch.__path__[0])')/share/cmake/Torch \
             -DBUILD_SHARED_LIBS=On \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
             -DWITH_CALIPER=On \
             -DWITH_HDF5=On \
             -DWITH_RMQ=On \

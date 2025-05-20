@@ -51,8 +51,12 @@ if (WITH_RMQ)
   target_link_libraries(AMS PUBLIC  $<BUILD_INTERFACE:amqpcpp> PRIVATE $<INSTALL_INTERFACE:amqpcpp>)
 
   if (OPENSSL_FOUND)
-    target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:OpenSSL::SSL OpenSSL::Crypto> PRIVATE
-    		$<INSTALL_INTERFACE:OpenSSL::SSL OpenSSL::Crypto>)
+    target_link_libraries(AMS PUBLIC
+                               $<BUILD_INTERFACE:OpenSSL::SSL>
+                               $<BUILD_INTERFACE:OpenSSL::Crypto>
+                               PRIVATE
+                               $<INSTALL_INTERFACE:OpenSSL::SSL>
+                               $<INSTALL_INTERFACE:OpenSSL::Crypto>)
   endif()
   # NOTE: We set here the event/event pthreads as public. As there is no easy way
   # to do a find package(libevent) and RMQ is not exposing that properly.
