@@ -14,8 +14,7 @@
 #include "wf/utils.hpp"
 
 using namespace ams;
-static std::string getDTypeAsString(
-    torch::Dtype dtype)
+static std::string getDTypeAsString(torch::Dtype dtype)
 {
   if (dtype == torch::kFloat32) return "float32";
   if (dtype == torch::kFloat64) return "float64";
