@@ -1,0 +1,104 @@
+name: cpp-linter
+
+on:
+  pull_request:
+
+jobs:
+  cpp-linter:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps (APT) 
+        run: |
+          sudo apt-get update
+          sudo apt-get update
+          sudo apt-get install -y \
+              lsb-release \
+              gnupg \
+              software-properties-common \
+              git \
+              python3 \
+              python3-pip \
+              mariadb-server \
+              mariadb-client \
+              curl \
+              rabbitmq-server \
+              supervisor \
+              python3-venv \
+              nlohmann-json3-dev \
+              build-essential \
+              cmake \
+              libopenmpi-dev \
+              libmetis-dev \
+              libhypre-dev \
+              libblas-dev \
+              liblapack-dev \
+              libhdf5-dev \
+              hdf5-tools
+      - name: Install clang-llvm
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 18
+      - name: Install AMQCPP 
+        run: |
+          git clone --depth=1 https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git
+          cd AMQP-CPP/
+          mkdir -p build/
+          cd build/
+          cmake -DCMAKE_CXX_FLAGS="-D_GLIBCXX_USE_CXX11_ABI=0"  -DAMQP-CPP_LINUX_TCP=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DAMQP-CPP_BUILD_SHARED=On ..
+          make && sudo make install
+      - name: Install caliper
+        run: |
+          git clone --depth 1 https://github.com/LLNL/Caliper.git
+          cd Caliper 
+          mkdir build && cd build 
+          cmake ..
+          make  && sudo make install
+      - name: Install Torch and HDF5
+        run: |
+          pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip3 install h5py
+      - name: Install AMS
+        run: |
+          mkdir build
+          cd build
+          cmake -DWITH_RMQ=On \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
+            -DTorch_DIR=$(python -c 'import torch; print(torch.__path__[0])')/share/cmake/Torch \
+            -DBUILD_SHARED_LIBS=On \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DWITH_CALIPER=On \
+            -DWITH_HDF5=On \
+            -DWITH_RMQ=On \
+            -DWITH_TESTS=On \
+            -DWITH_AMS_DEBUG=On \
+            -DWITH_CUDA=Off \
+            -DWITH_MPI=On ..
+      - uses: cpp-linter/cpp-linter-action@v2
+        id: linter
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          version: 18
+          ignore: .github | .gitlab | scripts | build | .git 
+          database: build
+          extra-args: '-D__AMS_ENABLE_CALIPER__ -D__AMS_ENABLE_HDF5__ -D__AMS_ENABLE_MPI__ -D__AMS_ENABLE_RMQ__'
+          style: file
+          tidy-checks: ''
+          lines-changed-only: true
+          format-review: true
+          tidy-review: false
+          passive-reviews: true
+          thread-comments: true
+      - name: Check clang-format linter status
+        if: steps.linter.outputs.clang-format-checks-failed != 0
+        run: exit 1

@@ -56,7 +56,8 @@ SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
 
   if (!std::experimental::filesystem::exists(Path, ec)) {
     FATAL(Surrogate,
-          "Path to Surrogate Model (%s) Does not exist",
+          "Path to Surrogate Model (%s) Does not "
+          "exist",
           model_path.c_str())
   }
 
@@ -69,7 +70,8 @@ SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
   auto method_ptr = module.find_method("get_ams_info");
   if (!method_ptr) {
     FATAL(Surrogate,
-          "The Surrogate %s is not a valid AMSModel",
+          "The Surrogate %s is not a valid "
+          "AMSModel",
           model_path.c_str());
   }
 
@@ -121,7 +123,10 @@ std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
     return std::make_tuple(AMS_DEVICE, c10::DeviceType::CUDA);
   }
   // If no parameters or buffers are found, default to unknown
-  FATAL(Surrogate, "Cannot determine device type of model %s", value.c_str());
+  FATAL(Surrogate,
+        "Cannot determine device type of model "
+        "%s",
+        value.c_str());
   return std::make_tuple(AMS_UNKNOWN,
                          c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES);
 }
@@ -184,7 +189,8 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_evaluate(
 {
   if (inputs.dtype() != torch_dtype) {
     throw std::runtime_error(
-        "Received inputs of wrong dType. Model is expecting " +
+        "Received inputs of wrong dType. Model "
+        "is expecting " +
         getDTypeAsString(torch::typeMetaToScalarType(inputs.dtype())) +
         " and model is " + getDTypeAsString(torch_dtype));
   }
@@ -214,7 +220,8 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
 {
   if (Inputs.size() == 0) {
     throw std::invalid_argument(
-        "Input Vector should always contain at least one tensor");
+        "Input Vector should always contain at "
+        "least one tensor");
   }
 
   torch::DeviceType InputDevice = Inputs[0].device().type();
@@ -225,12 +232,14 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
   for (auto& In : Inputs) {
     if (InputDevice != In.device().type()) {
       throw std::invalid_argument(
-          "Unsupported feature, application domain tensors are on different "
+          "Unsupported feature, application "
+          "domain tensors are on different "
           "devices\n");
     }
     if (InputDType != torch::typeMetaToScalarType(In.dtype())) {
       throw std::invalid_argument(
-          "Unsupported feature, application domain tensors have different data "
+          "Unsupported feature, application "
+          "domain tensors have different data "
           "types\n");
     }
   }
