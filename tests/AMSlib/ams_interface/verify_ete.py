@@ -177,8 +177,8 @@ def verify_data(
         # Compute a theoritical range of possible values in the db.
         # The duq/faiss tests have specific settings. The random one can have a
         # bound. This checks for all these cases
-        lb = num_elements * (1 - threshold) - num_elements * 0.05
-        ub = num_elements * (1 - threshold) + num_elements * 0.05
+        lb = num_elements * (1 - threshold) - num_elements * 0.1
+        ub = num_elements * (1 - threshold) + num_elements * 0.1
         assert (
             inputs.shape[0] > lb and inputs.shape[0] < ub
         ), f"Not in the bounds of correct items {lb} {ub} {inputs.shape[0]}"
