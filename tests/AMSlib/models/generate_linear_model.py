@@ -1,9 +1,10 @@
-import torch
-import sys
-import numpy as np
-import math
 import argparse
-from typing import Tuple, Dict
+import math
+import sys
+from typing import Dict, Tuple
+
+import numpy as np
+import torch
 
 
 class linearRegression(torch.nn.Module):
@@ -12,8 +13,7 @@ class linearRegression(torch.nn.Module):
         self.linear = torch.nn.Linear(inputSize, outputSize, bias=True)
 
     def forward(self, x):
-        y = self.linear(x)
-        return y
+        return self.linear(x), torch.rand(x.shape[0], 1)
 
 
 class AMSModel(torch.nn.Module):
@@ -46,7 +46,7 @@ def create_ams_model(model, trace_input, device, precision):
     elif precision == torch.float64:
         ams_dtype = "float64"
     else:
-        raise RuntimeError(f"AMS library does not support type of {dtype}")
+        raise RuntimeError(f"AMS library does not support type of {precision}")
 
     model = model.to(device, dtype=precision)
     inp = trace_input.to(device, dtype=precision)
@@ -72,6 +72,7 @@ def main(args):
     model = linearRegression(args.inputDim, args.outputDim)
 
     # Set the precision based on command-line argument
+    prec = torch.float32
     if args.precision == "single":
         model = model.float()  # Set to single precision (float32)
         prec = torch.float32

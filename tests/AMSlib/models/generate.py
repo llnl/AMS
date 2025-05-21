@@ -1,13 +1,14 @@
-import torch
-import sys
-import torch.nn as nn
 import argparse
+import sys
+from typing import Dict, Tuple
+
+import torch
+import torch.nn as nn
 from torch import Tensor
-from typing import Tuple, Dict
 
 
 # Ugly code that expands the fake_uq to the shape we need as an output
-def to_tupple(y: Tensor, fake_uq: Tensor) -> Tuple[Tensor, Tensor]:
+def to_tupple(y: Tensor, fake_uq: Tensor, is_max: bool) -> Tuple[Tensor, Tensor]:
     outer_dim = y.shape[0]
     fake_uq_dim = fake_uq.shape[0]
     tmp = fake_uq.clone().detach()
@@ -19,14 +20,20 @@ def to_tupple(y: Tensor, fake_uq: Tensor) -> Tuple[Tensor, Tensor]:
     tmp = tmp.repeat(new_dims)
     tmp = tmp.reshape(final_shape)
     std = tmp[: y.shape[0], ...]
-    return y, std
+    if is_max:
+        max_std, _ = std.max(dim=1, keepdim=True)
+        return (y, max_std)
+
+    return (y, std std.mean(dim=1, keepdim=True))
 
 
+# An example of a structure of D-UQ model. This is how AMS expects all models. Forward returns 2 Tensors, the prediction and the uncertainty.
 class TuppleModel(torch.nn.Module):
-    def __init__(self, inputSize, outputSize, fake_uq):
+    def __init__(self, inputSize, outputSize, fake_uq, is_max):
         super(TuppleModel, self).__init__()
         self.linear = torch.nn.Linear(inputSize, outputSize, False)
         self.fake_uq = torch.nn.Parameter(fake_uq, requires_grad=False)
+        self._is_max = is_max
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -38,10 +45,10 @@ class TuppleModel(torch.nn.Module):
 
     def forward(self, x):
         y = self.linear(x)
-        return to_tupple(y, self.fake_uq)
+        return to_tupple(y, self.fake_uq, self._is_max)
 
 
-# Define a simple model
+# An example of the structure of a random model. This is how AMS expects all models. Forward returns 2 Tensors, the prediction and the uncertainty. Uncertainty in random models is defined by a random value generated in the uniform distribution [0, 1).
 class SimpleModel(nn.Module):
     def __init__(self, in_features, out_features):
         super(SimpleModel, self).__init__()
@@ -56,7 +63,7 @@ class SimpleModel(nn.Module):
             raise ValueError("Identity initialization requires in_features == out_features")
 
     def forward(self, x):
-        return self.fc(x)
+        return self.fc(x), torch.rand(x.shape[0], 1)
 
 
 class AMSModel(nn.Module):
@@ -89,8 +96,9 @@ def create_ams_model(model, trace_input, device, precision):
     elif precision == torch.float64:
         ams_dtype = "float64"
     else:
-        raise RuntimeError(f"AMS library does not support type of {dtype}")
+        raise RuntimeError(f"AMS library does not support type of {precision}")
 
+    model.eval()
     with torch.jit.optimized_execution(True):
         model = model.to(device, dtype=precision)
         inp = trace_input.to(device, dtype=precision)
@@ -117,14 +125,14 @@ def main():
         fake_uq[0, ...] *= 0.5
         # This sets even uq to larger than 0.5
         fake_uq[1, ...] = 0.5 + 0.5 * (fake_uq[1, ...])
-        model = TuppleModel(8, 8, fake_uq)
+        model = TuppleModel(8, 8, fake_uq, False)
     elif args.uq == "duq_max":
         fake_uq = torch.rand(2, 8)
         max_val = torch.max(fake_uq, axis=1).values
         scale = 0.49 / max_val
         fake_uq *= scale.unsqueeze(0).T
         fake_uq[1, 2] = 0.51
-        model = TuppleModel(8, 8, fake_uq)
+        model = TuppleModel(8, 8, fake_uq, True)
     elif args.uq == "random":
         model = SimpleModel(8, 8)
     else:
