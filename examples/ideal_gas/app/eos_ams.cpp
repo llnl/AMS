@@ -5,10 +5,10 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
+#include "eos_ams.hpp"
+
 #include <SmallVector.hpp>
 #include <vector>
-
-#include "eos_ams.hpp"
 
 using namespace ams;
 
@@ -16,15 +16,16 @@ template <typename FPType>
 AMSEOS<FPType>::AMSEOS(const AMSDBType db_type,
                        const AMSResourceType resource,
                        const AMSExecPolicy exec_policy,
-                       const AMSUQPolicy uq_policy,
                        const int mpi_task,
                        const int mpi_nproc,
                        const double threshold,
                        const char *surrogate_path)
     : res_(resource), IdealGas<FPType>(1.6, 1.4)
 {
-  AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
-      "ideal_gas", uq_policy, threshold, surrogate_path, "ideal_gas");
+  AMSCAbstrModel model_descr = AMSRegisterAbstractModel("ideal_gas",
+                                                        threshold,
+                                                        surrogate_path,
+                                                        "ideal_gas");
   wf_ = AMSCreateExecutor(model_descr, mpi_task, mpi_nproc);
 }
 
@@ -57,7 +58,8 @@ void AMSEOS<FPType>::Eval(const int length,
   outputs.push_back(
       std::move(AMSTensor::view(temperature, {length, 1}, {1, 1}, res_)));
 
-  DomainLambda OrigComputation = [&, this](const SmallVector<AMSTensor> &ams_ins,
+  DomainLambda OrigComputation = [&,
+                                  this](const SmallVector<AMSTensor> &ams_ins,
                                         SmallVector<AMSTensor> &ams_inouts,
                                         SmallVector<AMSTensor> &ams_outs) {
     std::cout << "Shape is " << ams_ins[0].shape()[0] << ", "
