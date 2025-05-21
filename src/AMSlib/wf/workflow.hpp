@@ -308,7 +308,7 @@ public:
       for (auto S : InOuts)
         PhysicInOutsBefore.push_back(S.clone());
 
-      // We call the application her
+      // We call the application here
       CALIPER(CALI_MARK_BEGIN("PHYSICS MODULE");)
       callApplication(CallBack, Ins, InOuts, Outs);
       CALIPER(CALI_MARK_END("PHYSICS MODULE");)
