@@ -86,7 +86,7 @@ class AMSModel(nn.Module):
         return self._model(x)
 
 
-def create_ams_model(model, trace_input, device, precision):
+def create_ams_model(model, device, precision, trace_input=None):
     if not isinstance(device, torch.device):
         raise RuntimeError(f"Expected a model to be of type torch.device instead got {type(device)}")
 
@@ -105,15 +105,13 @@ def create_ams_model(model, trace_input, device, precision):
     model.eval()
     with torch.jit.optimized_execution(True):
         model = model.to(device, dtype=precision)
-        inp = trace_input.to(device, dtype=precision)
         ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
 
-        # Trace the model
-        # I script the models as all of them are deterministic, and don't require any tracing.
-        # When tracing the random models emit warnings as python outputs and traced outputs do not
-        # match because of the randomness.
-        scripted_model = torch.jit.script(ams_model)
-    return scripted_model
+        if trace_input is None:
+            return torch.jit.script(ams_model)
+
+        inp = trace_input.to(device, dtype=precision)
+        return torch.jit.trace(ams_model, inp)
 
 
 def main():
@@ -126,6 +124,8 @@ def main():
     args = parser.parse_args()
 
     # Initialize model
+    example_input = None
+    prec = torch.float32
     if args.uq == "duq_mean":
         fake_uq = torch.rand(2, 8)
         # This sets odd uq to less than 0.5
@@ -133,6 +133,7 @@ def main():
         # This sets even uq to larger than 0.5
         fake_uq[1, ...] = 0.5 + 0.5 * (fake_uq[1, ...])
         model = TuppleModel(8, 8, fake_uq, False)
+        example_input = torch.randn(2, 8)
     elif args.uq == "duq_max":
         fake_uq = torch.rand(2, 8)
         max_val = torch.max(fake_uq, axis=1).values
@@ -140,6 +141,7 @@ def main():
         fake_uq *= scale.unsqueeze(0).T
         fake_uq[1, 2] = 0.51
         model = TuppleModel(8, 8, fake_uq, True)
+        example_input = torch.randn(2, 8)
     elif args.uq == "random":
         model = SimpleModel(8, 8)
     else:
@@ -159,8 +161,7 @@ def main():
         device = torch.device("cpu")
 
     # Create example input tensor
-    example_input = torch.randn(2, 8)
-    scripted_model = create_ams_model(model, example_input, device, prec)
+    scripted_model = create_ams_model(model, device, prec, example_input)
 
     # Move model to the appropriate device
 

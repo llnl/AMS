@@ -32,7 +32,7 @@ class AMSModel(torch.nn.Module):
         return self._model(x)
 
 
-def create_ams_model(model, trace_input, device, precision):
+def create_ams_model(model, device, precision, trace_input=None):
     if not isinstance(device, torch.device):
         raise RuntimeError(f"Expected a model to be of type torch.device instead got {type(device)}")
 
@@ -48,15 +48,16 @@ def create_ams_model(model, trace_input, device, precision):
     else:
         raise RuntimeError(f"AMS library does not support type of {precision}")
 
-    model = model.to(device, dtype=precision)
-    inp = trace_input.to(device, dtype=precision)
-    ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
+    model.eval()
+    with torch.jit.optimized_execution(True):
+        model = model.to(device, dtype=precision)
+        ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
 
-    # I script the models as all of them are deterministic, and don't require any tracing.
-    # When tracing the random models emit warnings as python outputs and traced outputs do not
-    # match because of the randomness.
-    scripted_model = torch.jit.script(ams_model, inp)
-    return scripted_model
+        if trace_input is None:
+            return torch.jit.script(ams_model)
+
+        inp = trace_input.to(device, dtype=precision)
+        return torch.jit.trace(ams_model, inp)
 
 
 def main(args):
@@ -96,7 +97,7 @@ def main(args):
 
     # Generate the file name
     file_name = f"{args.precision}_{args.device}_{args.uq}.pt"
-    ams_model = create_ams_model(model, torch.randn(args.inputDim, dtype=prec), device, prec)
+    ams_model = create_ams_model(model, device, prec)
     file_path = f"{args.directory}/linear_{file_name}"
     print(f"Model saved to {file_path}")
     ams_model.save(file_path)
