@@ -34,38 +34,10 @@ namespace
 {
 
 struct AMSAbstractModel {
-  enum UQAggrType {
-    Unknown = -1,
-    Mean = 0,
-    Max = 1,
-  };
-
 public:
   std::string SPath;
   double threshold;
-  AMSUQPolicy uqPolicy;
   bool storeData;
-
-  static AMSUQPolicy getUQType(std::string type)
-  {
-    if (type.compare("deltaUQ") == 0) {
-      return AMSUQPolicy::AMS_DELTAUQ_MEAN;
-    } else if (type.compare("random") == 0) {
-      return AMSUQPolicy::AMS_RANDOM;
-    } else {
-      THROW(std::runtime_error, ("Unknown uq type " + type).c_str());
-    }
-    return AMSUQPolicy::AMS_UQ_END;
-  }
-
-  static UQAggrType getUQAggregate(std::string policy)
-  {
-    if (policy.compare("mean") == 0)
-      return UQAggrType::Mean;
-    else if (policy.compare("max") == 0)
-      return UQAggrType::Max;
-    return UQAggrType::Unknown;
-  }
 
   bool parseStoreData(nlohmann::json &value)
   {
@@ -90,58 +62,9 @@ public:
     return path;
   }
 
-
-  int parseClusters(nlohmann::json &value)
-  {
-    if (!value.contains("neighbours"))
-      THROW(std::runtime_error, "UQ Policy must contain neighbours");
-
-    return value["neighbours"].get<int>();
-  }
-
-
-  AMSUQPolicy parseUQPolicy(nlohmann::json &value)
-  {
-    AMSUQPolicy policy = AMSUQPolicy::AMS_UQ_END;
-    if (value.contains("uq_type")) {
-      policy = getUQType(value["uq_type"].get<std::string>());
-    } else {
-      THROW(std::runtime_error, "Model must specify the UQ type");
-    }
-
-    if (!UQ::isUQPolicy(policy)) {
-      THROW(std::runtime_error, "UQ Policy is not supported");
-    }
-
-    UQAggrType uqAggregate = UQAggrType::Unknown;
-    if (value.contains("uq_aggregate")) {
-      uqAggregate = getUQAggregate(value["uq_aggregate"].get<std::string>());
-    } else {
-      THROW(std::runtime_error, "Model must specify UQ Policy");
-    }
-
-
-    if (UQ::isDeltaUQ(policy) && uqAggregate == UQAggrType::Unknown) {
-      THROW(std::runtime_error,
-            "UQ Type should be defined or set to undefined value");
-    }
-
-    if (UQ::isDeltaUQ(policy)) {
-      if (uqAggregate == Max)
-        policy = AMSUQPolicy::AMS_DELTAUQ_MAX;
-      else if (uqAggregate == Mean)
-        policy = AMSUQPolicy::AMS_DELTAUQ_MEAN;
-    }
-    DBG(AMS, "UQ Policy is %s", UQ::UQPolicyToStr(policy).c_str())
-    return policy;
-  }
-
-
 public:
   AMSAbstractModel(nlohmann::json &value)
   {
-
-    uqPolicy = parseUQPolicy(value);
 
     if (!value.contains("threshold")) {
       THROW(std::runtime_error,
@@ -155,26 +78,20 @@ public:
   }
 
 
-  AMSAbstractModel(AMSUQPolicy uq_policy,
-                   const char *surrogate_path,
+  AMSAbstractModel(const char *surrogate_path,
                    double threshold,
                    bool store_data = true)
   {
     storeData = store_data;
 
-    if (!UQ::isUQPolicy(uq_policy)) {
-      FATAL(AMS, "Invalid UQ policy %d", uq_policy)
-    }
-
-    uqPolicy = uq_policy;
-
     if (surrogate_path != nullptr) SPath = std::string(surrogate_path);
 
     this->threshold = threshold;
-    DBG(AMS,
-        "Registered Model %s %g",
-        UQ::UQPolicyToStr(uqPolicy).c_str(),
-        threshold);
+    CDEBUG(AMS,
+           surrogate_path != nullptr,
+           "Registered Model '%s' has threshold %g",
+           SPath.c_str(),
+           threshold);
   }
 
 
@@ -182,9 +99,9 @@ public:
   {
     if (!SPath.empty()) DBG(AMS, "Surrogate Model Path: %s", SPath.c_str());
     DBG(AMS,
-        "Threshold %f UQ-Policy: %u StoreData: %s",
+        "Threshold %f Model Path: %s StoreData: %s",
         threshold,
-        uqPolicy,
+        SPath.c_str(),
         storeData ? "true" : "false");
   }
 };
@@ -400,7 +317,6 @@ public:
   }
 
   int register_model(const char *domain_name,
-                     AMSUQPolicy uq_policy,
                      double threshold,
                      const char *surrogate_path,
                      bool store_data = true)
@@ -415,7 +331,7 @@ public:
     }
     registered_models.push_back(std::make_pair(
         std::string(domain_name),
-        AMSAbstractModel(uq_policy, surrogate_path, threshold, store_data)));
+        AMSAbstractModel(surrogate_path, threshold, store_data)));
     ams_candidate_models.emplace(std::string(domain_name),
                                  registered_models.size() - 1);
     return registered_models.size() - 1;
@@ -461,7 +377,6 @@ ams::AMSWorkflow *_AMSCreateExecutor(AMSCAbstrModel model,
   ams::AMSWorkflow *WF = new ams::AMSWorkflow(model_descr.second.SPath,
                                               model_descr.first,
                                               model_descr.second.threshold,
-                                              model_descr.second.uqPolicy,
                                               process_id,
                                               world_size,
                                               model_descr.second.storeData);
@@ -527,7 +442,7 @@ void AMSExecute(AMSExecutor executor,
 }
 
 void AMSCExecute(AMSExecutor executor,
-                 EOSCFn OrigCComputation,
+                 DomainCFn OrigCComputation,
                  void *args,
                  const ams::SmallVector<ams::AMSTensor> &ins,
                  ams::SmallVector<ams::AMSTensor> &inouts,
@@ -572,7 +487,6 @@ void AMSSetAllocator(AMSResourceType resource, const char *alloc_name)
 }
 
 AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
-                                        AMSUQPolicy uq_policy,
                                         double threshold,
                                         const char *surrogate_path,
                                         bool store_data)
@@ -580,8 +494,10 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
   CFATAL(AMS, !_amsWrap, "AMSInit has not been called.")
   auto id = _amsWrap->get_model_index(domain_name);
   if (id == -1) {
-    id = _amsWrap->register_model(
-        domain_name, uq_policy, threshold, surrogate_path, store_data);
+    id = _amsWrap->register_model(domain_name,
+                                  threshold,
+                                  surrogate_path,
+                                  store_data);
   }
 
   return id;

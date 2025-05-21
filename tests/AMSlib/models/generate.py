@@ -22,9 +22,13 @@ def to_tupple(y: Tensor, fake_uq: Tensor, is_max: bool) -> Tuple[Tensor, Tensor]
     std = tmp[: y.shape[0], ...]
     if is_max:
         max_std, _ = std.max(dim=1, keepdim=True)
-        return (y, max_std)
+        return y, max_std
 
-    return (y, std std.mean(dim=1, keepdim=True))
+    return y, std.mean(dim=1, keepdim=True)
+
+
+def random_tuple(y: Tensor) -> Tuple[Tensor, Tensor]:
+    return y, torch.rand(y.shape[0], 1)
 
 
 # An example of a structure of D-UQ model. This is how AMS expects all models. Forward returns 2 Tensors, the prediction and the uncertainty.
@@ -62,8 +66,8 @@ class SimpleModel(nn.Module):
         else:
             raise ValueError("Identity initialization requires in_features == out_features")
 
-    def forward(self, x):
-        return self.fc(x), torch.rand(x.shape[0], 1)
+    def forward(self, x) -> Tuple[Tensor, Tensor]:
+        return random_tuple(self.fc(x))
 
 
 class AMSModel(nn.Module):
@@ -105,7 +109,10 @@ def create_ams_model(model, trace_input, device, precision):
         ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
 
         # Trace the model
-        scripted_model = torch.jit.trace(ams_model, inp)
+        # I script the models as all of them are deterministic, and don't require any tracing.
+        # When tracing the random models emit warnings as python outputs and traced outputs do not
+        # match because of the randomness.
+        scripted_model = torch.jit.script(ams_model)
     return scripted_model
 
 

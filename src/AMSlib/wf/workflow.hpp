@@ -42,9 +42,6 @@ class AMSWorkflow
   /** @brief The module that performs uncertainty quantification (UQ) */
   std::shared_ptr<SurrogateModel> MLModel;
 
-  /** The metric/type of UQ we will use to select between physics and ml computations **/
-  const AMSUQPolicy uqPolicy = AMSUQPolicy::AMS_UQ_END;
-
   /** @brief The database to store data for which we cannot apply the current
      * model */
   std::shared_ptr<ams::db::BaseDB> DB;
@@ -117,14 +114,12 @@ public:
   AMSWorkflow(std::string &surrogate_path,
               std::string &domain_name,
               float threshold,
-              const AMSUQPolicy uq_policy,
               int _pId = 0,
               int _wSize = 1,
               bool store_data = true)
       : domainName(domain_name),
         rId(_pId),
         wSize(_wSize),
-        uqPolicy(uq_policy),
         storeData(store_data),
 #ifdef __AMS_ENABLE_MPI__
         comm(MPI_COMM_NULL),
@@ -138,10 +133,7 @@ public:
     if (storeData) DB = dbm.getDB(domainName, rId);
     MLModel = nullptr;
     if (!surrogate_path.empty())
-      MLModel = SurrogateModel::getInstance(
-          surrogate_path,
-          uqPolicy == AMSUQPolicy::AMS_DELTAUQ_MAX ||
-              uqPolicy == AMSUQPolicy::AMS_DELTAUQ_MEAN);
+      MLModel = SurrogateModel::getInstance(surrogate_path);
   }
 
   std::string getDBFilename() const
@@ -316,7 +308,7 @@ public:
       for (auto S : InOuts)
         PhysicInOutsBefore.push_back(S.clone());
 
-      // We call the application here
+      // We call the application her
       CALIPER(CALI_MARK_BEGIN("PHYSICS MODULE");)
       callApplication(CallBack, Ins, InOuts, Outs);
       CALIPER(CALI_MARK_END("PHYSICS MODULE");)
@@ -332,7 +324,6 @@ public:
             rId == 0,
             "Updating surrogate model with %s",
             model.c_str())
-      // UQModel->updateModel(model);
     }
     CALIPER(CALI_MARK_END("UPDATEMODEL");)
 
@@ -341,8 +332,7 @@ public:
     // -------------------------------------------------------------
     CALIPER(CALI_MARK_BEGIN("SURROGATE");)
     // The predicate with which we will split the data on a lateMLInputsr step
-    auto [MLOutputs, Predicate] =
-        MLModel->evaluate(InputTensors, uqPolicy, threshold);
+    auto [MLOutputs, Predicate] = MLModel->evaluate(InputTensors, threshold);
 
     CALIPER(CALI_MARK_END("SURROGATE");)
 

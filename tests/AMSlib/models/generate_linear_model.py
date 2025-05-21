@@ -52,8 +52,10 @@ def create_ams_model(model, trace_input, device, precision):
     inp = trace_input.to(device, dtype=precision)
     ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
 
-    # Trace the model
-    scripted_model = torch.jit.trace(ams_model, inp)
+    # I script the models as all of them are deterministic, and don't require any tracing.
+    # When tracing the random models emit warnings as python outputs and traced outputs do not
+    # match because of the randomness.
+    scripted_model = torch.jit.script(ams_model, inp)
     return scripted_model
 
 

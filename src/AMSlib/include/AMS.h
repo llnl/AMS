@@ -20,10 +20,10 @@ using DomainLambda =
                        ams::SmallVector<ams::AMSTensor> & /* outputs */)>;
 
 
-using EOSCFn = void (*)(void *,
-                        const ams::SmallVector<ams::AMSTensor> &,
-                        ams::SmallVector<ams::AMSTensor> &,
-                        ams::SmallVector<ams::AMSTensor> &);
+using DomainCFn = void (*)(void *,
+                           const ams::SmallVector<ams::AMSTensor> &,
+                           ams::SmallVector<ams::AMSTensor> &,
+                           ams::SmallVector<ams::AMSTensor> &);
 
 using AMSExecutor = int64_t;
 using AMSCAbstrModel = int;
@@ -37,7 +37,6 @@ AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
                               int world_size);
 
 AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
-                                        AMSUQPolicy uq_policy,
                                         double threshold,
                                         const char *surrogate_path,
                                         bool store_data = true);
@@ -51,7 +50,7 @@ void AMSExecute(AMSExecutor executor,
                 ams::SmallVector<ams::AMSTensor> &outs);
 
 void AMSCExecute(AMSExecutor executor,
-                 EOSCFn OrigComputation,
+                 DomainCFn OrigComputation,
                  void *args,
                  const ams::SmallVector<ams::AMSTensor> &ins,
                  ams::SmallVector<ams::AMSTensor> &inouts,
