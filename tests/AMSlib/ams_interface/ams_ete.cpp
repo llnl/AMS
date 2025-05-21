@@ -1,10 +1,10 @@
-#include <stdexcept>
 #include <unistd.h>
 
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <stdexcept>
 
 #include "../utils.hpp"
 #include "AMS.h"
@@ -138,7 +138,6 @@ int main(int argc, char **argv)
   char *model_path = argv[4];
   AMSDType data_type = getDataType(argv[5]);
   std::string uq_name = std::string(argv[6]);
-  const AMSUQPolicy uq_policy = UQPolicyFromStr(uq_name);
   float threshold = std::atof(argv[7]);
   int num_iterations = std::atoi(argv[8]);
   int avg_elements = std::atoi(argv[9]);
@@ -150,13 +149,8 @@ int main(int argc, char **argv)
 
   AMSConfigureFSDatabase(db_type, fs_path.c_str());
 
-  assert((uq_policy == AMSUQPolicy::AMS_DELTAUQ_MAX ||
-          uq_policy == AMSUQPolicy::AMS_DELTAUQ_MEAN ||
-          uq_policy == AMSUQPolicy::AMS_RANDOM) &&
-         "Test only supports duq models");
-
-  AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
-      "test", uq_policy, threshold, model_path, "test");
+  AMSCAbstrModel model_descr =
+      AMSRegisterAbstractModel("test", threshold, model_path, "test");
 
   AMSExecutor wf = AMSCreateExecutor(model_descr, 0, 1);
   if (data_type == AMSDType::AMS_SINGLE) {

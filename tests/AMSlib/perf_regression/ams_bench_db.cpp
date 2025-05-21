@@ -264,7 +264,6 @@ int main(int argc, char **argv)
   }
 
   AMSCAbstrModel ams_model = AMSRegisterAbstractModel("bench_db_no_model",
-                                                      AMSUQPolicy::AMS_RANDOM,
                                                       0.5,
                                                       "",
                                                       "bench_db_no_model");
