@@ -1,9 +1,10 @@
-import torch
-import sys
-import numpy as np
-import math
 import argparse
-from typing import Tuple, Dict
+import math
+import sys
+from typing import Dict, Tuple
+
+import numpy as np
+import torch
 
 
 class linearRegression(torch.nn.Module):
@@ -12,8 +13,7 @@ class linearRegression(torch.nn.Module):
         self.linear = torch.nn.Linear(inputSize, outputSize, bias=True)
 
     def forward(self, x):
-        y = self.linear(x)
-        return y
+        return self.linear(x), torch.rand(x.shape[0], 1)
 
 
 class AMSModel(torch.nn.Module):
@@ -32,7 +32,7 @@ class AMSModel(torch.nn.Module):
         return self._model(x)
 
 
-def create_ams_model(model, trace_input, device, precision):
+def create_ams_model(model, device, precision, trace_input=None):
     if not isinstance(device, torch.device):
         raise RuntimeError(f"Expected a model to be of type torch.device instead got {type(device)}")
 
@@ -46,15 +46,18 @@ def create_ams_model(model, trace_input, device, precision):
     elif precision == torch.float64:
         ams_dtype = "float64"
     else:
-        raise RuntimeError(f"AMS library does not support type of {dtype}")
+        raise RuntimeError(f"AMS library does not support type of {precision}")
 
-    model = model.to(device, dtype=precision)
-    inp = trace_input.to(device, dtype=precision)
-    ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
+    model.eval()
+    with torch.jit.optimized_execution(True):
+        model = model.to(device, dtype=precision)
+        ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
 
-    # Trace the model
-    scripted_model = torch.jit.trace(ams_model, inp)
-    return scripted_model
+        if trace_input is None:
+            return torch.jit.script(ams_model)
+
+        inp = trace_input.to(device, dtype=precision)
+        return torch.jit.trace(ams_model, inp)
 
 
 def main(args):
@@ -72,6 +75,7 @@ def main(args):
     model = linearRegression(args.inputDim, args.outputDim)
 
     # Set the precision based on command-line argument
+    prec = torch.float32
     if args.precision == "single":
         model = model.float()  # Set to single precision (float32)
         prec = torch.float32
@@ -93,7 +97,7 @@ def main(args):
 
     # Generate the file name
     file_name = f"{args.precision}_{args.device}_{args.uq}.pt"
-    ams_model = create_ams_model(model, torch.randn(args.inputDim, dtype=prec), device, prec)
+    ams_model = create_ams_model(model, device, prec)
     file_path = f"{args.directory}/linear_{file_name}"
     print(f"Model saved to {file_path}")
     ams_model.save(file_path)

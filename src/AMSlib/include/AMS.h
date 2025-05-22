@@ -20,10 +20,10 @@ using DomainLambda =
                        ams::SmallVector<ams::AMSTensor> & /* outputs */)>;
 
 
-using EOSCFn = void (*)(void *,
-                        const ams::SmallVector<ams::AMSTensor> &,
-                        ams::SmallVector<ams::AMSTensor> &,
-                        ams::SmallVector<ams::AMSTensor> &);
+using DomainCFn = void (*)(void *,
+                           const ams::SmallVector<ams::AMSTensor> &,
+                           ams::SmallVector<ams::AMSTensor> &,
+                           ams::SmallVector<ams::AMSTensor> &);
 
 using AMSExecutor = int64_t;
 using AMSCAbstrModel = int;
@@ -36,8 +36,30 @@ AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
                               int process_id,
                               int world_size);
 
+/*
+In the past AMSlib internally handled the various kinds of UQ (random, duq(max),
+duq(mean)). This required our API to require the user to explicitly set the UQ
+type of the model. Further on indirect model registration  (through environment
+variables pointing to a JSON file) every entry under the models had to define
+all of these values. There were the following shortcomings with the previous approach:
+
+1. The user of the model may not be the producer of the model and thus requiring
+from the user to know the UQ may be harder.
+2. Every new UQ technology needs to be hardcoded in AMSlib. That limits how fast
+we can use new ideas regarding UQ.
+3. AMSlib required internally to keep some state and implement conditional
+nesting depending on the uq type.
+
+AMS expects models to return a Tuple[[Tensor[N, ...], Tensor[N, 1]]. The first index
+of the Tuple is the actual model prediction, whereas the second one should be a
+tensor of the shape [N, 1]. Lower values on index "k" indicate low uncertainty,
+higher values indicate high uncertainty.
+
+Simple implementations of the current duq(mean), duq(max), random can be found on our
+model generation files used in testing.
+*/
+
 AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
-                                        AMSUQPolicy uq_policy,
                                         double threshold,
                                         const char *surrogate_path,
                                         bool store_data = true);
@@ -51,7 +73,7 @@ void AMSExecute(AMSExecutor executor,
                 ams::SmallVector<ams::AMSTensor> &outs);
 
 void AMSCExecute(AMSExecutor executor,
-                 EOSCFn OrigComputation,
+                 DomainCFn OrigComputation,
                  void *args,
                  const ams::SmallVector<ams::AMSTensor> &ins,
                  ams::SmallVector<ams::AMSTensor> &inouts,

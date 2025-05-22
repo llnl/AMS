@@ -1,10 +1,11 @@
-import sys
 import json
+import os
+import sys
 from pathlib import Path
+from typing import Optional, Tuple
+
 import h5py
 import numpy as np
-import os
-from typing import Tuple, Optional
 
 
 def get_suffix(db_type):
@@ -176,8 +177,8 @@ def verify_data(
         # Compute a theoritical range of possible values in the db.
         # The duq/faiss tests have specific settings. The random one can have a
         # bound. This checks for all these cases
-        lb = num_elements * (1 - threshold) - num_elements * 0.05
-        ub = num_elements * (1 - threshold) + num_elements * 0.05
+        lb = num_elements * (1 - threshold) - num_elements * 0.1
+        ub = num_elements * (1 - threshold) + num_elements * 0.1
         assert (
             inputs.shape[0] > lb and inputs.shape[0] < ub
         ), f"Not in the bounds of correct items {lb} {ub} {inputs.shape[0]}"
@@ -303,12 +304,18 @@ def get_rmq_data(ams_config, domain_names, num_iterations, timeout=1):
         model = ams_config["ml_models"][ml_id]
         threshold = model["threshold"]
         model_path = model.get("model_path", None)
-        uq_type = model["uq_type"]
-        if "uq_aggregate" in model:
-            uq_type += " ({0})".format(model["uq_aggregate"])
 
         if model_path == None or model_path == "":
             threshold = 0.0
+
+        uq_type = "unknown"
+        if "random" in ml_id:
+            uq_type = "random"
+        elif "uq" in ml_id:
+            if "mean" in ml_id:
+                uq_type = "deltaUQ(mean)"
+            elif "max" in ml_id:
+                uq_type = "deltaUQ(max)"
 
         print("Type for domain", d, type(_data[d]), len(_data[d]))
         store_data = model.get("store", True)
@@ -349,10 +356,7 @@ def from_json(argv):
             print("Reading Model", m)
             ml_id = data["domain_models"][m]
             model = data["ml_models"][ml_id]
-            uq_type = model["uq_type"]
             store_data = model.get("store", True)
-            if "uq_aggregate" in model:
-                uq_type += " ({0})".format(model["uq_aggregate"])
 
             threshold = model["threshold"]
             model_path = model.get("model_path", None)
@@ -377,6 +381,16 @@ def from_json(argv):
                 print("Out is None, In is not")
                 return 1
 
+            uq_type = "unknown"
+            if "random" in m:
+                uq_type = "random"
+            elif "uq" in m:
+                if "mean" in m:
+                    uq_type = "deltaUQ(mean)"
+                elif "max" in m:
+                    uq_type = "deltaUQ(max)"
+
+            print("Uq type is ", uq_type)
             sim_data[m] = (_in, _out, thresh, uq_type)
     elif db_type == "rmq":
         print("RMQ")

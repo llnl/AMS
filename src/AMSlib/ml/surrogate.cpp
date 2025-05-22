@@ -47,8 +47,8 @@ static std::string getAMSResourceTypeAsString(AMSResourceType res)
 }
 
 
-SurrogateModel::SurrogateModel(std::string& model_path, bool isDeltaUQ)
-    : _model_path(model_path), _is_DeltaUQ(isDeltaUQ)
+SurrogateModel::SurrogateModel(std::string& model_path)
+    : _model_path(model_path)
 {
 
   std::experimental::filesystem::path Path(model_path);
@@ -148,43 +148,8 @@ std::tuple<AMSDType, torch::Dtype> SurrogateModel::convertModelDataType(
 }
 
 
-std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_computeDetlaUQ(
-    c10::IValue& deltaUQTuple,
-    AMSUQPolicy policy,
-    float threshold)
-{
-  at::Tensor output_mean_tensor = deltaUQTuple.toTuple()
-                                      ->elements()[0]
-                                      .toTensor()
-                                      .set_requires_grad(false)
-                                      .detach();
-  at::Tensor output_stdev_tensor = deltaUQTuple.toTuple()
-                                       ->elements()[1]
-                                       .toTensor()
-                                       .set_requires_grad(false)
-                                       .detach();
-  auto outer_dim = output_stdev_tensor.sizes().size() - 1;
-  if (policy != AMSUQPolicy::AMS_DELTAUQ_MAX &&
-      policy != AMSUQPolicy::AMS_DELTAUQ_MEAN)
-    throw std::runtime_error("Invalid DELTA_UQ policy");
-
-  if (policy == AMSUQPolicy::AMS_DELTAUQ_MEAN) {
-    auto mean = output_stdev_tensor.mean(outer_dim);
-    auto predicate = mean < threshold;
-    return std::make_tuple(std::move(output_mean_tensor), std::move(predicate));
-  } else if (policy == AMSUQPolicy::AMS_DELTAUQ_MAX) {
-    auto tmp = output_stdev_tensor.max(outer_dim);
-    torch::Tensor max = std::get<0>(tmp);
-    auto predicate = max < threshold;
-    return std::make_tuple(std::move(output_mean_tensor), std::move(predicate));
-  }
-  throw std::runtime_error("Invalid DELTA_UQ policy");
-}
-
-
 std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_evaluate(
     torch::Tensor& inputs,
-    AMSUQPolicy policy,
     float threshold)
 {
   if (inputs.dtype() != torch_dtype) {
@@ -196,26 +161,19 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_evaluate(
   }
   c10::InferenceMode guard(true);
   auto out = module.forward({inputs});
-  if (_is_DeltaUQ) {
-    return _computeDetlaUQ(out, policy, threshold);
-  }
 
-  at::Tensor output_tensor = out.toTensor().set_requires_grad(false).detach();
-  // Randomly select indices to set to True
-  torch::Tensor predicate =
-      torch::zeros({output_tensor.sizes()[0], 1}, torch::kBool);
-  auto indices = torch::randperm(output_tensor.sizes()[0])
-                     .slice(0, 0, threshold * output_tensor.sizes()[0]);
+  at::Tensor prediction =
+      out.toTuple()->elements()[0].toTensor().set_requires_grad(false).detach();
+  at::Tensor uncertainty =
+      out.toTuple()->elements()[1].toTensor().set_requires_grad(false).detach();
 
-  // Set selected indices to True
-  predicate.index_put_({indices, 0}, true);
-  return std::make_tuple(std::move(output_tensor), std::move(predicate));
+  auto predicate = uncertainty < threshold;
+  return std::make_tuple(std::move(prediction), std::move(predicate));
 }
 
 
 std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
     ams::MutableArrayRef<at::Tensor> Inputs,
-    AMSUQPolicy policy,
     float threshold)
 {
   if (Inputs.size() == 0) {
@@ -257,7 +215,7 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
       "Input concatenated tensor is %s",
       shapeToString(ITensor).c_str());
 
-  auto [OTensor, Predicate] = _evaluate(ITensor, policy, threshold);
+  auto [OTensor, Predicate] = _evaluate(ITensor, threshold);
   if (InputDevice != torch_device) {
     OTensor = OTensor.to(InputDevice);
     Predicate = Predicate.to(InputDevice);

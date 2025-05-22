@@ -23,7 +23,6 @@ public:
   AMSEOS(const ams::AMSDBType db_type,
          const ams::AMSResourceType resource,
          const ams::AMSExecPolicy exec_policy,
-         const ams::AMSUQPolicy uq_policy,
          const int mpi_task,
          const int mpi_nproc,
          const double threshold,

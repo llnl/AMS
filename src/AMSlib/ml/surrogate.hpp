@@ -25,55 +25,6 @@
 #include "wf/debug.h"
 
 
-namespace UQ
-{
-static inline bool isDeltaUQ(ams::AMSUQPolicy policy)
-{
-  if (policy >= ams::AMSUQPolicy::AMS_DELTAUQ_MEAN &&
-      policy <= ams::AMSUQPolicy::AMS_DELTAUQ_MAX) {
-    return true;
-  }
-  return false;
-}
-
-static inline bool isRandomUQ(ams::AMSUQPolicy policy)
-{
-  return policy == ams::AMSUQPolicy::AMS_RANDOM;
-}
-
-
-static inline bool isUQPolicy(ams::AMSUQPolicy policy)
-{
-  if (ams::AMSUQPolicy::AMS_UQ_BEGIN < policy &&
-      policy < ams::AMSUQPolicy::AMS_UQ_END)
-    return true;
-  return false;
-}
-
-static std::string UQPolicyToStr(ams::AMSUQPolicy policy)
-{
-  if (policy == ams::AMSUQPolicy::AMS_RANDOM)
-    return "random";
-  else if (policy == ams::AMSUQPolicy::AMS_DELTAUQ_MEAN)
-    return "deltaUQ (mean)";
-  else if (policy == ams::AMSUQPolicy::AMS_DELTAUQ_MAX)
-    return "deltaUQ (max)";
-  return "Unknown";
-}
-
-static ams::AMSUQPolicy UQPolicyFromStr(std::string& policy)
-{
-  if (policy.compare("random") == 0)
-    return ams::AMSUQPolicy::AMS_RANDOM;
-
-  else if (policy.compare("deltaUQ (mean)") == 0)
-    return ams::AMSUQPolicy::AMS_DELTAUQ_MEAN;
-  else if (policy.compare("deltaUQ (max)") == 0)
-    return ams::AMSUQPolicy::AMS_DELTAUQ_MAX;
-  return ams::AMSUQPolicy::AMS_UQ_END;
-}
-};  // namespace UQ
-
 //! ----------------------------------------------------------------------------
 //! An implementation for a surrogate model
 //! ----------------------------------------------------------------------------
@@ -86,8 +37,6 @@ private:
   torch::DeviceType torch_device;
   ams::AMSDType model_dtype;
   torch::Dtype torch_dtype;
-  const bool _is_DeltaUQ;
-
   // -------------------------------------------------------------------------
   // variables to store the torch model
   // -------------------------------------------------------------------------
@@ -97,15 +46,14 @@ protected:
   static std::unordered_map<std::string, std::shared_ptr<SurrogateModel>>
       instances;
 
-  SurrogateModel(std::string& model_path, bool is_DeltaUQ = false);
+  SurrogateModel(std::string& model_path);
 
 public:
   // -------------------------------------------------------------------------
   // public interface
   // -------------------------------------------------------------------------
 
-  static std::shared_ptr<SurrogateModel> getInstance(std::string& model_path,
-                                                     bool is_DeltaUQ = false)
+  static std::shared_ptr<SurrogateModel> getInstance(std::string& model_path)
   {
     auto model = SurrogateModel::instances.find(std::string(model_path));
     if (model != instances.end()) {
@@ -121,8 +69,7 @@ public:
     // Model does not exist. We need to create one
     DBG(Surrogate, "Generating new model under (%s)", model_path.c_str());
     std::shared_ptr<SurrogateModel> torch_model =
-        std::shared_ptr<SurrogateModel>(
-            new SurrogateModel(model_path, is_DeltaUQ));
+        std::shared_ptr<SurrogateModel>(new SurrogateModel(model_path));
     instances.insert(std::make_pair(std::string(model_path), torch_model));
     return torch_model;
   };
@@ -132,18 +79,11 @@ public:
     DBG(Surrogate, "Destroying surrogate model at %s", _model_path.c_str());
   }
 
-  std::tuple<torch::Tensor, torch::Tensor> _computeDetlaUQ(
-      c10::IValue& deltaUQTuple,
-      ams::AMSUQPolicy policy,
-      float threshold);
-
   std::tuple<torch::Tensor, torch::Tensor> _evaluate(torch::Tensor& inputs,
-                                                     ams::AMSUQPolicy policy,
                                                      const float threshold);
 
   std::tuple<torch::Tensor, torch::Tensor> evaluate(
       ams::MutableArrayRef<at::Tensor> Inputs,
-      ams::AMSUQPolicy policy,
       const float threshold);
 
 
@@ -168,8 +108,6 @@ public:
   {
     return model_dtype == dType;
   }
-
-  bool is_DeltaUQ() { return _is_DeltaUQ; }
 
   std::tuple<ams::AMSResourceType, torch::DeviceType> convertModelResourceType(
       std::string& device);

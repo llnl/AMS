@@ -250,21 +250,6 @@ int main(int argc, char* argv[])
   auto& db_instance = ams::db::DBManager::getInstance();
   db_instance.instantiate_fs_db(AMSDBType::AMS_HDF5, db_path);
 
-
-  AMSUQPolicy duq;
-
-  if (duq_type.compare("duq_mean") == 0) {
-    duq = AMSUQPolicy::AMS_DELTAUQ_MEAN;
-  } else if (duq_type.compare("duq_max") == 0) {
-    duq = AMSUQPolicy::AMS_DELTAUQ_MAX;
-  } else if (duq_type.compare("random") == 0) {
-    duq = AMSUQPolicy::AMS_RANDOM;
-  } else {
-    std::cout << "Unknown dUQ \n";
-    return 1;
-  }
-
-
   if (Type.compare("double") == 0) {
     DType = torch::kFloat64;
   }
@@ -279,7 +264,7 @@ int main(int argc, char* argv[])
 
   {
     ams::AMSWorkflow wf =
-        ams::AMSWorkflow(model_path, domain_name, threshold, duq, 0, 1);
+        ams::AMSWorkflow(model_path, domain_name, threshold, 0, 1);
 
     filename = wf.getDBFilename();
 

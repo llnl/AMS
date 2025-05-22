@@ -157,7 +157,6 @@ int main(int argc, char **argv)
   char *model_path = argv[4];
   AMSDType data_type = getDataType(argv[5]);
   std::string uq_name = std::string(argv[6]);
-  const AMSUQPolicy uq_policy = UQ::UQPolicyFromStr(uq_name);
   float threshold = std::atof(argv[7]);
   int num_iterations = std::atoi(argv[8]);
   int avg_elements = std::atoi(argv[9]);
@@ -169,16 +168,11 @@ int main(int argc, char **argv)
 
   AMSConfigureFSDatabase(db_type, fs_path.c_str());
 
-  assert((uq_policy == AMSUQPolicy::AMS_DELTAUQ_MAX ||
-          uq_policy == AMSUQPolicy::AMS_DELTAUQ_MEAN ||
-          uq_policy == AMSUQPolicy::AMS_RANDOM) &&
-         "Test only supports duq models");
+  AMSCAbstrModel model_descr =
+      AMSRegisterAbstractModel("test_1", threshold, nullptr, "test_1");
 
-  AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
-      "test_1", uq_policy, threshold, nullptr, "test_1");
-
-  AMSCAbstrModel model_descr1 = AMSRegisterAbstractModel(
-      "test_2", uq_policy, threshold, nullptr, "test_2");
+  AMSCAbstrModel model_descr1 =
+      AMSRegisterAbstractModel("test_2", threshold, nullptr, "test_2");
 
   std::cout << "Running with " << num_iterations << "\n";
   AMSExecutor wf1 = AMSCreateExecutor(model_descr, 0, 1);

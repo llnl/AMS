@@ -105,7 +105,6 @@ void random_init(mfem::Array<T> &arr)
 template <typename TypeValue>
 int run(const char *device_name,
         const char *db_type,
-        const char *uq_policy_opt,
         int seed,
         int rId,
         int imbalance,
@@ -146,16 +145,6 @@ int run(const char *device_name,
   if (dbType != AMSDBType::AMS_RMQ) {
     AMSConfigureFSDatabase(dbType, db_config);
   }
-
-  AMSUQPolicy uq_policy;
-  if (strcmp(uq_policy_opt, "deltauq-max") == 0)
-    uq_policy = AMSUQPolicy::AMS_DELTAUQ_MAX;
-  else if (strcmp(uq_policy_opt, "deltauq-mean") == 0)
-    uq_policy = AMSUQPolicy::AMS_DELTAUQ_MEAN;
-  else if (strcmp(uq_policy_opt, "random") == 0)
-    uq_policy = AMSUQPolicy::AMS_RANDOM;
-  else
-    throw std::runtime_error("Invalid UQ policy");
 
   // set up a randomization seed
   srand(seed + rId);
@@ -287,7 +276,6 @@ int run(const char *device_name,
                                     ? ams::AMSResourceType::AMS_DEVICE
                                     : ams::AMSResourceType::AMS_HOST,
                                 ams_loadBalance,
-                                uq_policy,
                                 rId,
                                 wS,
                                 threshold,
@@ -534,8 +522,6 @@ int main(int argc, char **argv)
 
   const char *precision_opt = "double";
 
-  const char *uq_policy_opt = "";
-
   int seed = 0;
   double empty_element_ratio = -1;
 
@@ -639,14 +625,6 @@ int main(int argc, char **argv)
                  "\t 'hdf5': use hdf5 as a back end\n"
                  "\t 'rmq': use RabbitMQ as a back end\n");
 
-  args.AddOption(&uq_policy_opt,
-                 "-uq",
-                 "--uqtype",
-                 "Types of UQ to select from: \n"
-                 "\t 'deltauq-mean': Uncertainty through DUQ using mean\n"
-                 "\t 'deltauq-max': Uncertainty through DUQ using max\n"
-                 "\t 'random': Uncertainty throug a random model\n");
-
   args.AddOption(
       &verbose, "-v", "--verbose", "-qu", "--quiet", "Print extra stuff");
 
@@ -706,7 +684,6 @@ int main(int argc, char **argv)
   if (strcmp(precision_opt, "single") == 0)
     ret = run<float>(device_name,
                      db_type,
-                     uq_policy_opt,
                      seed,
                      rId,
                      imbalance,
@@ -728,7 +705,6 @@ int main(int argc, char **argv)
   else if (strcmp(precision_opt, "double") == 0)
     ret = run<double>(device_name,
                       db_type,
-                      uq_policy_opt,
                       seed,
                       rId,
                       imbalance,

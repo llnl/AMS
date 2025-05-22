@@ -80,27 +80,28 @@ void eval_ams(AMSExecutor &wf,
                       AMSResourceType::AMS_HOST));
 
 
-  DomainLambda OrigComputation = [&](const ams::SmallVector<ams::AMSTensor>
-                                      &ams_ins,
-                                  ams::SmallVector<ams::AMSTensor> &ams_inouts,
-                                  ams::SmallVector<ams::AMSTensor> &ams_outs) {
-    int prunedZones = ams_ins[0].shape()[0];
-    std::cout << "Pruned are " << prunedZones << "\n";
-    real_t *pruned_mat[prunedZones];
-    // The 2D data of materials are unnder a c_vector.
-    real_t *c_mats = ams_ins[0].data<real_t>();
-    // We need this as eval requires a c like 2D vector
-    for (int i = 0; i < prunedZones; i++) {
-      pruned_mat[i] = &c_mats[i * ams_ins[0].shape()[1]];
-    }
-    eval(ams_inouts[0].data<real_t>(),  // density was the first entry in inout
-         ams_outs[0].data<real_t>(),
-         ams_inouts[1].data<real_t>(),  // qc was the second entry in inout
-         *ams_ins[1].data<real_t>(),
-         pruned_mat,
-         NumComps,
-         prunedZones);
-  };
+  DomainLambda OrigComputation =
+      [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
+          ams::SmallVector<ams::AMSTensor> &ams_inouts,
+          ams::SmallVector<ams::AMSTensor> &ams_outs) {
+        int prunedZones = ams_ins[0].shape()[0];
+        std::cout << "Pruned are " << prunedZones << "\n";
+        real_t *pruned_mat[prunedZones];
+        // The 2D data of materials are unnder a c_vector.
+        real_t *c_mats = ams_ins[0].data<real_t>();
+        // We need this as eval requires a c like 2D vector
+        for (int i = 0; i < prunedZones; i++) {
+          pruned_mat[i] = &c_mats[i * ams_ins[0].shape()[1]];
+        }
+        eval(ams_inouts[0]
+                 .data<real_t>(),  // density was the first entry in inout
+             ams_outs[0].data<real_t>(),
+             ams_inouts[1].data<real_t>(),  // qc was the second entry in inout
+             *ams_ins[1].data<real_t>(),
+             pruned_mat,
+             NumComps,
+             prunedZones);
+      };
   // After I call this, I expect the database to have the following order:
   // input_Data: **input_tensors, **inout_tensors
   // input_Data: **output_tensors, **inout_tensors
@@ -136,8 +137,8 @@ int main(int argc, char *argv[])
   initializeRandom(qc, numZones);
   real_t dt = 1.0;
   ams::AMSConfigureFSDatabase(ams::AMSDBType::AMS_HDF5, "./");
-  ams::AMSCAbstrModel model_descr = AMSRegisterAbstractModel(
-      "test", ams::AMSUQPolicy::AMS_RANDOM, 0.0, nullptr, "test");
+  ams::AMSCAbstrModel model_descr =
+      AMSRegisterAbstractModel("test", 0.0, nullptr, "test");
   ams::AMSExecutor wf = ams::AMSCreateExecutor(model_descr, 0, 1);
 
   // Here I am uncertain if materials are NumComps or NumZones.

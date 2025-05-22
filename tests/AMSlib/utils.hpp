@@ -77,29 +77,6 @@ static inline AMSDBType getDBType(std::string db_type)
   return dbType;
 }
 
-static std::string UQPolicyToStr(AMSUQPolicy policy)
-{
-  if (policy == AMSUQPolicy::AMS_RANDOM)
-    return "random";
-  else if (policy == AMSUQPolicy::AMS_DELTAUQ_MEAN)
-    return "deltaUQ (mean)";
-  else if (policy == AMSUQPolicy::AMS_DELTAUQ_MAX)
-    return "deltaUQ (max)";
-  return "Unknown";
-}
-
-static AMSUQPolicy UQPolicyFromStr(std::string &policy)
-{
-  if (policy.compare("random") == 0)
-    return AMSUQPolicy::AMS_RANDOM;
-  else if (policy.compare("deltaUQ (mean)") == 0)
-    return AMSUQPolicy::AMS_DELTAUQ_MEAN;
-  else if (policy.compare("deltaUQ (max)") == 0)
-    return AMSUQPolicy::AMS_DELTAUQ_MAX;
-  return AMSUQPolicy::AMS_UQ_END;
-}
-
-
 // Signal handler to print the stack trace
 static inline void signalHandler(int signum)
 {
