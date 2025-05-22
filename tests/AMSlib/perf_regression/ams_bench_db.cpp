@@ -280,7 +280,6 @@ int main(int argc, char **argv)
   } else {
     Problem<double> prob(num_inputs, num_outputs, sleep_msec);
     prob.ams_run(wf, resource, num_iterations, num_elems);
-    prob.ams_run(wf, resource, num_iterations, num_elems);
   }
 
   MPI_CALL(MPI_Finalize());
