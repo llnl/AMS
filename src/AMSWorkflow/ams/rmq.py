@@ -30,7 +30,6 @@ class AMSMessage(object):
     def __init__(self, body: str):
         self.body = body
 
-        self.num_elements = None
         self.hsize = None
         self.dtype_byte = None
         self.mpi_rank = None
@@ -43,7 +42,7 @@ class AMSMessage(object):
         dt = "float" if self.dtype_byte == 4 else 8
         if not self.dtype_byte:
             dt = None
-        return f"AMSMessage(domain={self.domain_names}, #mpi={self.mpi_rank}, num_elements={self.num_elements}, datatype={dt}, input_dim={self.input_dim}, output_dim={self.output_dim})"
+        return f"AMSMessage(domain={self.domain_names}, #mpi={self.mpi_rank}, datatype={dt}, input_dim={self.input_dim}, output_dim={self.output_dim})"
 
     def __repr__(self):
         return self.__str__()
@@ -65,7 +64,7 @@ class AMSMessage(object):
         is structured as pairs of input/outputs. Let K be the total number of elements,
         then we have K inputs followed by K outputs:
 
-            |__Header_(16B)__|_Domain_Name_|__Input 1__|...|__Input_K__|__Output_1__|...
+            |__Header_(12B)__|_Domain_Name_|__Input 1__|...|__Input_K__|__Output_1__|...
 
         """
         return "BHHHH3x"

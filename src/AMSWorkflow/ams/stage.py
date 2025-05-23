@@ -348,7 +348,7 @@ class RMQDomainDataLoaderTask(Task):
             "delivery_tag": basic_deliver.delivery_tag,
             "mpi_rank": msg.mpi_rank,
             "domain_name": domain_name,
-            "num_elements": msg.num_elements,
+            "num_elements": input_data.size + output_data.size,
             "input_dim": msg.input_dim,
             "output_dim": msg.output_dim,
             "size_bytes": input_data.nbytes + output_data.nbytes,
