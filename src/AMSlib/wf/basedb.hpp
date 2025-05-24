@@ -309,33 +309,29 @@ public:
 
 #endif
 
-
 #ifdef __AMS_ENABLE_RMQ__
-// TODO IMPLEMENT THIS AFTER everything else is working
 
 enum class ConnectionStatus { FAILED, CONNECTED, CLOSED, ERROR };
 
 /**
-  * @brief AMS represents the header as follows:
-  * The header is 16 bytes long:
-  *   - 1 byte is the size of the header (here 16). Limit max: 255
+  * @brief AMS represents headers as follows:
+  * The header is 12 bytes long:
+  *   - 1 byte is the size of the header (here 12). Limit max: 255
   *   - 2 bytes are the MPI rank (0 if AMS is not running with MPI). Limit max: 65535
   *   - 2 bytes to store the size of the MSG domain name. Limit max: 65535
-  *   - 2 bytes are the number of input tensors . Limit max: 65535
-  *   - 2 bytes are the number of output tensors . Limit max: 65535
+  *   - 2 bytes are the number of input tensors. Limit max: 65535
+  *   - 2 bytes are the number of output tensors. Limit max: 65535
   *   - 3 bytes for padding. Limit max: 2^16 - 1
   *
-  * |_Header_|___Rank___|__DomainSize__|___InDim____|___OutDim___|_Pad_|.real data.|
-  * ^        ^          ^          ^              ^          ^            ^            ^     ^           ^
-  * | Byte 1 | Byte 2-3 |    Byte 4-5  |  Byte 6-7  |Byte 8-9    | Byte 10-12 | Byte 12-14 |-----| Byte 16-k |
+  * |_Header_|___Rank___|_DomainSize_|___InDim__|__OutDim__|____Pad_____|.real data.|
+  * ^        ^          ^            ^          ^          ^            ^           ^
+  * | Byte 1 | Byte 2-3 |  Byte 4-5  | Byte 6-7 | Byte 8-9 | Byte 10-12 | Byte 12-k |
   *
-  * where X = datatype * num_element * (InDim + OutDim). Total message size is 16+k. 
-  *
-  * The data starts at byte 16, ends at byte k.
+  * The data starts at byte 12, ends at byte k.
   * The data is structured as pairs of input/outputs. Let K be the total number of 
-  * elements, then we have K pairs of inputs/outputs (either float or double):
+  * elements, then we have K pairs of inputs/outputs:
   *
-  *  |__Header_(16B)__|__Input 1__|__Output 1__|...|__Input_K__|__Output_K__|
+  *  |__Header_(12B)__|__Input 1__|__Output 1__|...|__Input_K__|__Output_K__|
   */
 struct AMSMsgHeader {
   /** @brief Header size (bytes) */
@@ -352,7 +348,7 @@ struct AMSMsgHeader {
   /**
    * @brief Constructor for AMSMsgHeader
    * @param[in]  mpi_rank     MPI rank
-   * @param[in]  num_elem     Number of elements (input/outputs)
+   * @param[in]  domain_size  Size of the MSG domain name
    * @param[in]  in_dim       Inputs dimension
    * @param[in]  out_dim      Outputs dimension
    */
@@ -364,7 +360,7 @@ struct AMSMsgHeader {
   /**
    * @brief Constructor for AMSMsgHeader
    * @param[in]  mpi_rank     MPI rank
-   * @param[in]  num_elem     Number of elements (input/outputs)
+   * @param[in]  domain_size  Size of the MSG domain name
    * @param[in]  in_dim       Inputs dimension
    * @param[in]  out_dim      Outputs dimension
    */
