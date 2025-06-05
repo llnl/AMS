@@ -1285,52 +1285,57 @@ private:
     });
 
     _channel->declareExchange(_exchange_sender, AMQP::ExchangeType::direct)
-      .onSuccess([&]() {
-        DBG(ConnectionManagerAMQP, "declared exchange: %s", _exchange_sender.c_str())
-
-        _channel->declareQueue(_queue_name)
-          .onSuccess([&](const std::string& queue_name,
-                      uint32_t messagecount,
-                      uint32_t consumercount) {
+        .onSuccess([&]() {
           DBG(ConnectionManagerAMQP,
-              "declared queue: %s (messagecount=%d, "
-              "consumercount=%d)",
-              queue_name.c_str(),
-              messagecount,
-              consumercount)
-          // We bind the anonymous queue to the exchange
-          _channel->bindQueue(_exchange_sender, queue_name, _routing_key_sender)
-            .onSuccess([&, queue_name]() {
-              DBG(ConnectionManagerAMQP,
-                  "Bounded queue %s to exchange %s with "
-                  "routing key = %s",
-                  queue_name.c_str(),
-                  _exchange_sender.c_str(),
-                  _routing_key_sender.c_str())
-            }) // bindQueue
-            .onError([&](const char* message) {
-              WARNING(ConnectionManagerAMQP,
-                      "Error while binding queue to exchange "
-                      "%s",
-                      message)
-              _isConnected = false;
-            }); // bindQueue
-        }) //declareQueue
+              "declared exchange: %s",
+              _exchange_sender.c_str())
+
+          _channel->declareQueue(_queue_name)
+              .onSuccess([&](const std::string& queue_name,
+                             uint32_t messagecount,
+                             uint32_t consumercount) {
+                DBG(ConnectionManagerAMQP,
+                    "declared queue: %s (messagecount=%d, "
+                    "consumercount=%d)",
+                    queue_name.c_str(),
+                    messagecount,
+                    consumercount)
+                // We bind the anonymous queue to the exchange
+                _channel
+                    ->bindQueue(_exchange_sender,
+                                queue_name,
+                                _routing_key_sender)
+                    .onSuccess([&, queue_name]() {
+                      DBG(ConnectionManagerAMQP,
+                          "Bounded queue %s to exchange %s with "
+                          "routing key = %s",
+                          queue_name.c_str(),
+                          _exchange_sender.c_str(),
+                          _routing_key_sender.c_str())
+                    })  // bindQueue
+                    .onError([&](const char* message) {
+                      WARNING(ConnectionManagerAMQP,
+                              "Error while binding queue to exchange "
+                              "%s",
+                              message)
+                      _isConnected = false;
+                    });  // bindQueue
+              })         //declareQueue
+              .onError([&](const char* message) {
+                WARNING(ConnectionManagerAMQP,
+                        "Error while creating queue: "
+                        "%s",
+                        message)
+                _isConnected = false;
+              });  //declareQueue
+        })         // declareExchange
         .onError([&](const char* message) {
           WARNING(ConnectionManagerAMQP,
-                  "Error while creating queue: "
+                  "Error while creating exchange: "
                   "%s",
                   message)
           _isConnected = false;
-        }); //declareQueue
-      }) // declareExchange
-      .onError([&](const char* message) {
-        WARNING(ConnectionManagerAMQP,
-                "Error while creating exchange: "
-                "%s",
-                message)
-        _isConnected = false;
-      }); // declareExchange
+        });  // declareExchange
 
     _isConnected = true;
     _reliableChannel =
@@ -1480,7 +1485,9 @@ public:
     bool amsRMQFailure = checkEnvVariable("AMS_SIMULATE_RMQ_FAILURE");
     bool amsRMQNamedQueue = checkEnvVariable("AMS_USE_NAMED_QUEUE");
     CWARNING(RMQInterface, amsRMQFailure, "Simulating connetion drops")
-    CWARNING(RMQInterface, amsRMQNamedQueue, "Using named queue for RabbitMQ (slower)")
+    CWARNING(RMQInterface,
+             amsRMQNamedQueue,
+             "Using named queue for RabbitMQ (slower)")
 
     // If the queue_name is equals to "" RabbitMQ will create a queue for us (anonymous queue)
     // For debug and test we can also force RMQ to use a specific queue name which enforce message
@@ -1490,19 +1497,20 @@ public:
       queue_name = "ams-debug-queue-" + std::to_string(_rId);
     }
 
-    _publishingManager = std::make_unique<ConnectionManagerAMQP>(_rId,
-                                                                 rmq_user,
-                                                                 rmq_password,
-                                                                 rmq_vhost,
-                                                                 service_host,
-                                                                 service_port,
-                                                                 rmq_cert,
-                                                                 exchange_physics,
-                                                                 routing_key_physics,
-                                                                 exchange_ml,
-                                                                 routing_key_ml,
-                                                                 amsRMQFailure,
-                                                                 queue_name);
+    _publishingManager =
+        std::make_unique<ConnectionManagerAMQP>(_rId,
+                                                rmq_user,
+                                                rmq_password,
+                                                rmq_vhost,
+                                                service_host,
+                                                service_port,
+                                                rmq_cert,
+                                                exchange_physics,
+                                                routing_key_physics,
+                                                exchange_ml,
+                                                routing_key_ml,
+                                                amsRMQFailure,
+                                                queue_name);
     _updateSurrogate = updateSurrogate;
   }
 
