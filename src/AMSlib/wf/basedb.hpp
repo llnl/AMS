@@ -934,16 +934,20 @@ private:
   std::atomic<bool> _stop;
   /** @brief True if currently reconnectiong */
   std::atomic<bool> _reconnecting;
-  std::string _queue_sender;
-  /** @brief name of the exchange */
-  std::string _exchange;
-  /** @brief name of the routing binded to exchange */
-  std::string _routing_key;
+  /** @brief Exchange name for outgoing communication */
+  std::string _exchange_sender;
+  /** @brief Routing key for outgoing communication */
+  std::string _routing_key_sender;
+  /** @brief name of the receiving exchange */
+  std::string _exchange_receiver;
+  /** @brief name of the routing binded to receiving exchange */
+  std::string _routing_key_receiver;
   /** @brief True if connection */
   std::atomic<bool> _isConnected;
-
   /** @brief Number of messages not acked / nacked */
   std::atomic<int> _nbProcessingMsg;
+  /** @brief Store queue name if explicit queue name requested */
+  std::string _queue_name;
 
 public:
   ConnectionManagerAMQP(uint64_t id,
@@ -953,10 +957,12 @@ public:
                         std::string service_host,
                         int service_port,
                         std::string rmq_cert,
-                        std::string outbound_queue,
-                        std::string exchange,
-                        std::string routing_key,
-                        bool connectionDrop = false)
+                        std::string exchange_physics,
+                        std::string routing_key_physics,
+                        std::string exchange_ml,
+                        std::string routing_key_ml,
+                        bool connectionDrop = false,
+                        std::string queue_name = "")
       : _rId(id),
         _address(service_host,
                  service_port,
@@ -964,12 +970,14 @@ public:
                  rmq_vhost,
                  rmq_cert.empty() ? false : true),
         _stop(false),
-        _queue_sender(outbound_queue),
-        _exchange(exchange),
-        _routing_key(routing_key),
+        _exchange_sender(exchange_physics),
+        _exchange_receiver(exchange_ml),
+        _routing_key_sender(routing_key_physics),
+        _routing_key_receiver(routing_key_ml),
         _reconnecting(false),
         _isConnected(false),
-        _nbProcessingMsg(0)
+        _nbProcessingMsg(0),
+        _queue_name(queue_name)
   {
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
     evthread_use_pthreads();
@@ -988,8 +996,8 @@ public:
         _address.hostname().c_str(),
         _address.port(),
         _address.vhost().c_str(),
-        _exchange.c_str(),
-        _routing_key.c_str())
+        _exchange_receiver.c_str(),
+        _routing_key_receiver.c_str())
 
     _base = event_base_new();
     _handler = std::make_shared<AMQPHandler>(_base, rmq_cert);
@@ -1167,8 +1175,8 @@ private:
     // Publish using the reliable channel if available.
     if (_reliableChannel) {
       _reliableChannel
-          ->publish("",
-                    _queue_sender,
+          ->publish(_exchange_sender,
+                    _routing_key_sender,
                     reinterpret_cast<char*>(msg.dPtr.get()),
                     msg.size)
           .onAck([this, msg]() {
@@ -1276,24 +1284,54 @@ private:
       _isConnected = false;
     });
 
-    _channel->declareQueue(_queue_sender)
-        .onSuccess([](const std::string& name,
+    _channel->declareExchange(_exchange_sender, AMQP::ExchangeType::direct)
+      .onSuccess([&]() {
+        DBG(ConnectionManagerAMQP, "declared exchange: %s", _exchange_sender.c_str())
+
+        _channel->declareQueue(_queue_name)
+          .onSuccess([&](const std::string& queue_name,
                       uint32_t messagecount,
                       uint32_t consumercount) {
           DBG(ConnectionManagerAMQP,
               "declared queue: %s (messagecount=%d, "
               "consumercount=%d)",
-              name.c_str(),
+              queue_name.c_str(),
               messagecount,
               consumercount)
-        })
+          // We bind the anonymous queue to the exchange
+          _channel->bindQueue(_exchange_sender, queue_name, _routing_key_sender)
+            .onSuccess([&, queue_name]() {
+              DBG(ConnectionManagerAMQP,
+                  "Bounded queue %s to exchange %s with "
+                  "routing key = %s",
+                  queue_name.c_str(),
+                  _exchange_sender.c_str(),
+                  _routing_key_sender.c_str())
+            }) // bindQueue
+            .onError([&](const char* message) {
+              WARNING(ConnectionManagerAMQP,
+                      "Error while binding queue to exchange "
+                      "%s",
+                      message)
+              _isConnected = false;
+            }); // bindQueue
+        }) //declareQueue
         .onError([&](const char* message) {
           WARNING(ConnectionManagerAMQP,
-                  "Error while creating broker queue: "
+                  "Error while creating queue: "
                   "%s",
                   message)
           _isConnected = false;
-        });
+        }); //declareQueue
+      }) // declareExchange
+      .onError([&](const char* message) {
+        WARNING(ConnectionManagerAMQP,
+                "Error while creating exchange: "
+                "%s",
+                message)
+        _isConnected = false;
+      }); // declareExchange
+
     _isConnected = true;
     _reliableChannel =
         std::make_shared<AMQP::Reliable<AMQP::Tagger>>(*_channel);
@@ -1401,18 +1439,8 @@ private:
 class RMQInterface
 {
 private:
-  /** @brief Path of the config file (JSON) */
-  std::string _config;
   /** @brief MPI rank (0 if no MPI support) */
   uint64_t _rId;
-  /** @brief name of the queue to send data */
-  std::string _queue_sender;
-  /** @brief name of the exchange to receive data */
-  std::string _exchange;
-  /** @brief name of the routing key to receive data */
-  std::string _routing_key;
-  /** @brief TLS certificate path */
-  std::string _cacert;
   /** @brief Represent the ID of the last message sent */
   int _msg_tag;
   /** @brief True if we support surrogate update */
@@ -1432,9 +1460,10 @@ public:
    * @param[in] service_port The port number
    * @param[in] service_host URL of RabbitMQ server
    * @param[in] rmq_cert Path to TLS certificate
-   * @param[in] outbound_queue Name of the queue on which AMSlib publishes (send) messages
-   * @param[in] exchange Exchange for incoming messages
-   * @param[in] routing_key Routing key for incoming messages (must match what the AMS Python side is using)
+   * @param[in] exchange_physics Name of the exchange on which AMSlib publishes (send) messages
+   * @param[in] routing_key_physics Routing key used by AMSlib to send messages
+   * @param[in] exchange_ml Exchange for incoming messages
+   * @param[in] routing_key_ml Routing key for incoming messages (must match what the AMS Python side is using)
    */
   void connect(std::string rmq_user,
                std::string rmq_password,
@@ -1442,13 +1471,24 @@ public:
                std::string service_host,
                int service_port,
                std::string rmq_cert,
-               std::string outbound_queue,
-               std::string exchange,
-               std::string routing_key,
+               std::string exchange_physics,
+               std::string routing_key_physics,
+               std::string exchange_ml,
+               std::string routing_key_ml,
                bool updateSurrogate)
   {
     bool amsRMQFailure = checkEnvVariable("AMS_SIMULATE_RMQ_FAILURE");
+    bool amsRMQNamedQueue = checkEnvVariable("AMS_USE_NAMED_QUEUE");
     CWARNING(RMQInterface, amsRMQFailure, "Simulating connetion drops")
+    CWARNING(RMQInterface, amsRMQNamedQueue, "Using named queue for RabbitMQ (slower)")
+
+    // If the queue_name is equals to "" RabbitMQ will create a queue for us (anonymous queue)
+    // For debug and test we can also force RMQ to use a specific queue name which enforce message
+    // retention even if the other side (consumer) is not listening when we send messages
+    std::string queue_name = "";
+    if (amsRMQNamedQueue) {
+      queue_name = "ams-debug-queue-" + std::to_string(_rId);
+    }
 
     _publishingManager = std::make_unique<ConnectionManagerAMQP>(_rId,
                                                                  rmq_user,
@@ -1457,10 +1497,12 @@ public:
                                                                  service_host,
                                                                  service_port,
                                                                  rmq_cert,
-                                                                 outbound_queue,
-                                                                 exchange,
-                                                                 routing_key,
-                                                                 amsRMQFailure);
+                                                                 exchange_physics,
+                                                                 routing_key_physics,
+                                                                 exchange_ml,
+                                                                 routing_key_ml,
+                                                                 amsRMQFailure,
+                                                                 queue_name);
     _updateSurrogate = updateSurrogate;
   }
 
@@ -1869,9 +1911,10 @@ public:
                           std::string& rmq_user,
                           std::string& rmq_vhost,
                           std::string& rmq_cert,
-                          std::string& outbound_queue,
-                          std::string& exchange,
-                          std::string& routing_key,
+                          std::string& exchange_physics,
+                          std::string& routing_key_physics,
+                          std::string& exchange_ml,
+                          std::string& routing_key_ml,
                           bool update_surrogate)
   {
     fs::path Path(rmq_cert);
@@ -1890,9 +1933,10 @@ public:
                           host,
                           port,
                           rmq_cert,
-                          outbound_queue,
-                          exchange,
-                          routing_key,
+                          exchange_physics,
+                          routing_key_physics,
+                          exchange_ml,
+                          routing_key_ml,
                           update_surrogate);
 #else
     FATAL(DBManager,

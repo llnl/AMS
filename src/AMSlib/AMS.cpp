@@ -226,11 +226,13 @@ private:
         getEntry<std::string>(rmq_entry, "rabbitmq-password");
     std::string rmq_user = getEntry<std::string>(rmq_entry, "rabbitmq-user");
     std::string rmq_vhost = getEntry<std::string>(rmq_entry, "rabbitmq-vhost");
-    std::string rmq_out_queue =
-        getEntry<std::string>(rmq_entry, "rabbitmq-queue-physics");
-    std::string exchange =
+    std::string exchange_physics =
+        getEntry<std::string>(rmq_entry, "rabbitmq-exchange-physics");
+    std::string routing_key_physics =
+        getEntry<std::string>(rmq_entry, "rabbitmq-key-physics");
+    std::string exchange_ml =
         getEntry<std::string>(rmq_entry, "rabbitmq-exchange-training");
-    std::string routing_key =
+    std::string routing_key_ml =
         getEntry<std::string>(rmq_entry, "rabbitmq-key-training");
     bool update_surrogate = getEntry<bool>(entry, "update_surrogate");
 
@@ -240,13 +242,13 @@ private:
       rmq_cert = getEntry<std::string>(rmq_entry, "rabbitmq-cert");
 
     CFATAL(AMS,
-           (exchange == "" || routing_key == "") && update_surrogate,
+           (exchange_ml == "" || routing_key_ml == "") && update_surrogate,
            "Found empty RMQ exchange / routing-key, model update is not "
            "possible. "
            "Please provide a RMQ exchange or deactivate surrogate model "
            "update.")
 
-    if (exchange == "" || routing_key == "") {
+    if (exchange_ml == "" || routing_key_ml == "") {
       WARNING(AMS,
               "Found empty RMQ exchange or routing-key, deactivating model "
               "update")
@@ -260,9 +262,10 @@ private:
                           rmq_user,
                           rmq_vhost,
                           rmq_cert,
-                          rmq_out_queue,
-                          exchange,
-                          routing_key,
+                          exchange_physics,
+                          routing_key_physics,
+                          exchange_ml,
+                          routing_key_ml,
                           update_surrogate);
   }
 

@@ -225,12 +225,15 @@ class AMSChannel:
     def __init__(
         self,
         connection,
-        q_name,
+        exchange,
+        routing_key,
         callback: Optional[Callable] = None,
         logger: Optional[logging.Logger] = None,
     ):
         self.connection = connection
-        self.q_name = q_name
+        self.exchange = exchange
+        self.routing_key = routing_key
+        self.q_name = None
         self.logger = logger if logger else logging.getLogger(__name__)
         self.callback = callback if callback else self.default_callback
 
@@ -247,7 +250,18 @@ class AMSChannel:
 
     def open(self):
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=self.q_name)
+        q_name = self.routing_key
+        if self.exchange != '':
+            self.logger.info(f"Declared exchange {self.exchange}")
+            self.channel.exchange_declare(exchange = self.exchange, exchange_type = "direct")
+            q_name = "ams-debug" #TODO CHANGE
+
+        result = self.channel.queue_declare(queue = q_name, exclusive = False, durable = False)
+        self.q_name = result.method.queue
+        self.logger.info(f"Declared queue {self.q_name}")
+        if self.exchange != '':
+            self.logger.info(f"Binding queue {self.q_name} to exchange {self.exchange}")
+            self.channel.queue_bind(exchange = self.exchange, queue = self.q_name, routing_key = self.routing_key)
 
     def close(self):
         self.channel.close()
@@ -308,7 +322,7 @@ class AMSChannel:
         @param text The text to send
         @param exchange Exchange to use
         """
-        self.channel.basic_publish(exchange=exchange, routing_key=self.q_name, body=text)
+        self.channel.basic_publish(exchange = exchange, routing_key = self.routing_key, body=text)
         return
 
     def get_messages(self):
@@ -374,9 +388,11 @@ class BlockingClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.connection.close()
 
-    def connect(self, queue):
-        """Connect to the queue"""
-        return AMSChannel(self.connection, queue, self.callback)
+    def connect(self, exchange, routing_key):
+        """
+        Connect to the exchange and routing key.
+        """
+        return AMSChannel(self.connection, exchange, routing_key, self.callback)
 
 
 class StatusPoller(BlockingClient):
@@ -570,6 +586,7 @@ class AsyncConsumer(object):
         self.add_on_channel_close_callback()
         # we do not set up exchange first here, we use the default exchange ''
         self.setup_queue(self._queue)
+        # self.setup_exchange(self.EXCHANGE)
 
     def add_on_channel_close_callback(self):
         """This method tells pika to call the on_channel_closed method if
@@ -607,6 +624,57 @@ class AsyncConsumer(object):
         cb = functools.partial(self.on_queue_declareok, userdata=queue_name)
         # arguments = {"x-consumer-timeout":1800000} # 30 minutes in ms
         self._channel.queue_declare(queue=queue_name, exclusive=False, callback=cb)
+
+    # def setup_exchange(self, exchange_name):
+    #     """Setup the exchange on RabbitMQ by invoking the Exchange.Declare RPC
+    #     command. When it is complete, the on_exchange_declareok method will
+    #     be invoked by pika.
+
+    #     :param str|unicode exchange_name: The name of the exchange to declare
+
+    #     """
+    #     LOGGER.info('Declaring exchange: %s', exchange_name)
+    #     # Note: using functools.partial is not required, it is demonstrating
+    #     # how arbitrary data can be passed to the callback when it is called
+    #     cb = functools.partial(
+    #         self.on_exchange_declareok, userdata=exchange_name)
+    #     self._channel.exchange_declare(
+    #         exchange=exchange_name,
+    #         exchange_type=self.EXCHANGE_TYPE,
+    #         callback=cb)
+
+    # def setup_queue(self, queue_name):
+    #     """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
+    #     command. When it is complete, the on_queue_declareok method will
+    #     be invoked by pika.
+
+    #     :param str|unicode queue_name: The name of the queue to declare.
+
+    #     """
+    #     LOGGER.info('Declaring queue %s', queue_name)
+    #     cb = functools.partial(self.on_queue_declareok, userdata=queue_name)
+    #     self._channel.queue_declare(queue=queue_name, callback=cb)
+
+    # def on_queue_declareok(self, _unused_frame, userdata):
+    #     """Method invoked by pika when the Queue.Declare RPC call made in
+    #     setup_queue has completed. In this method we will bind the queue
+    #     and exchange together with the routing key by issuing the Queue.Bind
+    #     RPC command. When this command is complete, the on_bindok method will
+    #     be invoked by pika.
+
+    #     :param pika.frame.Method _unused_frame: The Queue.DeclareOk frame
+    #     :param str|unicode userdata: Extra user data (queue name)
+
+    #     """
+    #     queue_name = userdata
+    #     LOGGER.info('Binding %s to %s with %s', self.EXCHANGE, queue_name,
+    #                 self.ROUTING_KEY)
+    #     cb = functools.partial(self.on_bindok, userdata=queue_name)
+    #     self._channel.queue_bind(
+    #         queue_name,
+    #         self.EXCHANGE,
+    #         routing_key=self.ROUTING_KEY,
+    #         callback=cb)
 
     def on_queue_declareok(self, _unused_frame, userdata):
         """Method invoked by pika when the Queue.Declare RPC call made in
