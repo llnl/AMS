@@ -284,7 +284,7 @@ class RMQDomainDataLoaderTask(Task):
         rmq_exchange,
         rmq_routing_key,
         policy,
-        prefetch_count=1,
+        prefetch_count = 0,
         signals=[signal.SIGINT, signal.SIGUSR1],
     ):
         self.o_queue = o_queue
@@ -433,7 +433,7 @@ class AMSShutdown(AsyncFanOutConsumer):
         user: str,
         password: str,
         cert: str,
-        prefetch_count: int = 1,
+        prefetch_count: int = 0,
     ):
         self._consumers = consumers
         super().__init__(
@@ -1112,7 +1112,7 @@ class RMQPipeline(Pipeline):
             self._exchange,
             self._routing_key,
             policy,
-            prefetch_count=1,
+            prefetch_count = 0,
         )
         self._o_queue = o_queue
         self._gracefull_shutdown = AMSShutdown(
