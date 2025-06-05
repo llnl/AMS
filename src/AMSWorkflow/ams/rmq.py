@@ -17,8 +17,6 @@ import sys
 import numpy as np
 import json
 import pika
-# from pika.exchange_type import ExchangeType
-
 
 class AMSMessage(object):
     """
@@ -228,13 +226,14 @@ class AMSChannel:
         connection,
         exchange,
         routing_key,
+        queue = "",
         callback: Optional[Callable] = None,
         logger: Optional[logging.Logger] = None,
     ):
         self.connection = connection
         self.exchange = exchange
         self.routing_key = routing_key
-        self.q_name = None
+        self.q_name = queue
         self.logger = logger if logger else logging.getLogger(__name__)
         self.callback = callback if callback else self.default_callback
 
@@ -251,13 +250,11 @@ class AMSChannel:
 
     def open(self):
         self.channel = self.connection.channel()
-        q_name = self.routing_key
         if self.exchange != '':
             self.logger.info(f"Declared exchange {self.exchange}")
             self.channel.exchange_declare(exchange = self.exchange, exchange_type = "direct")
-            q_name = "ams-debug" #TODO CHANGE
 
-        result = self.channel.queue_declare(queue = q_name, exclusive = False, durable = False)
+        result = self.channel.queue_declare(queue = self.q_name, exclusive = False, durable = False)
         self.q_name = result.method.queue
         self.logger.info(f"Declared queue {self.q_name}")
         if self.exchange != '':
@@ -389,11 +386,11 @@ class BlockingClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.connection.close()
 
-    def connect(self, exchange, routing_key):
+    def connect(self, exchange, routing_key, queue = ""):
         """
         Connect to the exchange and routing key.
         """
-        return AMSChannel(self.connection, exchange, routing_key, self.callback)
+        return AMSChannel(self.connection, exchange, routing_key, queue, self.callback)
 
 
 class StatusPoller(BlockingClient):
@@ -859,31 +856,6 @@ class AsyncFanOutConsumer(AsyncConsumer):
             on_close_cb=on_close_cb,
             logger=logger,
         )
-
-    # # Callback when the channel is open
-    # def on_channel_open(self, channel):
-    #     self._channel = channel
-    #     self.logger.debug("Channel opened")
-    #     self.add_on_channel_close_callback()
-    #     self._channel.exchange_declare(
-    #         exchange="control-panel",
-    #         exchange_type="fanout",
-    #         callback=self.on_exchange_declared,
-    #     )
-
-    # # Callback when the exchange is declared
-    # def on_exchange_declared(self, frame):
-    #     self._channel.queue_declare(queue="", exclusive=True, callback=self.on_queue_declared)
-
-    # # Callback when the queue is declared
-    # def on_queue_declared(self, queue_result):
-    #     self._queue = queue_result.method.queue
-    #     self._channel.queue_bind(exchange="control-panel", queue=self._queue, callback=self.on_queue_bound)
-
-    # # Callback when the queue is bound to the exchange
-    # def on_queue_bound(self, frame):
-    #     self.set_qos()
-
 
 class AMSSyncProducer:
     def __init__(
