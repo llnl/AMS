@@ -1,5 +1,5 @@
 function(ADD_API_UNIT_TEST gname name cmd)
-  add_test(NAME ${name} COMMAND bash -c "${cmd}")
+  add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env --unset=AMS_OBJECTS bash -c "${cmd}")
   set_tests_properties(${name} PROPERTIES LABELS ${gname})
 endfunction()
 
