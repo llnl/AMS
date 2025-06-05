@@ -17,6 +17,7 @@ import sys
 import numpy as np
 import json
 import pika
+# from pika.exchange_type import ExchangeType
 
 
 class AMSMessage(object):
@@ -417,8 +418,11 @@ class AsyncConsumer(object):
         user: str,
         password: str,
         cert: str,
-        queue: str,
+        exchange: str,
+        routing_key: str,
+        queue: str = "",
         prefetch_count: int = 1,
+        exchange_type: str = "direct",
         on_message_cb: Optional[Callable] = None,
         on_close_cb: Optional[Callable] = None,
         logger: Optional[logging.Logger] = None,
@@ -441,6 +445,9 @@ class AsyncConsumer(object):
         self._vhost = vhost
         self._cacert = cert
         self._queue = queue
+        self._exchange = exchange
+        self._exchange_type = exchange_type
+        self._routing_key = routing_key
 
         self.should_reconnect = False
         # Holds the latest error/reason to reconnect
@@ -584,9 +591,7 @@ class AsyncConsumer(object):
         self._channel = channel
         self.logger.debug("Channel opened")
         self.add_on_channel_close_callback()
-        # we do not set up exchange first here, we use the default exchange ''
-        self.setup_queue(self._queue)
-        # self.setup_exchange(self.EXCHANGE)
+        self.setup_exchange(self._exchange, self._exchange_type)
 
     def add_on_channel_close_callback(self):
         """This method tells pika to call the on_channel_closed method if
@@ -612,6 +617,33 @@ class AsyncConsumer(object):
             self._on_close_cb()  # running user callback
         self.close_connection()
 
+    def setup_exchange(self, exchange_name, exchange_type):
+        """Setup the exchange on RabbitMQ by invoking the Exchange.Declare RPC
+        command. When it is complete, the on_exchange_declareok method will
+        be invoked by pika.
+
+        :param str|unicode exchange_name: The name of the exchange to declare
+
+        """
+        self.logger.debug(f"Declaring exchange: '{exchange_name}'")
+        cb = functools.partial(
+            self.on_exchange_declareok, userdata = exchange_name)
+        self._channel.exchange_declare(
+            exchange = exchange_name,
+            exchange_type = exchange_type,
+            callback = cb)
+
+    def on_exchange_declareok(self, _unused_frame, userdata):
+        """Invoked by pika when RabbitMQ has finished the Exchange.Declare RPC
+        command.
+
+        :param pika.Frame.Method unused_frame: Exchange.DeclareOk response frame
+        :param str|unicode userdata: Extra user data (exchange name)
+
+        """
+        self.logger.debug(f"Exchange declared: '{userdata}'")
+        self.setup_queue(self._queue)
+
     def setup_queue(self, queue_name):
         """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
         command. When it is complete, the on_queue_declareok method will
@@ -620,61 +652,10 @@ class AsyncConsumer(object):
         :param str|unicode queue_name: The name of the queue to declare.
 
         """
-        self.logger.debug(f'Declaring queue "{queue_name}"')
+        self.logger.debug(f"Declaring queue '{queue_name}'")
         cb = functools.partial(self.on_queue_declareok, userdata=queue_name)
         # arguments = {"x-consumer-timeout":1800000} # 30 minutes in ms
         self._channel.queue_declare(queue=queue_name, exclusive=False, callback=cb)
-
-    # def setup_exchange(self, exchange_name):
-    #     """Setup the exchange on RabbitMQ by invoking the Exchange.Declare RPC
-    #     command. When it is complete, the on_exchange_declareok method will
-    #     be invoked by pika.
-
-    #     :param str|unicode exchange_name: The name of the exchange to declare
-
-    #     """
-    #     LOGGER.info('Declaring exchange: %s', exchange_name)
-    #     # Note: using functools.partial is not required, it is demonstrating
-    #     # how arbitrary data can be passed to the callback when it is called
-    #     cb = functools.partial(
-    #         self.on_exchange_declareok, userdata=exchange_name)
-    #     self._channel.exchange_declare(
-    #         exchange=exchange_name,
-    #         exchange_type=self.EXCHANGE_TYPE,
-    #         callback=cb)
-
-    # def setup_queue(self, queue_name):
-    #     """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
-    #     command. When it is complete, the on_queue_declareok method will
-    #     be invoked by pika.
-
-    #     :param str|unicode queue_name: The name of the queue to declare.
-
-    #     """
-    #     LOGGER.info('Declaring queue %s', queue_name)
-    #     cb = functools.partial(self.on_queue_declareok, userdata=queue_name)
-    #     self._channel.queue_declare(queue=queue_name, callback=cb)
-
-    # def on_queue_declareok(self, _unused_frame, userdata):
-    #     """Method invoked by pika when the Queue.Declare RPC call made in
-    #     setup_queue has completed. In this method we will bind the queue
-    #     and exchange together with the routing key by issuing the Queue.Bind
-    #     RPC command. When this command is complete, the on_bindok method will
-    #     be invoked by pika.
-
-    #     :param pika.frame.Method _unused_frame: The Queue.DeclareOk frame
-    #     :param str|unicode userdata: Extra user data (queue name)
-
-    #     """
-    #     queue_name = userdata
-    #     LOGGER.info('Binding %s to %s with %s', self.EXCHANGE, queue_name,
-    #                 self.ROUTING_KEY)
-    #     cb = functools.partial(self.on_bindok, userdata=queue_name)
-    #     self._channel.queue_bind(
-    #         queue_name,
-    #         self.EXCHANGE,
-    #         routing_key=self.ROUTING_KEY,
-    #         callback=cb)
 
     def on_queue_declareok(self, _unused_frame, userdata):
         """Method invoked by pika when the Queue.Declare RPC call made in
@@ -688,7 +669,23 @@ class AsyncConsumer(object):
 
         """
         queue_name = userdata
-        self.logger.debug(f'Queue "{queue_name}" declared')
+        self.logger.info(f"Binding {self._exchange} to queue '{queue_name}' with key '{self._routing_key}'")
+        cb = functools.partial(self.on_bindok, userdata=queue_name)
+        self._channel.queue_bind(
+            queue_name,
+            self._exchange,
+            routing_key=self._routing_key,
+            callback=cb)
+
+    def on_bindok(self, _unused_frame, userdata):
+        """Invoked by pika when the Queue.Bind method has completed. At this
+        point we will set the prefetch count for the channel.
+
+        :param pika.frame.Method _unused_frame: The Queue.BindOk response frame
+        :param str|unicode userdata: Extra user data (queue name)
+
+        """
+        self.logger.debug(f"Queue bound: '{userdata}'")
         self.set_qos()
 
     def set_qos(self):
@@ -840,49 +837,52 @@ class AsyncFanOutConsumer(AsyncConsumer):
         user: str,
         password: str,
         cert: str,
-        queue: str,
+        routing_key: str,
         prefetch_count: int = 1,
         on_message_cb: Optional[Callable] = None,
         on_close_cb: Optional[Callable] = None,
         logger: Optional[logging.Logger] = None,
     ):
         super().__init__(
-            host,
-            port,
-            vhost,
-            user,
-            password,
-            cert,
-            queue,
-            prefetch_count,
-            on_message_cb,
-            on_close_cb,
-            logger,
-        )
-
-    # Callback when the channel is open
-    def on_channel_open(self, channel):
-        self._channel = channel
-        self.logger.debug("Channel opened")
-        self.add_on_channel_close_callback()
-        self._channel.exchange_declare(
+            host=host,
+            port=port,
+            vhost=vhost,
+            user=user,
+            password=password,
+            cert=cert,
             exchange="control-panel",
+            routing_key=routing_key,
+            queue="",
             exchange_type="fanout",
-            callback=self.on_exchange_declared,
+            prefetch_count=prefetch_count,
+            on_message_cb=on_message_cb,
+            on_close_cb=on_close_cb,
+            logger=logger,
         )
 
-    # Callback when the exchange is declared
-    def on_exchange_declared(self, frame):
-        self._channel.queue_declare(queue="", exclusive=True, callback=self.on_queue_declared)
+    # # Callback when the channel is open
+    # def on_channel_open(self, channel):
+    #     self._channel = channel
+    #     self.logger.debug("Channel opened")
+    #     self.add_on_channel_close_callback()
+    #     self._channel.exchange_declare(
+    #         exchange="control-panel",
+    #         exchange_type="fanout",
+    #         callback=self.on_exchange_declared,
+    #     )
 
-    # Callback when the queue is declared
-    def on_queue_declared(self, queue_result):
-        self._queue = queue_result.method.queue
-        self._channel.queue_bind(exchange="control-panel", queue=self._queue, callback=self.on_queue_bound)
+    # # Callback when the exchange is declared
+    # def on_exchange_declared(self, frame):
+    #     self._channel.queue_declare(queue="", exclusive=True, callback=self.on_queue_declared)
 
-    # Callback when the queue is bound to the exchange
-    def on_queue_bound(self, frame):
-        self.set_qos()
+    # # Callback when the queue is declared
+    # def on_queue_declared(self, queue_result):
+    #     self._queue = queue_result.method.queue
+    #     self._channel.queue_bind(exchange="control-panel", queue=self._queue, callback=self.on_queue_bound)
+
+    # # Callback when the queue is bound to the exchange
+    # def on_queue_bound(self, frame):
+    #     self.set_qos()
 
 
 class AMSSyncProducer:
@@ -1015,7 +1015,8 @@ class AMSRMQConfiguration:
                     "rabbitmq-user": "",
                     "rabbitmq-vhost": "",
                     "rabbitmq-cert": "",
-                    "rabbitmq-queue-physics": "",
+                    "rabbitmq-exchange-physics": "",
+                    "rabbitmq-key-physics": "",
                     "rabbitmq-exchange-training": "",
                     "rabbitmq-key-training": ""
                 },
@@ -1030,7 +1031,8 @@ class AMSRMQConfiguration:
     rabbitmq_user: str
     rabbitmq_vhost: str
     rabbitmq_cert: str
-    rabbitmq_queue_physics: str
+    rabbitmq_exchange_physics: str
+    rabbitmq_key_physics: str
     rabbitmq_exchange_training: str = ""
     rabbitmq_key_training: str = ""
     rabbitmq_ml_submit_queue: str = ""
@@ -1062,7 +1064,8 @@ class AMSRMQConfiguration:
                 "rabbitmq-user": self.rabbitmq_user,
                 "rabbitmq-vhost": self.rabbitmq_vhost,
                 "rabbitmq-cert": self.rabbitmq_cert,
-                "rabbitmq-queue-physics": self.rabbitmq_queue_physics,
+                "rabbitmq-exchange-physics": self.rabbitmq_exchange_physics,
+                "rabbitmq-key-physics": self.rabbitmq_key_physics,
                 "rabbitmq-exchange-training": self.rabbitmq_exchange_training,
                 "rabbitmq-key-training": self.rabbitmq_key_training,
                 "rabbitmq-ml-submit-queue": self.rabbitmq_ml_submit_queue,
