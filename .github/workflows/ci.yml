@@ -285,7 +285,8 @@ jobs:
                 \"service-port\": ${RABBITMQ_PORT},
                 \"service-host\": \"${RABBITMQ_HOST}\",
                 \"rabbitmq-vhost\": \"/\",
-                \"rabbitmq-queue-physics\": \"test-ci\",
+                \"rabbitmq-exchange-physics\": \"exchange-ci\",
+                \"rabbitmq-key-physics\": \"queue-ci\",
                 \"rabbitmq-exchange-training\": \"ams-fanout\",
                 \"rabbitmq-key-training\": \"training\"
               }""" > rmq.json
