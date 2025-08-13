@@ -1,0 +1,89 @@
+version: "3.8"
+name: "AMS"
+
+services:
+  devcontainer:
+    container_name: ams-dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # RabbitMQ Configuration
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ams
+      RABBITMQ_PASS: ams
+      RABBITMQ_VHOST: /
+      # MariaDB Configuration
+      MARIADB_HOST: mariadb
+      MARIADB_PORT: 3306
+      MARIADB_DATABASE: testdb
+      MARIADB_USER: testuser
+      MARIADB_PASSWORD: testpass
+    depends_on:
+      - rabbitmq
+      - mariadb
+    command: sleep infinity
+    networks:
+      - ams-network
+
+  rabbitmq:
+    image: rabbitmq:3.13.7-management
+    container_name: ams-rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: ams
+      RABBITMQ_DEFAULT_PASS: ams
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - 5672:5672
+      - 15672:15672
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - rabbitmq-logs:/var/log/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - ams-network
+
+  mariadb:
+    image: mariadb:11
+    container_name: ams-mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: testuser
+      MYSQL_PASSWORD: testpass
+    ports:
+      - 3306:3306
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - ams-network
+
+volumes:
+  rabbitmq-data:
+    driver: local
+  rabbitmq-logs:
+    driver: local
+  mariadb-data:
+    driver: local
+
+networks:
+  ams-network:
+    driver: bridge

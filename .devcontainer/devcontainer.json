@@ -1,0 +1,76 @@
+{
+  "name": "AMS Development Environment",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-vscode.makefile-tools",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "streetsidesoftware.code-spell-checker"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "cmake.configureOnOpen": false
+      }
+    }
+  },
+
+  // Forward ports for services
+  "forwardPorts": [
+    5672,  // RabbitMQ AMQP
+    15672, // RabbitMQ Management UI
+    3306   // MariaDB
+  ],
+
+  // Port labels
+  "portsAttributes": {
+    "5672": {
+      "label": "RabbitMQ AMQP"
+    },
+    "15672": {
+      "label": "RabbitMQ Management",
+      "onAutoForward": "openBrowser"
+    },
+    "3306": {
+      "label": "MariaDB"
+    }
+  },
+
+  // Environment variables
+  "containerEnv": {
+    "RABBITMQ_HOST": "rabbitmq",
+    "RABBITMQ_PORT": "5672",
+    "RABBITMQ_USER": "ams",
+    "RABBITMQ_PASS": "ams",
+    "MARIADB_HOST": "mariadb",
+    "MARIADB_PORT": "3306",
+    "MARIADB_DATABASE": "testdb",
+    "MARIADB_USER": "testuser",
+    "MARIADB_PASSWORD": "testpass"
+  },
+
+  "postStartCommand": "git config --global --add safe.directory /workspace",
+
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+  ],
+
+  // Keep container running
+  "overrideCommand": false
+}
