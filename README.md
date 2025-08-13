@@ -1,3 +1,5 @@
+[![Open in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/LLNL/AMS)
+
 # Autonomous MultiScale Library (AMS)
 
 A library (under construction) to simplify machine learning surrogate model integration in HPC codes.
@@ -35,3 +37,7 @@ AMSLib is released under Apache License (Version 2.0) with LLVM exceptions. For 
 # Installation Instructions
 
 See [INSTALL.md](./INSTALL.md) for full instructions.
+
+# Dev Containers Instructions
+
+See [DEVCONTAINERS.md](./DEVCONTAINERS.md) for full instructions.
