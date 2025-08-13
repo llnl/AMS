@@ -28,11 +28,18 @@ elif [[ "$SYS_TYPE" == "toss_3_x86_64_ib" ]]; then
     module load cuda/11.4.1
   fi
   CUDA_ARCH=60
+elif [[ "$SYS_TYPE" == "toss_4_x86_64_ib" ]]; then
+  # Load gcc to avoid cmake warnings on mpi with the default Intel-based StdEnv.
+  module load gcc/11.2.1
+  module load mvapich2/2.3.7
+else
+  echo "Error: machine $SYS_TYPE is not supported by AMS"
+  return 1
 fi
 
-# Load gcc to avoid cmake warnings on mpi with the default Intel-based StdEnv.
-if [[ "$host" == "ruby" ]]; then
-  module load gcc/11.2.1
+if [[ "$host" == "dane" ]]; then
+  # Ruby is not active anymore but Dane is and they can use the same Spack env
+  host="ruby"
 fi
 
 ## activate spack
