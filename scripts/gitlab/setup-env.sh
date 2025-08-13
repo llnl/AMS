@@ -37,11 +37,6 @@ else
   return 1
 fi
 
-if [[ "$host" == "dane" ]]; then
-  # Ruby is not active anymore but Dane is and they can use the same Spack env
-  host="ruby"
-fi
-
 ## activate spack
 source /usr/workspace/AMS/ams-spack-environments/${SPACK_ENV_PATH}/spack/share/spack/setup-env.sh
 
