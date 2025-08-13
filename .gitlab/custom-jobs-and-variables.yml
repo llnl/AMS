@@ -12,13 +12,13 @@ variables:
 # named so that we are sure to retrieve it and avoid collisions.
   ALLOC_NAME: ${CI_PROJECT_NAME}_ci_${CI_PIPELINE_ID}
 
-# Ruby
+# Dane
 # Arguments for top level allocation
   DANE_SHARED_ALLOC: "--exclusive --reservation=ci --time=45 --nodes=1"
 # Arguments for job level allocation
   DANE_JOB_ALLOC: "--mpi=none --reservation=ci --nodes=1"
 # Add variables that should apply to all the jobs on a machine:
-#  RUBY_MY_VAR: "..."
+#  DANE_MY_VAR: "..."
 
 # Poodle
 # Arguments for top level allocation
