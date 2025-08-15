@@ -262,7 +262,7 @@ class RMQDomainDataLoaderTask(Task):
     """
     A RMQDomainDataLoaderTask consumes 'AMSMessages' from RabbitMQ bundles the data of
     the files into batches and forwards them to the next task waiting on the
-    output queuee.
+    output queue.
 
     Attributes:
         o_queue: The output queue to write the transformed messages
@@ -281,14 +281,17 @@ class RMQDomainDataLoaderTask(Task):
         user,
         password,
         cert,
-        rmq_queue,
+        rmq_exchange,
+        rmq_routing_key,
         policy,
-        prefetch_count=1,
+        prefetch_count = 0,
         signals=[signal.SIGINT, signal.SIGUSR1],
     ):
         self.o_queue = o_queue
         self.cert = cert
-        self.rmq_queue = rmq_queue
+        # self.rmq_queue = rmq_queue
+        self.rmq_exchange = rmq_exchange
+        self.rmq_routing_key = rmq_routing_key
         self.prefetch_count = prefetch_count
         self.datasize_byte = 0
         self.total_time_ns = 0
@@ -311,7 +314,9 @@ class RMQDomainDataLoaderTask(Task):
             user=user,
             password=password,
             cert=self.cert,
-            queue=self.rmq_queue,
+            exchange=self.rmq_exchange,
+            routing_key=self.rmq_routing_key,
+            queue="",
             on_message_cb=self.callback_message,
             on_close_cb=self.callback_close,
             prefetch_count=self.prefetch_count,
@@ -428,7 +433,7 @@ class AMSShutdown(AsyncFanOutConsumer):
         user: str,
         password: str,
         cert: str,
-        prefetch_count: int = 1,
+        prefetch_count: int = 0,
     ):
         self._consumers = consumers
         super().__init__(
@@ -1061,7 +1066,8 @@ class RMQPipeline(Pipeline):
         user,
         password,
         cert,
-        data_queue,
+        exchange,
+        routing_key,
         model_update_queue=None,
     ):
         """
@@ -1075,10 +1081,12 @@ class RMQPipeline(Pipeline):
         self._user = user
         self._password = password
         self._cert = Path(cert)
-        self._data_queue = data_queue
+        # self._data_queue = data_queue
+        self._exchange = exchange
+        self._routing_key = routing_key
         self._model_update_queue = model_update_queue
-        print("Received a data queue of", self._data_queue)
-        print("Received a model_update queue of", self._model_update_queue)
+        print(f"Received data from exchange {self._exchange} / rkey {self._routing_key}")
+        print(f"Received a model_update queue of {self._model_update_queue}")
         self._gracefull_shutdown = None
         self._o_queue = None
 
@@ -1101,9 +1109,10 @@ class RMQPipeline(Pipeline):
             self._user,
             self._password,
             self._cert,
-            self._data_queue,
+            self._exchange,
+            self._routing_key,
             policy,
-            prefetch_count=1,
+            prefetch_count = 0,
         )
         self._o_queue = o_queue
         self._gracefull_shutdown = AMSShutdown(
@@ -1176,7 +1185,8 @@ class RMQPipeline(Pipeline):
             config.rabbitmq_user,
             config.rabbitmq_password,
             config.rabbitmq_cert,
-            config.rabbitmq_queue_physics,
+            config.rabbitmq_exchange_physics,
+            config.rabbitmq_key_physics,
             config.rabbitmq_exchange_training if args.update_rmq_models else None,
         )
 

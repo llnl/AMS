@@ -9,7 +9,8 @@
       "rabbitmq-user": "",
       "rabbitmq-vhost": "",
       "rabbitmq-cert": "",
-      "rabbitmq-queue-physics": "",
+      "rabbitmq-exchange-physics": "",
+      "rabbitmq-key-physics": "",
       "rabbitmq-exchange-training": "",
       "rabbitmq-key-training": ""
     },

@@ -265,7 +265,7 @@ def from_cli(argv):
     return error
 
 
-def get_rmq_data(ams_config, domain_names, num_iterations, timeout=1):
+def get_rmq_data(ams_config, domain_names, num_iterations, timeout=10):
     from ams.rmq import BlockingClient, default_ams_callback
 
     rmq_json = ams_config["db"]["rmq_config"]
@@ -275,13 +275,19 @@ def get_rmq_data(ams_config, domain_names, num_iterations, timeout=1):
     port = rmq_json["service-port"]
     user = rmq_json["rabbitmq-user"]
     password = rmq_json["rabbitmq-password"]
-    queue = rmq_json["rabbitmq-queue-physics"]
+    exchange = rmq_json["rabbitmq-exchange-physics"]
+    rkey = rmq_json["rabbitmq-key-physics"]
     cert = None
     if "rabbitmq-cert" in rmq_json:
         cert = rmq_json["rabbitmq-cert"]
         cert = None if cert == "" else cert
     with BlockingClient(host, port, vhost, user, password, cert, default_ams_callback) as client:
-        with client.connect(queue) as channel:
+        # For testing purpose we expect data from Rank 0
+        # using the debug mode enabled by setting AMS_USE_NAMED_QUEUE
+        # This allows us to use named queue which can retain data.
+        # without that, running the sender before the receiver would not work.
+        queue = "ams-debug-queue-0"
+        with client.connect(exchange, rkey, queue) as channel:
             msgs = channel.receive(n_msg=num_iterations * len(domain_names), timeout=timeout)
 
     dns = set(domain_names)

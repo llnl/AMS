@@ -1,31 +1,33 @@
 function(ADD_API_UNIT_TEST gname name cmd)
-  add_test(NAME ${name} COMMAND bash -c "${cmd}")
+  add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env --unset=AMS_OBJECTS bash -c "${cmd}")
   set_tests_properties(${name} PROPERTIES LABELS ${gname})
 endfunction()
 
 
 function(JSON_TESTS db_type)
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/json_configs/env_2_models_fs_rand_uq.json.in" "${JSON_FP}" @ONLY)
-  
+  if(NOT EXISTS "${JSON_FP}")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/json_configs/env_2_models_fs_rand_uq.json.in" "${JSON_FP}" @ONLY)
+  endif()
+
   # Tests Random models with different percentages both models store to file
-  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::Random10::Random50::Double::DB::${db_type}::HOST "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_random_10 app_random_50;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_random_10 app_random_50")
+  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::Random10::Random50::Double::DB::${db_type}::HOST "AMS_USE_NAMED_QUEUE=1 AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_random_10 app_random_50;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_random_10 app_random_50")
 
 
   # Tests delta-uq models with different aggregation both models store to file
-  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::DuqMean::DuqMax::Double::DB::${db_type}::HOST "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_uq_mean app_uq_max;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_uq_mean app_uq_max")
+  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::DuqMean::DuqMax::Double::DB::${db_type}::HOST "AMS_USE_NAMED_QUEUE=1 AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_uq_mean app_uq_max;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_uq_mean app_uq_max")
 
 
   # Tests detla uq model with a random uq model both models store to files
-  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::Random::DuqMax::Double::DB::${db_type}::HOST "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_random_10 app_uq_max;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_random_10 app_uq_max")
+  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::Random::DuqMax::Double::DB::${db_type}::HOST "AMS_USE_NAMED_QUEUE=1 AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_random_10 app_uq_max;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_random_10 app_uq_max")
 
   # Tests detla uq model with no model. uq model both store to files
-  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::Random::NoModel::Double::DB::${db_type}::HOST "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_random_10 app_no_model;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_random_10 app_no_model")
+  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::Random::NoModel::Double::DB::${db_type}::HOST "AMS_USE_NAMED_QUEUE=1 AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_random_10 app_no_model;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_random_10 app_no_model")
 
   # Tests 2 delta uq models with no deb . uq model both store to files
-  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::DuqMean::DuqMax::Double::NODB::${db_type}::HOST "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_uq_mean_ndb app_uq_max_ndb;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_uq_mean_ndb app_uq_max_ndb")
+  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::DuqMean::DuqMax::Double::NODB::${db_type}::HOST "AMS_USE_NAMED_QUEUE=1 AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_uq_mean_ndb app_uq_max_ndb;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_uq_mean_ndb app_uq_max_ndb")
 
   # Tests null models null dbs 
-  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::None::None::Double::NODB::${db_type}::HOST "AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_no_model_no_db  app_no_model_no_db ;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_no_model_no_db app_no_model_no_db")
+  ADD_API_UNIT_TEST(APIEnvAPI AMS::ENV::None::None::Double::NODB::${db_type}::HOST "AMS_USE_NAMED_QUEUE=1 AMS_OBJECTS=${JSON_FP} ${CMAKE_CURRENT_BINARY_DIR}/ams_end_to_end_env  0 8 8 \"double\" 1 512 app_no_model_no_db  app_no_model_no_db ;AMS_OBJECTS=${JSON_FP} python3 ${CMAKE_CURRENT_SOURCE_DIR}/verify_ete.py 0 8 8 \"double\" 512 app_no_model_no_db app_no_model_no_db")
 
   unset(AMS_DB_TEST_TYPE)
   unset(JSON_FP)
@@ -42,7 +44,7 @@ function(CHECK_RMQ_CONFIG file)
   string(JSON RMQ_PORT GET ${DB_CONF} "service-port")
 
   if(NOT "${RMQ_HOST}" STREQUAL "" AND NOT "${RMQ_PORT}" STREQUAL "0")
-  message(STATUS "RabbitMQ config ${file}: ${RMQ_HOST}:${RMQ_PORT}")
+    message(STATUS "RabbitMQ config ${file}: ${RMQ_HOST}:${RMQ_PORT}")
   else()
     message(WARNING "RabbitMQ config file ${file} looks empty! Make sure to fill these fields before running the tests")
   endif()
