@@ -37,7 +37,8 @@ dependencies = [
   "SQLAlchemy",
   "mysql-connector-python",
   "pika>=1.3.0",
-  "numpy>=1.2.0"
+  "numpy>=1.2.0",
+  "flux-python>=0.75.0"
 ]
 
 [project.scripts]

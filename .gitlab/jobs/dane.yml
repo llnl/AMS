@@ -15,7 +15,10 @@
 .dane_reproducer_vars:
   script:
     - export WITH_CUDA="Off"
-    - export WITH_HIP="On"
+    - export WITH_HIP="Off"
+    - export HIP_VISIBLE_DEVICES=
+    - export ROCR_VISIBLE_DEVICES=
+    - export KMP_LIBRARY=serial
 
 # With GitLab CI, included files cannot be empty.
 # TODO: remove when you have at least on job defined.
