@@ -7,13 +7,10 @@ endfunction()
 
 function(BUILD_UNIT_TEST exe source)
   add_executable(${exe} ${source})
-  add_dependencies(${exe} generate_cpu_models)
 
   if (WITH_CUDA)
-    add_dependencies(${exe} generate_gpu_models)
     target_link_libraries(${exe} PRIVATE CUDA::cudart)
   elseif(WITH_HIP)
-    add_dependencies(${exe} generate_gpu_models)
     target_link_libraries(${exe} PRIVATE hip::host)
   endif()
 

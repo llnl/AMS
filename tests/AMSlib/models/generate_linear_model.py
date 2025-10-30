@@ -62,45 +62,45 @@ def create_ams_model(model, device, precision, trace_input=None):
 
 def main(args):
     parser = argparse.ArgumentParser(description="Generate and save a scripted model.")
-    parser.add_argument("precision", choices=["single", "double"], help="Model precision: 'single' or 'double'.")
-    parser.add_argument("device", choices=["cpu", "gpu"], help="Device: 'cpu' or 'gpu'.")
     parser.add_argument("directory", type=str, help="Directory to save the model.")
-    parser.add_argument(
-        "uq", choices=["random", "duq_mean", "duq_max"], help="The UQ Type to use (this is ignored a.t.m)"
-    )
     parser.add_argument("inputDim", type=int, help="The dimensions of the input data")
     parser.add_argument("outputDim", type=int, help="the dimensions of the output data")
     args = parser.parse_args()
 
-    model = linearRegression(args.inputDim, args.outputDim)
+    for precision in ["single", "double"]:
+        for a_device in ["cpu", "gpu"]:
+            for uq in ["random", "duq_mean", "duq_max"]:
+                if a_device == "gpu" and not torch.cuda.is_available():
+                    continue
 
-    # Set the precision based on command-line argument
-    prec = torch.float32
-    if args.precision == "single":
-        model = model.float()  # Set to single precision (float32)
-        prec = torch.float32
-    elif args.precision == "double":
-        model = model.double()  # Set to double precision (float64)
-        prec = torch.float64
+                model = linearRegression(args.inputDim, args.outputDim)
+                # Set the precision based on command-line argument
+                prec = torch.float32
+                if precision == "single":
+                    model = model.float()  # Set to single precision (float32)
+                    prec = torch.float32
+                elif precision == "double":
+                    model = model.double()  # Set to double precision (float64)
+                    prec = torch.float64
 
-    # Set the device based on command-line argument
-    if (args.device == "gpu") and torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
+                # Set the device based on command-line argument
+                if (a_device == "gpu") and torch.cuda.is_available():
+                    device = torch.device("cuda")
+                else:
+                    device = torch.device("cpu")
 
-    model = model.to(device)
-    model.eval()
+                model = model.to(device)
+                model.eval()
 
-    x = torch.rand((1, args.inputDim), device=device, dtype=prec)
-    y_before_jit = model(x)
+                x = torch.rand((1, args.inputDim), device=device, dtype=prec)
+                y_before_jit = model(x)
 
-    # Generate the file name
-    file_name = f"{args.precision}_{args.device}_{args.uq}.pt"
-    ams_model = create_ams_model(model, device, prec)
-    file_path = f"{args.directory}/linear_{file_name}"
-    print(f"Model saved to {file_path}")
-    ams_model.save(file_path)
+                # Generate the file name
+                file_name = f"{precision}_{a_device}_{uq}.pt"
+                ams_model = create_ams_model(model, device, prec)
+                file_path = f"{args.directory}/linear_{file_name}"
+                print(f"Model saved to {file_path}")
+                ams_model.save(file_path)
 
 
 if __name__ == "__main__":
