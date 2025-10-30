@@ -34,6 +34,7 @@ set(AMS_EXAMPLE_INCLUDES "")
 
 # ------------------------------------------------------------------------------
 option(WITH_CUDA           "Option to enable CUDA" OFF)
+option(WITH_HIP            "Option to enable HIP" OFF)
 option(WITH_MPI            "Option to enable MPI" OFF)
 option(WITH_CALIPER        "Use Caliper for Profiling" OFF)
 option(WITH_TESTS          "Compile tests" OFF)
@@ -67,11 +68,15 @@ if (WITH_MPI)
   list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_MPI__")
 endif()
 
-# ------------------------------------------------------------------------------
-if (WITH_CUDA)
+if(WITH_CUDA AND WITH_HIP)
+  message(FATAL "AMS Does not support compilation with both CUDA and HIP enabled.")
+elseif (WITH_CUDA)
   find_package(CUDAToolkit)
+  list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_CUDA__")
+elseif (WITH_HIP)
+  find_package(HIP REQUIRED)
+  list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_HIP__")
 endif()
-
 
 # ------------------------------------------------------------------------------
 if (WITH_CALIPER)
