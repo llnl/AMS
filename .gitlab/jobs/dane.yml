@@ -15,6 +15,7 @@
 .dane_reproducer_vars:
   script:
     - export WITH_CUDA="Off"
+    - export WITH_HIP="On"
 
 # With GitLab CI, included files cannot be empty.
 # TODO: remove when you have at least on job defined.
@@ -47,3 +48,19 @@ build-run-dane:
   extends: .job_on_dane
   variables:
 
+.base-job:
+  extends: .job_on_dane
+  before_script:
+    - echo "=== Start CI Build and Test on Dane ==="
+  after_script:
+    - echo "=== End CI Build and Test on Dane ==="
+
+.build-variants:
+  parallel:
+    matrix:
+      - WITH_HDF5: ["on", "off"]
+        WITH_MPI: ["on", "off"]
+        WITH_WORKFLOW: ["on", "off"]
+
+build-run-dane:
+  extends: [.base-job, .build-variants]
