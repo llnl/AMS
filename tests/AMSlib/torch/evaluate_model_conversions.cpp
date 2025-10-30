@@ -141,9 +141,15 @@ void test(SurrogateModel& model,
                                                torch::kFloat64};
   auto inputShapes = generateRandomVector(iDims[iDims.size() - 1], 3);
   std::vector<c10::DeviceType> SupportedDevices = {c10::DeviceType::CPU};
+#if defined(__AMS_ENABLE_CUDA__)
   if (torch::cuda::is_available() && torch::cuda::device_count() > 0) {
     SupportedDevices.push_back(c10::DeviceType::CUDA);
   }
+#elif defined(__AMS_ENABLE_HIP__)
+  if (torch::cuda::is_available() && torch::cuda::device_count() > 0) {
+    SupportedDevices.push_back(c10::DeviceType::CUDA);
+  }
+#endif
 
   for (auto type : SupportedDTypes) {
     for (auto device : SupportedDevices) {

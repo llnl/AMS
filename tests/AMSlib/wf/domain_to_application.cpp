@@ -38,7 +38,7 @@ std::vector<int> generateRandomVector(int target_sum, int size)
 }
 
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
 
   if (argc != 4) {
@@ -62,7 +62,10 @@ int main(int argc, char *argv[])
 
   if (phType.compare("double") == 0) phDType = torch::kFloat64;
 
-  if (device.compare("cuda") == 0) dev = c10::DeviceType::CUDA;
+  if (device.compare("cuda") == 0)
+    dev = c10::DeviceType::CUDA;
+  else if (device.compare("hip") == 0)
+    dev = c10::DeviceType::CUDA;
 
   torch::Tensor Src =
       torch::rand({32, 11}, torch::TensorOptions().dtype(mlDType).device(dev));

@@ -58,7 +58,7 @@ private:
   /** @brief  Used internally to map resource types (Device, host, pinned memory) to
    * umpire allocator ids. */
   std::vector<AMSAllocator*> RMAllocators;
-  ResourceManager() : RMAllocators({nullptr, nullptr, nullptr}){};
+  ResourceManager() : RMAllocators({nullptr, nullptr, nullptr}) {};
 
 public:
   ~ResourceManager()
@@ -155,7 +155,7 @@ public:
     std::string pinned_alloc("PINNED");
     if (!RMAllocators[AMSResourceType::AMS_HOST])
       setAllocator(host_alloc, AMSResourceType::AMS_HOST);
-#ifdef __AMS_ENABLE_CUDA__
+#if defined(__AMS_ENABLE_CUDA__)
     if (!RMAllocators[AMSResourceType::AMS_DEVICE])
       setAllocator(host_alloc, AMSResourceType::AMS_DEVICE);
 

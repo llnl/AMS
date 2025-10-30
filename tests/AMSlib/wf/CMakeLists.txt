@@ -19,6 +19,8 @@ function(BUILD_UNIT_TEST exe source)
 
   if(WITH_CUDA)
     target_link_libraries(${exe} PRIVATE CUDA::cudart)
+  elseif(WITH_HIP)
+    target_link_libraries(${exe} PRIVATE hip::host)
   endif()
 
   if (WITH_CALIPER)
@@ -99,17 +101,23 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLHost::Evaluate::InInoutsAndOuts::PhDo
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLHost::Evaluate::Inouts::PhDouble::MLFloat::AllModel evaluate_in_and_outs double cpu ${TORCH_MODEL_DIR}/single_cpu_duq_max.pt "duq_max" 1.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "8")
 endif()
 
+if (WITH_CUDA OR WITH_HIP)
 if (WITH_CUDA)
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::FLOAT::FLOAT domain_to_application float float cuda)
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::DOUBLE::FLOAT domain_to_application double float cuda)
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::FLOAT::DOUBLE domain_to_application float double cuda)
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::DOUBLE::DOUBLE domain_to_application double double cuda)
+set(device "cuda")
+elseif(WITH_HIP)
+set(device "hip")
+endif()
 
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::SubSelect::Double subselect_tensors double cuda)
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::SubSelect::Float subselect_tensors float cuda)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::FLOAT::FLOAT domain_to_application float float ${device})
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::DOUBLE::FLOAT domain_to_application double float ${device})
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::FLOAT::DOUBLE domain_to_application float double ${device})
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::DomainToApplication::DOUBLE::DOUBLE domain_to_application double double ${device})
 
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::ScatterPhysics::Double scatter_physics double cuda)
-ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::ScatterPhysics::Float scatter_physics float cuda)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::SubSelect::Double subselect_tensors double ${device})
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::SubSelect::Float subselect_tensors float ${device})
+
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::ScatterPhysics::Double scatter_physics double ${device})
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::DEVICE::ScatterPhysics::Float scatter_physics float ${device})
 
 if (WITH_HDF5)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PhHOST::MLDevice::Evaluate::InAndOuts::PhFloat::MLFloat::AllPhysics evaluate_in_and_outs float cpu ${TORCH_MODEL_DIR}/single_gpu_duq_max.pt "duq_max" 0.0  "1,8" "1,8" ${CMAKE_CURRENT_BINARY_DIR}/ "0")

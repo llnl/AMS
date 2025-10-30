@@ -155,7 +155,7 @@ def main():
         prec = torch.float64
 
     # Set the device based on command-line argument
-    if args.device == "gpu" and torch.cuda.is_available():
+    if (args.device == "gpu") and torch.cuda.is_available():
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")

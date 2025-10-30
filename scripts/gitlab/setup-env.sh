@@ -6,63 +6,60 @@ source /etc/profile.d/z00_lmod.sh
 host=$(hostname)
 host=${host//[0-9]/}
 
-SPACK_ENV_PATH="0.20"
+#!/usr/bin/env bash
 
-if [[ "$SYS_TYPE" == "blueos_3_ppc64le_ib_p9" ]]; then
-  ## load relevant modules on lassen
-  module load gcc/8.3.1
-  module load cmake/3.23.1
-  echo "Loading mpi and cuda"
-  if [[ "${SPACK_ENV_PATH}" == "0.20" ]]; then
-    module load cuda/11.6.1
-  elif [[ "${SPACK_ENV_PATH}" == "0.18" ]]; then
-    module load cuda/11.4.1
-  fi
-  module load spectrum-mpi
-  CUDA_ARCH=70
-elif [[ "$SYS_TYPE" == "toss_3_x86_64_ib" ]]; then
-  module load mvapich2/2.3
-  if [[ "${SPACK_ENV_PATH}" == "0.20" ]]; then
-    module load cuda/11.6.1
-  elif [[ "${SPACK_ENV_PATH}" == "0.18" ]]; then
-    module load cuda/11.4.1
-  fi
-  CUDA_ARCH=60
+## load relevant modules on tuo/tioga
+host=$(hostname)
+host=${host//[0-9]/}
+
+SPACK_VER="1.0"
+
+if [[ "$SYS_TYPE" == "toss_4_x86_64_ib_cray" ]]; then
+    echo "Loading MPI and ROCm"
+    module load gcc/13.3.1-magic
+    module load rocm/6.4.1
+    module load cray-mpich/8.1.32
+    ROCM_ARCH=$(rocm_agent_enumerator | sed -n 1p)
 elif [[ "$SYS_TYPE" == "toss_4_x86_64_ib" ]]; then
-  # Load gcc to avoid cmake warnings on mpi with the default Intel-based StdEnv.
-  module load gcc/11.2.1
-  module load mvapich2/2.3.7
-else
-  echo "Error: machine $SYS_TYPE is not supported by AMS"
-  return 1
+    # Dane
+    module load cmake/3.30.5
+    module load gcc/13.3.1-magic
+    module load mvapich2/2.3.7
 fi
 
 ## activate spack
-source /usr/workspace/AMS/ams-spack-environments/${SPACK_ENV_PATH}/spack/share/spack/setup-env.sh
+echo "Activating Spack"
+source /usr/workspace/AMS/ams-spack-environments/${SPACK_VER}/spack/share/spack/setup-env.sh
 
 ## activate the spack environment
-spack env activate /usr/workspace/AMS/ams-spack-environments/${SPACK_ENV_PATH}/$host
+echo "Activating Spack Environment"
+spack env activate /usr/workspace/AMS/ams-spack-environments/${SPACK_VER}/$host
 
 ## export the paths (currently cmake needs these)
-export AMS_MFEM_PATH=`spack location -i mfem`
 export AMS_TORCH_PATH=`spack location -i py-torch`
-export AMS_FAISS_PATH=`spack location -i faiss`
-export AMS_UMPIRE_PATH=`spack location -i umpire`
-export AMS_HIREDIS_PATH=`spack location -i hiredis`
-export AMS_REDIS_PLUS_PLUS_PATH=`spack location -i redis-plus-plus`
 export AMS_HDF5_PATH=`spack location -i hdf5`
+export AMS_CALIPER_PATH=`spack location -i caliper`
+export AMS_AMQPCPP_PATH=`spack location -i amqp-cpp`
+export AMS_ADIAK_PATH=`spack location -i adiak`
 export AMS_CUDA_ARCH=${CUDA_ARCH}
+export AMS_HIP_ARCH=${ROCM_ARCH}
 
-echo "AMS_MFEM_PATH              = $AMS_MFEM_PATH"
-echo "AMS_TORCH_PATH             = $AMS_TORCH_PATH"
-echo "AMS_FAISS_PATH             = $AMS_FAISS_PATH"
-echo "AMS_UMPIRE_PATH            = $AMS_UMPIRE_PATH"
-echo "AMS_CUDA_ARCH              = $AMS_CUDA_ARCH"
-echo "AMS_HIREDIS_PATH           = $AMS_HIREDIS_PATH"
-echo "AMS_REDIS_PLUS_PLUS_PATH   = $AMS_REDIS_PLUS_PLUS_PATH"
-echo "AMS_HDF5_PATH              = $AMS_HDF5_PATH"
+if [[ "$SYS_TYPE" == "toss_4_x86_64_ib_cray" ]]; then
+    # echo "AMS_CUDA_ARCH                = $AMS_CUDA_ARCH"
+    echo "AMS_HIP_ARCH                 = $AMS_HIP_ARCH"
+fi
+echo "AMS_TORCH_PATH               = $AMS_TORCH_PATH"
+echo "AMS_HDF5_PATH                = $AMS_HDF5_PATH"
+echo "AMS_CALIPER_PATH             = $AMS_CALIPER_PATH"
+echo "AMS_AMQPCPP_PATH             = $AMS_AMQPCPP_PATH"
+echo "AMS_ADIAK_PATH               = $AMS_ADIAK_PATH"
 
 export AMS_TORCH_PATH=$(echo $AMS_TORCH_PATH/lib/python3.*/site-packages/torch/share/cmake/Torch)
+export AMS_AMQPCPP_PATH=$(echo $AMS_AMQPCPP_PATH/cmake)
+export AMS_CALIPER_PATH=$(echo $AMS_CALIPER_PATH/share/cmake/caliper)
 
-echo "(for cmake) AMS_TORCH_PATH = $AMS_TORCH_PATH"
+echo "(for cmake) AMS_TORCH_PATH   = $AMS_TORCH_PATH"
+echo "(for cmake) AMS_AMQPCPP_PATH = $AMS_AMQPCPP_PATH"
+echo "(for cmake) AMS_CALIPER_PATH = $AMS_CALIPER_PATH"
 
+export AMS_LOG_LEVEL=Debug

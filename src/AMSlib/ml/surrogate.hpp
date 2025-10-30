@@ -10,6 +10,7 @@
 
 #include <ATen/core/interned_strings.h>
 #include <ATen/core/ivalue.h>
+// NOTE: AFAIK torch does not provide the respective hip.h, and we should not guard here.
 #include <torch/cuda.h>
 #include <torch/script.h>  // One-stop header.
 

@@ -33,6 +33,8 @@ target_include_directories(AMS PUBLIC
 
 if (WITH_CUDA)
   target_link_libraries(AMS PRIVATE CUDA::cudart)
+elseif (WITH_HIP)
+  target_link_libraries(AMS PRIVATE hip::host)
 endif()
 
 if (WITH_HDF5)

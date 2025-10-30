@@ -12,6 +12,9 @@ function(BUILD_UNIT_TEST exe source)
   if (WITH_CUDA)
     add_dependencies(${exe} generate_gpu_models)
     target_link_libraries(${exe} PRIVATE CUDA::cudart)
+  elseif(WITH_HIP)
+    add_dependencies(${exe} generate_gpu_models)
+    target_link_libraries(${exe} PRIVATE hip::host)
   endif()
 
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)
@@ -29,7 +32,7 @@ endfunction()
 BUILD_UNIT_TEST(ams_verify_dtype verify_dtype.cpp)
 BUILD_UNIT_TEST(ams_verify_device verify_device.cpp)
 BUILD_UNIT_TEST(ams_evaluate_model evaluate_model.cpp)
-BUILD_UNIT_TEST(ams_convert_and_evaluate_model evalute_model_conversions.cpp)
+BUILD_UNIT_TEST(ams_convert_and_evaluate_model evaluate_model_conversions.cpp)
 
 #detect datatype
 ADD_TORCH_UNIT_TEST(Surrogate::DType::HOST::Double::Random ams_verify_dtype double ${TORCH_MODEL_DIR}/double_cpu_random.pt)
@@ -68,7 +71,7 @@ ADD_TORCH_UNIT_TEST(Surrogate::EvaluateAndCat::HOST::UQMean::Single ams_convert_
 ADD_TORCH_UNIT_TEST(Surrogate::EvaluateAndCat::HOST::UQMax::Double ams_convert_and_evaluate_model "2000,8" "2000,8" ${TORCH_MODEL_DIR}/double_cpu_duq_max.pt "duq_max")
 ADD_TORCH_UNIT_TEST(Surrogate::EvaluateAndCat::HOST::UQMax::Single ams_convert_and_evaluate_model "2000,8" "2000,8" ${TORCH_MODEL_DIR}/single_cpu_duq_max.pt "duq_max")
 
-if(WITH_CUDA)
+if(WITH_CUDA OR WITH_HIP)
 
 #detect datatype
 ADD_TORCH_UNIT_TEST(Surrogate::DType::DEVICE::Double::Random ams_verify_dtype double ${TORCH_MODEL_DIR}/double_gpu_random.pt)

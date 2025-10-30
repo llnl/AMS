@@ -11,7 +11,7 @@
 #include "wf/workflow.hpp"
 
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
 
   if (argc != 3) {
@@ -32,7 +32,10 @@ int main(int argc, char *argv[])
 
   if (Type.compare("double") == 0) DType = torch::kFloat64;
 
-  if (device.compare("cuda") == 0) dev = c10::DeviceType::CUDA;
+  if (device.compare("cuda") == 0)
+    dev = c10::DeviceType::CUDA;
+  else if (device.compare("hip") == 0)
+    dev = c10::DeviceType::CUDA;
 
   ams::SmallVector<torch::Tensor> vectors;
   for (int i = 0; i < 4; i++)

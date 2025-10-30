@@ -84,12 +84,12 @@ def main(args):
         prec = torch.float64
 
     # Set the device based on command-line argument
-    if args.device == "gpu" and torch.cuda.is_available():
+    if (args.device == "gpu") and torch.cuda.is_available():
         device = torch.device("cuda")
-        model = model.cuda()
     else:
         device = torch.device("cpu")
 
+    model = model.to(device)
     model.eval()
 
     x = torch.rand((1, args.inputDim), device=device, dtype=prec)

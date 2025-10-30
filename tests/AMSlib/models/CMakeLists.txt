@@ -32,7 +32,7 @@ add_custom_command(
   OUTPUT ${GENERATED_CPU_MODELS}
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/generate.sh ${CMAKE_CURRENT_BINARY_DIR}/ "cpu"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh;${CMAKE_CURRENT_SOURCE_DIR}/generate.py;${CMAKE_CURRENT_SOURCE_DIR}/generate_linear_model.py" 
-    COMMENT "Generating PyTorch models..."
+    COMMENT "Generating CPU PyTorch models..."
 )
 
 # Define a target to generate models
@@ -41,7 +41,7 @@ add_custom_target(generate_cpu_models ALL
     COMMENT "Generate cpu models before ctests..."
 )
 
-if (WITH_CUDA)
+if (WITH_CUDA OR WITH_HIP)
 set(GENERATED_GPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/double_gpu_duq_max.pt  
   ${CMAKE_CURRENT_BINARY_DIR}/double_gpu_duq_mean.pt  
@@ -66,11 +66,12 @@ set(GENERATED_GPU_MODELS
 )
 
 # Custom command to generate models
+message(INFO "Device is ${device}")
 add_custom_command(
   OUTPUT ${GENERATED_GPU_MODELS}
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/generate.sh ${CMAKE_CURRENT_BINARY_DIR}/ "gpu"
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/generate.sh ${CMAKE_CURRENT_BINARY_DIR}/ "gpu" 
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh;${CMAKE_CURRENT_SOURCE_DIR}/generate.py" 
-    COMMENT "Generating PyTorch models..."
+    COMMENT "Generating GPU PyTorch models..."
 )
 
 # Define a target to generate models

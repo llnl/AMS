@@ -2,7 +2,7 @@
 
 if [[ $# -ne 2 ]]; then
   echo "Expecting at least 2 CLI argument"
-  echo "$0 <directory> cpu|gpu"
+  echo "$0 <directory> cpu|hip|cuda"
   exit
 fi
 

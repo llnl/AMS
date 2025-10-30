@@ -10,6 +10,8 @@
 
 #ifdef __AMS_ENABLE_CUDA__
 #include <cuda_runtime.h>
+#elif defined(__AMS_ENABLE_HIP__)
+#include <hip/hip_runtime.h>
 #endif
 
 #include "debug.h"
@@ -34,21 +36,27 @@ struct AMSDefaultDeviceAllocator final : AMSAllocator {
     DBG(AMSDefaultDeviceAllocator, "Destroying default device allocator");
   };
 
-  void *allocate(size_t num_bytes, size_t alignment)
+  void* allocate(size_t num_bytes, size_t alignment)
   {
-#ifdef __AMS_ENABLE_CUDA__
-    void *devPtr;
+#if defined(__AMS_ENABLE_CUDA__)
+    void* devPtr;
     cudaMalloc(&devPtr, num_bytes);
+    return devPtr;
+#elif defined(__AMS_ENABLE_HIP__)
+    void* devPtr;
+    hipMalloc(&devPtr, num_bytes);
     return devPtr;
 #else
     return nullptr;
 #endif
   }
 
-  void deallocate(void *ptr)
+  void deallocate(void* ptr)
   {
-#ifdef __AMS_ENABLE_CUDA__
+#if defined(__AMS_ENABLE_CUDA__)
     cudaFree(ptr);
+#elif defined(__AMS_ENABLE_HIP__)
+    hipFree(ptr);
 #endif
   }
 };
@@ -60,33 +68,39 @@ struct AMSDefaultHostAllocator final : AMSAllocator {
     DBG(AMSDefaultDeviceAllocator, "Destroying default host allocator");
   }
 
-  void *allocate(size_t num_bytes, size_t alignment)
+  void* allocate(size_t num_bytes, size_t alignment)
   {
     return aligned_alloc(alignment, roundUp(num_bytes, alignment));
   }
 
-  void deallocate(void *ptr) { free(ptr); }
+  void deallocate(void* ptr) { free(ptr); }
 };
 
 struct AMSDefaultPinnedAllocator final : AMSAllocator {
   AMSDefaultPinnedAllocator(std::string name) : AMSAllocator(name) {}
   ~AMSDefaultPinnedAllocator() = default;
 
-  void *allocate(size_t num_bytes, size_t alignment)
+  void* allocate(size_t num_bytes, size_t alignment)
   {
-#ifdef __AMS_ENABLE_CUDA__
-    void *ptr;
+#if defined(__AMS_ENABLE_CUDA__)
+    void* ptr;
     cudaHostAlloc(&ptr, num_bytes, cudaHostAllocPortable);
+    return ptr;
+#elif defined(__AMS_ENABLE_HIP__)
+    void* ptr;
+    hipHostAlloc(&ptr, num_bytes, hipHostAllocPortable);
     return ptr;
 #else
     return nullptr;
 #endif
   }
 
-  void deallocate(void *ptr)
+  void deallocate(void* ptr)
   {
-#ifdef __AMS_ENABLE_CUDA__
+#if defined(__AMS_ENABLE_CUDA__)
     cudaFreeHost(ptr);
+#elif defined(__AMS_ENABLE_HIP__)
+    hipFreeHost(ptr);
 #endif
   }
 };
@@ -94,9 +108,9 @@ struct AMSDefaultPinnedAllocator final : AMSAllocator {
 
 namespace internal
 {
-void _raw_copy(void *src,
+void _raw_copy(void* src,
                AMSResourceType src_dev,
-               void *dest,
+               void* dest,
                AMSResourceType dest_dev,
                size_t num_bytes)
 {
@@ -109,8 +123,10 @@ void _raw_copy(void *src,
           std::memcpy(dest, src, num_bytes);
           break;
         case AMSResourceType::AMS_DEVICE:
-#ifdef __AMS_ENABLE_CUDA__
+#if defined(__AMS_ENABLE_CUDA__)
           cudaMemcpy(dest, src, num_bytes, cudaMemcpyHostToDevice);
+#elif defined(__AMS_ENABLE_HIP__)
+          hipMemcpy(dest, src, num_bytes, hipMemcpyHostToDevice);
 #endif
           break;
         default:
@@ -118,7 +134,7 @@ void _raw_copy(void *src,
           break;
       }
       break;
-#ifdef __AMS_ENABLE_CUDA__
+#if defined(__AMS_ENABLE_CUDA__)
     case AMSResourceType::AMS_DEVICE:
       switch (dest_dev) {
         case AMSResourceType::AMS_DEVICE:
@@ -132,6 +148,21 @@ void _raw_copy(void *src,
           FATAL(ResourceManager, "Unknown device type to copy to from DEVICE");
           break;
       }
+#elif defined(__AMS_ENABLE_HIP__)
+    case AMSResourceType::AMS_DEVICE:
+      switch (dest_dev) {
+        case AMSResourceType::AMS_DEVICE:
+          hipMemcpy(dest, src, num_bytes, hipMemcpyDeviceToDevice);
+          break;
+        case AMSResourceType::AMS_HOST:
+        case AMSResourceType::AMS_PINNED:
+          hipMemcpy(dest, src, num_bytes, hipMemcpyDeviceToHost);
+          break;
+        default:
+          FATAL(ResourceManager, "Unknown device type to copy to from DEVICE");
+          break;
+      }
+
 #endif
       break;
     default:
@@ -139,7 +170,7 @@ void _raw_copy(void *src,
   }
 }
 
-AMSAllocator *_get_allocator(std::string &alloc_name, AMSResourceType resource)
+AMSAllocator* _get_allocator(std::string& alloc_name, AMSResourceType resource)
 {
   switch (resource) {
     case AMSResourceType::AMS_DEVICE:
@@ -157,7 +188,7 @@ AMSAllocator *_get_allocator(std::string &alloc_name, AMSResourceType resource)
   }
 }
 
-void _release_allocator(AMSAllocator *allocator) { delete allocator; }
+void _release_allocator(AMSAllocator* allocator) { delete allocator; }
 
 }  // namespace internal
 }  // namespace ams

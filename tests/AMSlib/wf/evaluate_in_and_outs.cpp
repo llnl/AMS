@@ -12,6 +12,15 @@
 #include "AMS.h"
 #include "wf/workflow.hpp"
 
+#if defined(__AMS_ENABLE_CUDA__)
+constexpr c10::DeviceType AMS_TEST_CTYPE = c10::DeviceType::CUDA;
+#elif defined(__AMS_ENABLE_HIP__)
+constexpr c10::DeviceType AMS_TEST_CTYPE = c10::DeviceType::CUDA;
+#else
+constexpr c10::DeviceType AMS_TEST_CTYPE =
+    c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES;
+#endif
+
 using namespace ams;
 
 #define SIZE 32
@@ -256,7 +265,10 @@ int main(int argc, char* argv[])
 
   if (Type.compare("double") == 0) DType = torch::kFloat64;
 
-  if (device.compare("cuda") == 0) dev = c10::DeviceType::CUDA;
+  if (device.compare("cuda") == 0)
+    dev = c10::DeviceType::CUDA;
+  else if (device.compare("hip") == 0)
+    dev = c10::DeviceType::CUDA;
   std::string domain_name("test");
 
   auto tOptions = torch::TensorOptions().dtype(DType).device(dev);
@@ -293,11 +305,11 @@ int main(int argc, char* argv[])
     std::cout << "NumIn " << numIn << " " << in.size() << "\n";
     std::cout << "NumOut " << numOut << " " << out.size() << "\n";
     std::cout << "NumInOut " << numInOuts << " " << inout.size() << "\n";
-    if (DType == torch::kFloat64 && dev == c10::DeviceType::CUDA)
-      compute<double, torch::kFloat64, c10::DeviceType::CUDA>(
+    if (DType == torch::kFloat64 && dev == AMS_TEST_CTYPE)
+      compute<double, torch::kFloat64, AMS_TEST_CTYPE>(
           wf, in, inout, out, dbroadcastVal, false);
-    else if (DType == torch::kFloat32 && dev == c10::DeviceType::CUDA)
-      compute<float, torch::kFloat32, c10::DeviceType::CUDA>(
+    else if (DType == torch::kFloat32 && dev == AMS_TEST_CTYPE)
+      compute<float, torch::kFloat32, AMS_TEST_CTYPE>(
           wf, in, inout, out, fbroadcastVal, false);
     else if (DType == torch::kFloat64 && dev == c10::DeviceType::CPU)
       compute<double, torch::kFloat64, c10::DeviceType::CPU>(

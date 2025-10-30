@@ -17,7 +17,7 @@ static AMSResourceType torchDeviceToAMSDevice(c10::DeviceType dType)
     case c10::DeviceType::CUDA:
       return AMSResourceType::AMS_DEVICE;
     case c10::DeviceType::HIP:
-      return AMSResourceType::AMS_UNKNOWN;
+      return AMSResourceType::AMS_DEVICE;
     case c10::DeviceType::CPU:
       return AMSResourceType::AMS_HOST;
     default:
@@ -50,7 +50,11 @@ static c10::DeviceType amsToTorchDevice(const ams::AMSResourceType resource)
   if (resource == ams::AMSResourceType::AMS_HOST)
     return c10::DeviceType::CPU;
   else if (resource == ams::AMSResourceType::AMS_DEVICE)
+#if defined(__AMS_ENABLE_CUDA__)
     return c10::DeviceType::CUDA;
+#elif defined(__AMS_ENABLE_HIP__)
+    return c10::DeviceType::CUDA;
+#endif
 
   throw std::runtime_error("Unknown ams resource type");
   return c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES;
@@ -93,10 +97,10 @@ static ams::SmallVector<ams::AMSTensor> torchToAMSTensors(
 }
 
 static ams::SmallVector<torch::Tensor> amsToTorchTensors(
-    const ams::SmallVector<ams::AMSTensor> &amsTensorVector)
+    const ams::SmallVector<ams::AMSTensor>& amsTensorVector)
 {
   ams::SmallVector<torch::Tensor> ams_tensors;
-  for (auto &tensor : amsTensorVector) {
+  for (auto& tensor : amsTensorVector) {
     // We should be able to completely remove these conversion by using some template "magic."
     // I will leave these for later though
     auto dType = amsToTorchDType(tensor.dType());
@@ -127,11 +131,11 @@ void callApplication(ams::DomainLambda CallBack,
   return;
 }
 
-void callAMS(ams::AMSWorkflow *executor,
+void callAMS(ams::AMSWorkflow* executor,
              DomainLambda Physics,
-             const ams::SmallVector<ams::AMSTensor> &ins,
-             ams::SmallVector<ams::AMSTensor> &inouts,
-             ams::SmallVector<ams::AMSTensor> &outs)
+             const ams::SmallVector<ams::AMSTensor>& ins,
+             ams::SmallVector<ams::AMSTensor>& inouts,
+             ams::SmallVector<ams::AMSTensor>& outs)
 {
   ams::SmallVector<torch::Tensor> tins = amsToTorchTensors(ins);
   ams::SmallVector<torch::Tensor> tinouts = amsToTorchTensors(inouts);
