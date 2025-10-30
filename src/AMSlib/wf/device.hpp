@@ -18,7 +18,7 @@
 
 #define UNDEFINED_FUNC -1
 
-#ifdef defined(__AMS_ENABLE_CUDA__) || defined(__AMS_ENABLE_HIP__)
+#if defined(__AMS_ENABLE_CUDA__) || defined(__AMS_ENABLE_HIP__)
 namespace ams
 {
 void DtoDMemcpy(void* dest, void* src, size_t nBytes);
