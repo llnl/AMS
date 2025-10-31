@@ -100,7 +100,7 @@ public:
       return;
     }
 
-    DBG(UQ,
+    AMS_DBG(UQ,
         "START: UQ Model is of type (%s, %d) with threshold %f",
         BaseUQ::UQPolicyToStr(uqPolicy).c_str(),
         uqPolicy,
@@ -127,7 +127,7 @@ public:
     if (isRandomUQ(uqPolicy))
       randomUQ = std::make_unique<RandomUQ>(resourceLocation, threshold);
 
-    DBG(UQ,
+    AMS_DBG(UQ,
         "UQ Model is of type (%s, %d) with threshold %f",
         BaseUQ::UQPolicyToStr(uqPolicy).c_str(),
         uqPolicy,
@@ -141,7 +141,7 @@ public:
                 bool *p_ml_acceptable)
   {
 
-    DBG(UQ,
+    AMS_DBG(UQ,
         "Calling %s surrogate [in:%ld %ld] -> (out:[%ld "
         "%ld])",
         BaseUQ::UQPolicyToStr(uqPolicy).c_str(),
@@ -170,7 +170,7 @@ public:
       CALIPER(CALI_MARK_END("SURROGATE");)
     } else if (uqPolicy == AMSUQPolicy::AMS_RANDOM) {
       CALIPER(CALI_MARK_BEGIN("RANDOM_UQ");)
-      DBG(Workflow, "Evaluating Random UQ");
+      AMS_DBG(Workflow, "Evaluating Random UQ");
       randomUQ->evaluate(totalElements, p_ml_acceptable);
       CALIPER(CALI_MARK_END("RANDOM_UQ");)
 
@@ -191,7 +191,7 @@ public:
     }
 
     if (uqPolicy == AMSUQPolicy::AMS_RANDOM && uq_path != "") {
-      WARNING(Workflow,
+      AMS_WARNING(Workflow,
               "RandomUQ cannot update hdcache path, ignoring argument")
     }
 

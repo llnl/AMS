@@ -87,7 +87,7 @@ public:
     if (surrogate_path != nullptr) SPath = std::string(surrogate_path);
 
     this->threshold = threshold;
-    CDEBUG(AMS,
+    AMS_CDEBUG(AMS,
            surrogate_path != nullptr,
            "Registered Model '%s' has threshold %g",
            SPath.c_str(),
@@ -97,8 +97,8 @@ public:
 
   void dump()
   {
-    if (!SPath.empty()) DBG(AMS, "Surrogate Model Path: %s", SPath.c_str());
-    DBG(AMS,
+    if (!SPath.empty()) AMS_DBG(AMS, "Surrogate Model Path: %s", SPath.c_str());
+    AMS_DBG(AMS,
         "Threshold %f Model Path: %s StoreData: %s",
         threshold,
         SPath.c_str(),
@@ -127,8 +127,8 @@ private:
   void dumpEnv()
   {
     for (auto &KV : ams_candidate_models) {
-      DBG(AMS, "\n")
-      DBG(AMS,
+      AMS_DBG(AMS, "\n")
+      AMS_DBG(AMS,
           "\t\t\t Model: %s With AMSAbstractID: %d",
           KV.first.c_str(),
           KV.second);
@@ -196,7 +196,7 @@ private:
     std::string db_path = entry["fs_path"].get<std::string>();
     auto &DB = ams::db::DBManager::getInstance();
     DB.instantiate_fs_db(dbType, db_path);
-    DBG(AMS,
+    AMS_DBG(AMS,
         "Configured AMS File system database to point to %s using file "
         "type %s",
         db_path.c_str(),
@@ -247,7 +247,7 @@ private:
            "update.")
 
     if (exchange == "" || routing_key == "") {
-      WARNING(AMS,
+      AMS_WARNING(AMS,
               "Found empty RMQ exchange or routing-key, deactivating model "
               "update")
       update_surrogate = false;
@@ -268,7 +268,7 @@ private:
 
   void parseDatabase(json &jRoot)
   {
-    DBG(AMS, "Parsing Data Base Fields")
+    AMS_DBG(AMS, "Parsing Data Base Fields")
     if (!jRoot.contains("db")) return;
     auto entry = jRoot["db"];
     if (!entry.contains("dbType"))
@@ -299,7 +299,7 @@ public:
     memManager.init();
 
     if (const char *object_descr = std::getenv("AMS_OBJECTS")) {
-      DBG(AMS, "Opening env file %s", object_descr);
+      AMS_DBG(AMS, "Opening env file %s", object_descr);
       std::ifstream json_file(object_descr);
       json data = json::parse(json_file);
       /* We first parse domain models. Domain models can be potentially 
@@ -397,7 +397,7 @@ namespace ams
 void AMSInit()
 {
   std::call_once(_amsInitFlag, [&]() {
-    DBG(AMS, "Initialization of AMS")
+    AMS_DBG(AMS, "Initialization of AMS")
     _amsWrap = std::make_unique<AMSWrap>();
   });
 }
@@ -405,7 +405,7 @@ void AMSInit()
 void AMSFinalize()
 {
   std::call_once(_amsFinalizeFlag, [&]() {
-    DBG(AMS, "Finalization of AMS")
+    AMS_DBG(AMS, "Finalization of AMS")
     _amsWrap.reset();
   });
 }
@@ -432,7 +432,7 @@ void AMSExecute(AMSExecutor executor,
   auto currExec = _amsWrap->executors[index];
 
   ams::AMSWorkflow *workflow = reinterpret_cast<ams::AMSWorkflow *>(currExec);
-  DBG(AMS,
+  AMS_DBG(AMS,
       "Calling AMS with in:%ld, inout:%ld, out:%ld",
       ins.size(),
       inouts.size(),

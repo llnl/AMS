@@ -149,7 +149,7 @@ public:
 
   void init()
   {
-    DBG(ResourceManager, "Initialization of allocators");
+    AMS_DBG(ResourceManager, "Initialization of allocators");
     std::string host_alloc("HOST");
     std::string device_alloc("DEVICE");
     std::string pinned_alloc("PINNED");
@@ -172,7 +172,7 @@ public:
 
     RMAllocators[resource] =
         ams::internal::_get_allocator(alloc_name, resource);
-    DBG(ResourceManager,
+    AMS_DBG(ResourceManager,
         "Set Allocator [%d] to pool with name : %s",
         resource,
         RMAllocators[resource]->getName().c_str());

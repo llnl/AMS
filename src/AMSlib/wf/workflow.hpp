@@ -85,7 +85,7 @@ class AMSWorkflow
       StoreOutputTensors.push_back(Tensor);
     }
 
-    DBG(Workflow,
+    AMS_DBG(Workflow,
         "Storing data (#elements = %ld) to database",
         StoreInputTensors[0].sizes()[0]);
     DB->store(StoreInputTensors, StoreOutputTensors);
@@ -205,7 +205,7 @@ public:
   }
 
 
-  ~AMSWorkflow() { DBG(Workflow, "Destroying Workflow Handler"); }
+  ~AMSWorkflow() { AMS_DBG(Workflow, "Destroying Workflow Handler"); }
 
   /** @brief This is the main entry point of AMSLib and replaces the original
      * execution path of the application.
@@ -259,7 +259,7 @@ public:
                 ams::MutableArrayRef<torch::Tensor> Outs)
   {
     CALIPER(CALI_MARK_BEGIN("AMSEvaluate");)
-    DBG(Workflow,
+    AMS_DBG(Workflow,
         "Entering Workflow with TorchIn:%ld, TochInOut:%ld, TorchOut:%ld",
         Ins.size(),
         InOuts.size(),
@@ -269,24 +269,24 @@ public:
     for (auto &TI : Ins)
       msg += shapeToString(TI) + " ";
     msg += "]";
-    DBG(Workflow, "%s", msg.c_str());
+    AMS_DBG(Workflow, "%s", msg.c_str());
 
     msg = "ApplicationInOut: [ ";
     for (auto &TIO : InOuts)
       msg += shapeToString(TIO) + " ";
     msg += "]";
-    DBG(Workflow, "%s", msg.c_str());
+    AMS_DBG(Workflow, "%s", msg.c_str());
 
     msg = "ApplicationOutput: [ ";
     for (auto &TO : Outs)
       msg += shapeToString(TO) + " ";
     msg += "]";
-    DBG(Workflow, "%s", msg.c_str());
+    AMS_DBG(Workflow, "%s", msg.c_str());
 
 
     SmallVector<torch::Tensor> InputTensors(Ins.begin(), Ins.end());
     SmallVector<torch::Tensor> OutputTensors(Outs.begin(), Outs.end());
-    DBG(Workflow,
+    AMS_DBG(Workflow,
         "Entering Workflow with TorchIn:%ld, TorchOut:%ld",
         InputTensors.size(),
         OutputTensors.size());
@@ -301,7 +301,7 @@ public:
     REPORT_MEM_USAGE(Workflow, "Start")
 
     if (!MLModel) {
-      DBG(Workflow, "Model does not exist, calling entire application");
+      AMS_DBG(Workflow, "Model does not exist, calling entire application");
       // We need to clone only inout data to guarantee
       // we have a copy of them when writting the database
       SmallVector<torch::Tensor> PhysicInOutsBefore;
@@ -320,7 +320,7 @@ public:
     CALIPER(CALI_MARK_BEGIN("UPDATEMODEL");)
     if (updateModel()) {
       auto model = DB->getLatestModel();
-      CINFO(Workflow,
+      AMS_CINFO(Workflow,
             rId == 0,
             "Updating surrogate model with %s",
             model.c_str())
@@ -383,7 +383,7 @@ public:
     CALIPER(CALI_MARK_END("UNPACK");)
 
 
-    DBG(Workflow, "Finished physics evaluation")
+    AMS_DBG(Workflow, "Finished physics evaluation")
 
     if (DB) {
       storeComputedData(PhysicIns,
@@ -392,7 +392,7 @@ public:
                         PhysicInOuts);
     }
 
-    DBG(Workflow, "Finished AMSExecution")
+    AMS_DBG(Workflow, "Finished AMSExecution")
 
     auto sizePhysics = (PhysicIns.size() > 0) ? PhysicIns[0].sizes()[0] : 0;
     auto sizeInput = (InputTensors.size() > 0) ? InputTensors[0].sizes()[0] : 0;
@@ -401,7 +401,7 @@ public:
       ratioComputedPhysics =
           (float)(PhysicIns[0].sizes()[0]) / float(InputTensors[0].sizes()[0]);
 
-    CINFO(Workflow,
+    AMS_CINFO(Workflow,
           rId == 0,
           "Computed %ld elems"
           "using physics out of the %ld items (%.2f)",

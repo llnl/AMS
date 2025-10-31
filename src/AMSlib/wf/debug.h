@@ -50,20 +50,20 @@ void memUsage(double& vm_usage, double& resident_set);
 
 #ifdef LIBAMS_VERBOSE
 
-#define CWARNING(id, condition, ...) \
+#define AMS_CWARNING(id, condition, ...) \
   AMSPRINT(id, condition, ams::util::LogVerbosityLevel::Warning, __VA_ARGS__)
 
-#define WARNING(id, ...) CWARNING(id, true, __VA_ARGS__)
+#define AMS_WARNING(id, ...) AMS_CWARNING(id, true, __VA_ARGS__)
 
-#define CINFO(id, condition, ...) \
+#define AMS_CINFO(id, condition, ...) \
   AMSPRINT(id, condition, ams::util::LogVerbosityLevel::Info, __VA_ARGS__)
 
-#define INFO(id, ...) CINFO(id, true, __VA_ARGS__)
+#define AMS_INFO(id, ...) AMS_CINFO(id, true, __VA_ARGS__)
 
-#define CDEBUG(id, condition, ...) \
+#define AMS_CDEBUG(id, condition, ...) \
   AMSPRINT(id, condition, ams::util::LogVerbosityLevel::Debug, __VA_ARGS__)
 
-#define DBG(id, ...) CDEBUG(id, true, __VA_ARGS__)
+#define AMS_DBG(id, ...) AMS_CDEBUG(id, true, __VA_ARGS__)
 
 // clang-format off
 #define REPORT_MEM_USAGE(id, phase)                                    \
@@ -72,7 +72,7 @@ void memUsage(double& vm_usage, double& resident_set);
     size_t watermark, current_size, actual_size;                       \
     auto& rm = ams::ResourceManager::getInstance();                    \
     memUsage(vm, rs);                                                  \
-    DBG(MEM, "Memory usage at %s is VM:%g RS:%g", phase, vm, rs); \
+    AMS_DBG(MEM, "Memory usage at %s is VM:%g RS:%g", phase, vm, rs); \
                                                                        \
     for (int i = 0; i < AMSResourceType::AMS_RSEND; i++) {             \
       if (rm.isActive((AMSResourceType)i)) {                           \
@@ -80,7 +80,7 @@ void memUsage(double& vm_usage, double& resident_set);
                              watermark,                                \
                              current_size,                             \
                              actual_size);                             \
-        DBG(MEM,                                                        \
+        AMS_DBG(MEM,                                                        \
               "Allocator: %s HWM:%lu CS:%lu AS:%lu) ",                 \
               rm.getAllocatorName((AMSResourceType)i).c_str(),         \
               watermark,                                               \
@@ -93,17 +93,17 @@ void memUsage(double& vm_usage, double& resident_set);
 // clang-format on
 
 #else  // LIBAMS_VERBOSE is disabled
-#define CWARNING(id, condition, ...)
+#define AMS_CWARNING(id, condition, ...)
 
-#define WARNING(id, ...)
+#define AMS_WARNING(id, ...)
 
-#define CINFO(id, condition, ...)
+#define AMS_CINFO(id, condition, ...)
 
-#define INFO(id, ...)
+#define AMS_INFO(id, ...)
 
-#define CDEBUG(id, condition, ...)
+#define AMS_CDEBUG(id, condition, ...)
 
-#define DBG(id, ...)
+#define AMS_DBG(id, ...)
 
 
 #endif  // LIBAMS_VERBOSE

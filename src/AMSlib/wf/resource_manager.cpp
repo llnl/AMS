@@ -33,7 +33,7 @@ struct AMSDefaultDeviceAllocator final : AMSAllocator {
   AMSDefaultDeviceAllocator(std::string name) : AMSAllocator(name) {};
   ~AMSDefaultDeviceAllocator()
   {
-    DBG(AMSDefaultDeviceAllocator, "Destroying default device allocator");
+    AMS_DBG(AMSDefaultDeviceAllocator, "Destroying default device allocator");
   };
 
   void* allocate(size_t num_bytes, size_t alignment)
@@ -65,7 +65,7 @@ struct AMSDefaultHostAllocator final : AMSAllocator {
   AMSDefaultHostAllocator(std::string name) : AMSAllocator(name) {}
   ~AMSDefaultHostAllocator()
   {
-    DBG(AMSDefaultDeviceAllocator, "Destroying default host allocator");
+    AMS_DBG(AMSDefaultDeviceAllocator, "Destroying default host allocator");
   }
 
   void* allocate(size_t num_bytes, size_t alignment)

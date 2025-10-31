@@ -54,7 +54,7 @@ size_t AMSMsgHeader::encode(uint8_t* data_blob)
       serialize_data(&data_blob[current_offset], static_cast<uint16_t>(out_dim));
 
   // Domain Size (should be 2 bytes)
-  DBG(AMSMsgHeader,
+  AMS_DBG(AMSMsgHeader,
       "Generating domain name of size %d --- %lu",
       domain_size,
       sizeof(domain_size));
@@ -66,7 +66,7 @@ AMSMsgHeader AMSMsgHeader::decode(uint8_t* data_blob)
   size_t current_offset = 0;
   // Header size (should be 1 bytes)
   uint8_t new_hsize = data_blob[current_offset];
-  CWARNING(AMSMsgHeader,
+  AMS_CWARNING(AMSMsgHeader,
            new_hsize != AMSMsgHeader::size(),
            "buffer is likely not a valid AMSMessage (%d / %ld)",
            new_hsize,
@@ -213,7 +213,7 @@ void MessagesBuffer::print()
 {
   std::lock_guard<std::mutex> lock(_mutex);
   for (const auto& e : _msgs)
-    DBG(MessagesBuffer,
+    AMS_DBG(MessagesBuffer,
         "Message [%d] (addr=%p,use_count=%d, size=%d)",
         e.second.id,
         e.second.dPtr.get(),
@@ -233,14 +233,14 @@ size_t MessagesBuffer::size()
 
 void AMQPHandler::onDetached(AMQP::TcpConnection* connection)
 {
-  DBG(AMQPHandler, "Connection detached");
+  AMS_DBG(AMQPHandler, "Connection detached");
   // Signal reconnection if needed.
   if (reconnectCallback) reconnectCallback();
 }
 
 void AMQPHandler::onError(AMQP::TcpConnection* connection, const char* message)
 {
-  WARNING(AMQPHandler, "Connection error: \"%s\"", message)
+  AMS_WARNING(AMQPHandler, "Connection error: \"%s\"", message)
   if (reconnectCallback) reconnectCallback();
 }
 
@@ -248,7 +248,7 @@ bool AMQPHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
 {
   // No TLS certificate provided
   if (_cacert.empty()) {
-    DBG(AMQPHandler, "No TLS certificate. Bypassing.")
+    AMS_DBG(AMQPHandler, "No TLS certificate. Bypassing.")
     return true;
   }
 
@@ -266,26 +266,26 @@ bool AMQPHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
       error += std::string(ERR_reason_error_string(err));
     }
     error += "]";
-    WARNING(AMQPHandler, "%s", error.c_str())
+    AMS_WARNING(AMQPHandler, "%s", error.c_str())
     return false;
   } else {
-    DBG(AMQPHandler, "Success logged with ca-chain")
+    AMS_DBG(AMQPHandler, "Success logged with ca-chain")
     return true;
   }
 }
 
 bool AMQPHandler::onSecured(AMQP::TcpConnection* connection, const SSL* ssl)
 {
-  DBG(AMQPHandler, "Secured TLS connection has been established")
+  AMS_DBG(AMQPHandler, "Secured TLS connection has been established")
   return true;
 }
 
 void AMQPHandler::onClosed(AMQP::TcpConnection* connection)
 {
-  DBG(AMQPHandler, "Connection closed")
+  AMS_DBG(AMQPHandler, "Connection closed")
 }
 
 void AMQPHandler::onReady(AMQP::TcpConnection* connection)
 {
-  DBG(AMQPHandler, "Connection established and ready")
+  AMS_DBG(AMQPHandler, "Connection established and ready")
 }

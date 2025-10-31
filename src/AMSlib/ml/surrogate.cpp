@@ -93,7 +93,7 @@ SurrogateModel::SurrogateModel(std::string& model_path)
              model_device == ams::AMSResourceType::AMS_UNKNOWN,
          "Model has unknown datatype or device");
 
-  DBG(SurrogateModel,
+  AMS_DBG(SurrogateModel,
       "Loaded model with type %s on device %s",
       getAMSDTypeAsString(model_dtype).c_str(),
       getAMSResourceTypeAsString(model_device).c_str());
@@ -211,7 +211,7 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
   }
 
   auto ITensor = torch::cat(ConvertedInputs, CAxis);
-  DBG(Surrogate,
+  AMS_DBG(Surrogate,
       "Input concatenated tensor is %s",
       shapeToString(ITensor).c_str());
 
