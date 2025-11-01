@@ -76,3 +76,8 @@ add_custom_target(regenerate_ams_models
   COMMENT "Forcing model regeneration by reconfiguring the build"
 )
 
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/ams_test_simple_models.hpp
+  ${CMAKE_CURRENT_BINARY_DIR}/ams_test_simple_models.hpp
+  COPYONLY
+)

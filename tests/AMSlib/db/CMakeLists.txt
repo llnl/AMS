@@ -40,7 +40,7 @@ function(ADD_DB_UNIT_TEST name exec)
 endfunction()
 
 if (WITH_HDF5)
-BUILD_UNIT_TEST(db_df5 db_hdf5.cpp)
+  BUILD_UNIT_TEST(db_hdf5 db_hdf5.cpp)
   ADD_DB_UNIT_TEST(DB::HDF5 db_hdf5)
 endif()
 

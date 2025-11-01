@@ -6,6 +6,8 @@
  */
 
 
+#include "logger.hpp"
+
 #include <limits.h>
 #include <unistd.h>
 
@@ -21,7 +23,6 @@
 #include <string>
 
 #include "debug.h"
-#include "logger.hpp"
 #include "wf/debug.h"
 #include "wf/logger.hpp"
 

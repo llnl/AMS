@@ -18,7 +18,8 @@ CATCH_TEST_CASE("DBManager tracks instances and materializes files",
   const fs::path base =
       fs::temp_directory_path() / fs::path("ams_dbmgr").string();
 
-  fs::create_directories(base);
+  std::filesystem::remove_all(base);
+  std::filesystem::create_directories(base);
   CATCH_INFO("Temp DB dir: " << base.string());
 
   auto& db = ams::db::DBManager::getInstance();
@@ -50,6 +51,7 @@ CATCH_TEST_CASE("DBManager tracks instances and materializes files",
 
   // Best-effort cleanup of temp artifacts
   std::error_code ec;
+  db.clean();
   fs::remove_all(base, ec);
 }
 
@@ -288,6 +290,7 @@ CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
   // temp dir + domain
   const auto tmpdir =
       (std::filesystem::temp_directory_path() / "ams_db_append_verify");
+  std::filesystem::remove_all(tmpdir);
   std::filesystem::create_directories(tmpdir);
 
   const std::string directory = tmpdir.string() + "/";
@@ -313,6 +316,7 @@ CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
       outputTensors.emplace_back(std::move(OData));
     }
 
+    CATCH_CAPTURE(filename);
     CATCH_REQUIRE(std::filesystem::exists(filename));
     CATCH_REQUIRE(
         verifyDatasetContents_f32_flat(filename, "input_data", inputTensors));
@@ -326,6 +330,7 @@ CATCH_TEST_CASE("HDF5 DB: 'domain_name' dataset matches provided name",
 {
   const auto tmpdir =
       (std::filesystem::temp_directory_path() / "ams_db_domain_meta");
+  std::filesystem::remove_all(tmpdir);
   std::filesystem::create_directories(tmpdir);
 
   const std::string directory = tmpdir.string() + "/";

@@ -1,5 +1,6 @@
 import argparse
 import sys
+from pathlib import Path
 from typing import Dict, Tuple
 
 import torch
@@ -115,6 +116,16 @@ def create_ams_model(model, device, precision, trace_input=None):
         return torch.jit.trace(ams_model, inp)
 
 
+def generate_header(directory, tests):
+    print(f"Writting model header under {directory}")
+    with open(f"{directory}/simple_models.hpp", "w") as fd:
+        fd.write('#include "./ams_test_simple_models.hpp"\n')
+        fd.write("const std::vector<const test_models> simple_models = {\n")
+        for t in tests:
+            fd.write("{" + f'"{t[0]}", "{t[1]}", "{t[2]}", "{t[3]}"' + "},\n")
+        fd.write("};\n")
+
+
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Generate and save a scripted model.")
@@ -122,6 +133,7 @@ def main():
     args = parser.parse_args()
 
     # Initialize model
+    tests = []
     for precision in ["single", "double"]:
         for a_device in ["cpu", "gpu"]:
             for uq in ["random", "duq_mean", "duq_max"]:
@@ -169,11 +181,13 @@ def main():
                 # Generate the file name
                 file_name = f"{precision}_{a_device}_{uq}.pt"
                 file_path = f"{args.directory}/{file_name}"
+                tests.append((str(Path(file_path).resolve()), precision, a_device, uq))
 
                 # Save the scripted model
                 scripted_model.save(file_path)
 
                 print(f"Model saved to {file_path}")
+    generate_header(args.directory, tests)
 
 
 if __name__ == "__main__":

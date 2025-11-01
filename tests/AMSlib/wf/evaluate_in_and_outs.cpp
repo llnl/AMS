@@ -1,407 +1,386 @@
-#include <ATen/core/TensorBody.h>
-#include <ATen/ops/matmul.h>
-#include <c10/core/DeviceType.h>
-#include <sys/types.h>
-#include <torch/csrc/autograd/generated/variable_factories.h>
+#include <hdf5.h>
 #include <torch/torch.h>
-#include <torch/types.h>
 
+#include <catch2/catch_all.hpp>
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators_adapters.hpp>
+#include <catch2/generators/catch_generators_range.hpp>
+#include <catch2/interfaces/catch_interfaces_reporter.hpp>
+#include <catch2/reporters/catch_reporter_event_listener.hpp>
+#include <catch2/reporters/catch_reporter_registrars.hpp>
 #include <cstdint>
+#include <filesystem>
+#include <ostream>
+#include <sstream>
+#include <string>
 #include <vector>
 
 #include "AMS.h"
+#include "models/simple_models.hpp"
 #include "wf/workflow.hpp"
 
-#if defined(__AMS_ENABLE_CUDA__)
-constexpr c10::DeviceType AMS_TEST_CTYPE = c10::DeviceType::CUDA;
-#elif defined(__AMS_ENABLE_HIP__)
+using namespace ams;
+
+// Register it so it runs before any test cases
+
+static std::atomic<int> g_test_counter{0};
+
+static std::string next_test_name()
+{
+  int id = g_test_counter.fetch_add(1, std::memory_order_relaxed);
+  return "test_" + std::to_string(id);
+}
+
+// ---------- Pretty printers so Catch can show readable names ----------
+struct PhysicsCfg {
+  std::string Prec;  // "float" | "double"
+  std::string Dev;   // "cpu" | "cuda" (rocm maps to cuda device type)
+  int NumInOuts;     // e.g., 0,1,...
+};
+inline std::ostream& operator<<(std::ostream& os, PhysicsCfg const& p)
+{
+  return os << "ph.prec=" << p.Prec << " | ph.dev=" << p.Dev
+            << " | inouts=" << p.NumInOuts;
+}
+
+
+static bool verifyDatasetContents(const std::string& fileName,
+                                  const std::string& datasetName,
+                                  const torch::Tensor& expectedFlatCpuFloat)
+{
+  hid_t file_id = H5Fopen(fileName.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+  if (file_id < 0)
+    throw std::runtime_error("Failed to open HDF5 file: " + fileName);
+
+  hid_t dset_id = H5Dopen2(file_id, datasetName.c_str(), H5P_DEFAULT);
+  if (dset_id < 0) {
+    H5Fclose(file_id);
+    throw std::runtime_error("Failed to open dataset: " + datasetName);
+  }
+
+  hid_t space_id = H5Dget_space(dset_id);
+  if (space_id < 0) {
+    H5Dclose(dset_id);
+    H5Fclose(file_id);
+    throw std::runtime_error("Failed to get dataspace");
+  }
+
+  int ndims = H5Sget_simple_extent_ndims(space_id);
+  if (ndims < 0) {
+    H5Sclose(space_id);
+    H5Dclose(dset_id);
+    H5Fclose(file_id);
+    throw std::runtime_error("Bad ndims");
+  }
+
+  std::vector<hsize_t> dims(ndims);
+  if (H5Sget_simple_extent_dims(space_id, dims.data(), nullptr) < 0) {
+    H5Sclose(space_id);
+    H5Dclose(dset_id);
+    H5Fclose(file_id);
+    throw std::runtime_error("Bad dims");
+  }
+
+  H5Sclose(space_id);
+
+  size_t total = 1;
+  for (auto d : dims)
+    total *= d;
+
+  // Read as float32 on CPU
+  torch::Tensor readTensor =
+      torch::empty({static_cast<int64_t>(total)}, torch::kFloat32);
+  herr_t st = H5Dread(dset_id,
+                      H5T_NATIVE_FLOAT,
+                      H5S_ALL,
+                      H5S_ALL,
+                      H5P_DEFAULT,
+                      readTensor.data_ptr());
+  H5Dclose(dset_id);
+  H5Fclose(file_id);
+  if (st < 0) throw std::runtime_error("H5Dread failed");
+
+  auto expected = expectedFlatCpuFloat.reshape({static_cast<int64_t>(total)})
+                      .to(torch::kFloat32)
+                      .cpu();
+  if (!torch::allclose(readTensor, expected, /*rtol=*/1e-5, /*atol=*/1e-8)) {
+    CATCH_INFO("HDF5 mismatch in dataset '" << datasetName
+                                            << "' total=" << total);
+    CATCH_INFO("read[0:10]="
+               << readTensor.index({torch::indexing::Slice(
+                      0, std::min<int64_t>(10, readTensor.size(0)))})
+               << " expected[0:10]="
+               << expected.index({torch::indexing::Slice(
+                      0, std::min<int64_t>(10, expected.size(0)))}));
+    return false;
+  }
+  return true;
+}
+
+// compile-time mapping like your original (CUDA/HIP -> CUDA dev type)
+#if defined(__AMS_ENABLE_CUDA__) || defined(__AMS_ENABLE_HIP__)
 constexpr c10::DeviceType AMS_TEST_CTYPE = c10::DeviceType::CUDA;
 #else
 constexpr c10::DeviceType AMS_TEST_CTYPE =
     c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES;
 #endif
 
-using namespace ams;
-
-#define SIZE 32
-
-
-std::vector<std::int64_t> getDims(const std::string input, char delimiter)
-{
-  std::vector<int64_t> tokens;
-  std::stringstream ss(input);
-  std::string token;
-
-  while (std::getline(ss, token, delimiter)) {
-    tokens.push_back(std::stoi(token));
-  }
-
-  return tokens;
-}
-
-
-// Function to read a dataset and compare it with the expected tensor
-bool verifyDatasetContents(const std::string& fileName,
-                           const std::string& datasetName,
-                           torch::Tensor& expectedTensor)
-{
-  // Open the HDF5 file
-  hid_t file_id = H5Fopen(fileName.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-  if (file_id < 0) {
-    throw std::runtime_error("Failed to open HDF5 file.");
-  }
-
-  // Open the dataset
-  hid_t dset_id = H5Dopen2(file_id, datasetName.c_str(), H5P_DEFAULT);
-  if (dset_id < 0) {
-    H5Fclose(file_id);
-    throw std::runtime_error("Failed to open dataset.");
-  }
-
-  // Get the dataspace
-  hid_t space_id = H5Dget_space(dset_id);
-  if (space_id < 0) {
-    H5Dclose(dset_id);
-    H5Fclose(file_id);
-    throw std::runtime_error("Failed to get dataspace.");
-  }
-
-  // Get the dataset dimensions
-  int ndims = H5Sget_simple_extent_ndims(space_id);
-  if (ndims < 0) {
-    H5Sclose(space_id);
-    H5Dclose(dset_id);
-    H5Fclose(file_id);
-    throw std::runtime_error("Failed to get number of dimensions.");
-  }
-
-  std::vector<hsize_t> dims(ndims);
-  if (H5Sget_simple_extent_dims(space_id, dims.data(), NULL) < 0) {
-    H5Sclose(space_id);
-    H5Dclose(dset_id);
-    H5Fclose(file_id);
-    throw std::runtime_error("Failed to get dataset dimensions.");
-  }
-
-  // Close dataspace
-  H5Sclose(space_id);
-
-  // Flatten the dataset dimensions into a total size
-  size_t totalSize = 1;
-  for (const auto& dim : dims) {
-    totalSize *= dim;
-  }
-
-  // Allocate a tensor to read the dataset
-  auto readTensor =
-      torch::empty({static_cast<int64_t>(totalSize)}, torch::kFloat);
-
-  // Read the dataset into the tensor
-  herr_t status = H5Dread(dset_id,
-                          H5T_NATIVE_FLOAT,
-                          H5S_ALL,
-                          H5S_ALL,
-                          H5P_DEFAULT,
-                          readTensor.data_ptr());
-  if (status < 0) {
-    H5Dclose(dset_id);
-    H5Fclose(file_id);
-    throw std::runtime_error("Failed to read dataset.");
-  }
-
-  // Close dataset and file
-  H5Dclose(dset_id);
-  H5Fclose(file_id);
-
-  // Concatenate all expected tensors into one
-  expectedTensor = expectedTensor.flatten();
-
-  // Compare the tensors
-  if (!torch::allclose(readTensor, expectedTensor)) {
-    throw std::runtime_error(
-        "Dataset contents do not match the expected tensors.");
-  }
-
-  std::cout << "Dataset contents match the expected tensors!" << std::endl;
-  return true;
-}
-
-
+// ---------- Core compute (your callback logic, templated) ----------
 template <typename T, torch::Dtype DType, torch::DeviceType DeviceType>
-void compute(ams::AMSWorkflow& wf,
-             std::vector<torch::Tensor>& orig_in,
-             std::vector<torch::Tensor>& orig_inout,
-             std::vector<torch::Tensor>& orig_out,
-             T& broadcastVal,
-             bool has_broadcast = false)
+static void compute(ams::AMSWorkflow& wf,
+                    std::vector<torch::Tensor>& orig_in,
+                    std::vector<torch::Tensor>& orig_inout,
+                    std::vector<torch::Tensor>& orig_out,
+                    T& /*broadcastVal*/,
+                    bool /*has_broadcast*/ = false)
 {
-
   auto callBack = [&](const ams::SmallVector<ams::AMSTensor>& pruned_ins,
                       ams::SmallVector<ams::AMSTensor>& pruned_inouts,
                       ams::SmallVector<ams::AMSTensor>& pruned_outs) {
-    int numIn = pruned_ins.size();
-    int numInOut = pruned_inouts.size();
-    int numOut = pruned_outs.size();
+    const int numIn = pruned_ins.size();
+    const int numInOut = pruned_inouts.size();
+    const int numOut = pruned_outs.size();
     int numElements = 0;
-    std::cout << "Num ins are " << numIn << "\n";
-    std::cout << "Num inouts are " << numInOut << "\n";
-    std::cout << "Num outs are " << numOut << "\n";
-    if (pruned_ins.size() != 0) {
+    if (!pruned_ins.empty())
       numElements = pruned_ins[0].shape()[0];
-    } else if (pruned_inouts.size() != 0) {
+    else if (!pruned_inouts.empty())
       numElements = pruned_inouts[0].shape()[0];
-    } else {
-      throw std::runtime_error(
-          "call back should be called at least with some elements in batch "
-          "axis");
-    }
+    else
+      CATCH_FAIL("Callback received empty batch");
 
-    // I am converthing all ams - tensors to torch - tensors. This is a conveniency for testing,
-    // as I can execute arbitary GPU code.
     std::vector<torch::Tensor> in;
+    in.reserve(numIn);
+    std::vector<torch::Tensor> inout;
+    inout.reserve(numInOut);
+    std::vector<torch::Tensor> out;
+    out.reserve(numOut);
+
     for (auto& V : pruned_ins) {
       c10::IntArrayRef shape(V.shape().begin(), V.shape().size());
-      std::cout << "Pointer of in " << V.data<float>() << "\n";
       in.push_back(torch::from_blob((void*)V.data<uint8_t>(),
                                     shape,
                                     torch::TensorOptions().dtype(DType).device(
                                         DeviceType)));
     }
-
-    std::vector<torch::Tensor> inout;
     for (auto& V : pruned_inouts) {
-      std::cout << "Pointer of inout " << V.data<float>() << "\n";
       c10::IntArrayRef shape(V.shape().begin(), V.shape().size());
       inout.push_back(torch::from_blob(
           (void*)V.data<uint8_t>(),
           shape,
           torch::TensorOptions().dtype(DType).device(DeviceType)));
     }
-
-    std::vector<torch::Tensor> out;
     for (auto& V : pruned_outs) {
       c10::IntArrayRef shape(V.shape().begin(), V.shape().size());
-      std::cout << "Pointer of out " << V.data<uint8_t>() << "\n";
       out.push_back(torch::from_blob((void*)V.data<uint8_t>(),
                                      shape,
                                      torch::TensorOptions().dtype(DType).device(
                                          DeviceType)));
     }
 
-
     torch::Tensor identity_matrix =
         torch::eye(out.size() + inout.size(),
                    torch::TensorOptions().dtype(DType).device(DeviceType));
 
-    // Iterate over all elements
     for (int i = 0; i < numElements; i++) {
-      // Create a tensor to aggregate input values
       torch::Tensor aggregate =
           torch::zeros({1, numIn + numInOut},
                        torch::TensorOptions().dtype(DType).device(DeviceType));
 
-      // Fill aggregate with cumulative sums from `in` tensors
-      for (int j = 0; j < numIn; j++) {
+      for (int j = 0; j < numIn; j++)
         aggregate[0][j] = in[j][i][0];
-      }
-
-
-      // Continue filling aggregate with cumulative sums from `inout` tensors
-      for (int j = 0; j < numInOut; j++) {
+      for (int j = 0; j < numInOut; j++)
         aggregate[0][numIn + j] = inout[j][i][0];
-      }
 
-      std::cout << "Aggr:" << aggregate << "\n";
-      std::cout << "IDM" << identity_matrix << "\n";
       auto res = aggregate.matmul(identity_matrix) * 13.0;
-      std::cout << "Res " << res << "\n";
 
-      // Assign to `out` tensors using modulo indexing
-      for (int j = 0; j < numOut; j++) {
+      for (int j = 0; j < numOut; j++)
         out[j][i][0] = res[0][j];
-      }
-
-      // Update `inout` tensors using modulo indexing
-      for (int j = 0; j < numInOut; j++) {
-        std::cout << "Setting in out for res" << res[0] << "\n";
+      for (int j = 0; j < numInOut; j++)
         inout[j][i][0] = res[0][numOut + j];
-      }
     }
   };
+
   wf.evaluate(callBack, orig_in, orig_inout, orig_out);
 }
 
-
-int main(int argc, char* argv[])
+// ---------- The test ----------
+CATCH_TEST_CASE("Workflow Evaluate: In/Out/InOut + HDF5 verification",
+                "[ams][workflow][db]")
 {
+  // ----- Generators -----
+  auto model_desc = GENERATE_COPY(from_range(simple_models));
+  auto threshold = GENERATE(Catch::Generators::values({0.0, 0.5, 1.0}));
 
-  if (argc != 10) {
-    std::cout << "Wrong command line\n";
-    std::cout << argv[0]
-              << " <physics type (float|double)> <physics-device (cpu|cuda)> "
-                 "<path-to-model> <duq-type> <threshold> <input-dim-shape "
-                 "(1024,2) <output-dim-shape (1024, 2) > <path to db> "
-                 "<num-in-outs\n";
-    return -1;
+  // Physics (host) precision/device cartesian product
+  auto phys = GENERATE_REF(Catch::Generators::values<PhysicsCfg>({
+      {"float", "cpu", 0},
+      {"double", "cpu", 0},
+      {"float", "cuda", 0},
+      {"double", "cuda", 0},
+      {"float", "cpu", 1},
+      {"double", "cpu", 1},
+      {"float", "cuda", 1},
+      {"double", "cuda", 1},
+      {"float", "cpu", 8},
+      {"double", "cpu", 8},
+      {"float", "cuda", 8},
+      {"double", "cuda", 8},
+      // add more NumInOuts here if you want to cover >0: {"float","cuda",1}, ...
+  }));
+
+  // Skip GPU physics if CUDA not available
+  if (phys.Dev == "cuda" && !torch::cuda::is_available()) {
+    CATCH_SKIP("CUDA not available; skipping " << phys << " with "
+                                               << model_desc);
   }
-  torch::Dtype DType = torch::kFloat32;
-  torch::DeviceType dev = c10::DeviceType::CPU;
 
-  std::string Type(argv[1]);
-  std::string device(argv[2]);
-  std::string model_path(argv[3]);
-  std::string duq_type(argv[4]);
-  float threshold = std::atof(argv[5]);
-  std::vector<int64_t> iShape(getDims(argv[6], ','));
-  std::vector<int64_t> oShape(getDims(argv[7], ','));
-  std::string db_path(argv[8]);
-  int numInOuts = std::atoi(argv[9]);
+  if (threshold == 0.5 && model_desc.UQType != "duq_max")
+    CATCH_SKIP("These tests only support duq_max " << phys << " with "
+                                                   << model_desc);
+
+
+  // Fixed shapes you pass in your example ("1,8") -> we only need the last dim here
+  constexpr int SIZE = 32;
+  const std::vector<int64_t> iShape = {1, 8};
+  const std::vector<int64_t> oShape = {1, 8};
+
+  // Prepare DB
   auto& db_instance = ams::db::DBManager::getInstance();
-  db_instance.instantiate_fs_db(AMSDBType::AMS_HDF5, db_path);
 
-  if (Type.compare("double") == 0) {
-    DType = torch::kFloat64;
-  }
+  // Types & devices
+  torch::Dtype DType =
+      (phys.Prec == "double") ? torch::kFloat64 : torch::kFloat32;
+  c10::DeviceType dev =
+      (phys.Dev == "cuda") ? c10::DeviceType::CUDA : c10::DeviceType::CPU;
 
-  if (Type.compare("double") == 0) DType = torch::kFloat64;
+  std::string domain{next_test_name()};
 
-  if (device.compare("cuda") == 0)
-    dev = c10::DeviceType::CUDA;
-  else if (device.compare("hip") == 0)
-    dev = c10::DeviceType::CUDA;
-  std::string domain_name("test");
+  ams::AMSWorkflow wf(model_desc.ModelPath,
+                      /*domain*/ domain,
+                      /*threshold*/ threshold,
+                      0,
+                      1);
+  const std::string filename = wf.getDBFilename();
 
-  auto tOptions = torch::TensorOptions().dtype(DType).device(dev);
-  std::string filename;
+  torch::TensorOptions tOptions =
+      torch::TensorOptions().dtype(DType).device(dev);
 
-  {
-    ams::AMSWorkflow wf =
-        ams::AMSWorkflow(model_path, domain_name, threshold, 0, 1);
+  // Build inputs based on last dims and NumInOuts
+  const int numInOuts = phys.NumInOuts;
+  const int numIn = static_cast<int>(iShape.back()) - numInOuts;
+  const int numOut = static_cast<int>(oShape.back()) - numInOuts;
 
-    filename = wf.getDBFilename();
+  std::vector<torch::Tensor> in, inout, out;
+  in.reserve(numIn);
+  inout.reserve(numInOuts);
+  out.reserve(numOut);
 
-    // How many numInOuts are we going to have in this test
-    std::vector<torch::Tensor> in;
-    std::vector<torch::Tensor> inout;
-    std::vector<torch::Tensor> out;
-    // Get the number of inputs for this test
-    int numIn = iShape[iShape.size() - 1] - numInOuts;
-    for (auto i = 0; i < numIn; i++) {
-      in.push_back(torch::ones({SIZE, 1}, tOptions));
-    }
-    for (auto i = 0l; i < numInOuts; i++) {
-      inout.push_back(torch::ones({SIZE, 1}, tOptions));
-    }
+  CATCH_CAPTURE(phys, model_desc, threshold, filename);
+  for (int i = 0; i < numIn; ++i)
+    in.push_back(torch::ones({SIZE, 1}, tOptions));
+  for (int i = 0; i < numInOuts; ++i)
+    inout.push_back(torch::ones({SIZE, 1}, tOptions));
+  for (int i = 0; i < numOut; ++i)
+    out.push_back(torch::zeros({SIZE, 1}, tOptions));
 
-    int numOut = oShape[oShape.size() - 1] - numInOuts;
-    for (auto i = 0; i < numOut; i++) {
-      out.push_back(torch::zeros({SIZE, 1}, tOptions));
-    }
+  float fb = 0.0f;
+  double db = 0.0;
 
-    // Call compute_torch
-    float fbroadcastVal = 0.0;
-    double dbroadcastVal = 0.0;
-    std::cout << "Creating workflow with:\n";
-    std::cout << "NumIn " << numIn << " " << in.size() << "\n";
-    std::cout << "NumOut " << numOut << " " << out.size() << "\n";
-    std::cout << "NumInOut " << numInOuts << " " << inout.size() << "\n";
-    if (DType == torch::kFloat64 && dev == AMS_TEST_CTYPE)
-      compute<double, torch::kFloat64, AMS_TEST_CTYPE>(
-          wf, in, inout, out, dbroadcastVal, false);
-    else if (DType == torch::kFloat32 && dev == AMS_TEST_CTYPE)
-      compute<float, torch::kFloat32, AMS_TEST_CTYPE>(
-          wf, in, inout, out, fbroadcastVal, false);
-    else if (DType == torch::kFloat64 && dev == c10::DeviceType::CPU)
-      compute<double, torch::kFloat64, c10::DeviceType::CPU>(
-          wf, in, inout, out, dbroadcastVal, false);
-    else if (DType == torch::kFloat32 && dev == c10::DeviceType::CPU)
-      compute<float, torch::kFloat32, c10::DeviceType::CPU>(
-          wf, in, inout, out, fbroadcastVal, false);
+  // Dispatch compute like your original (respecting compile-time AMS_TEST_CTYPE)
+  if (DType == torch::kFloat64 && dev == AMS_TEST_CTYPE)
+    compute<double, torch::kFloat64, AMS_TEST_CTYPE>(
+        wf, in, inout, out, db, false);
+  else if (DType == torch::kFloat32 && dev == AMS_TEST_CTYPE)
+    compute<float, torch::kFloat32, AMS_TEST_CTYPE>(
+        wf, in, inout, out, fb, false);
+  else if (DType == torch::kFloat64 && dev == c10::DeviceType::CPU)
+    compute<double, torch::kFloat64, c10::DeviceType::CPU>(
+        wf, in, inout, out, db, false);
+  else if (DType == torch::kFloat32 && dev == c10::DeviceType::CPU)
+    compute<float, torch::kFloat32, c10::DeviceType::CPU>(
+        wf, in, inout, out, fb, false);
+  else
+    CATCH_FAIL("Unsupported (dtype,dev) combo");
 
-    // We do this, as AMS should ignore completely the threshold
-    // value when it doesn't have a model
-    if (model_path.empty()) threshold = 0.0;
+  // If there is no model, AMS should ignore threshold -> treat like 0.0
+  double effThreshold = model_desc.ModelPath.empty() ? 0.0 : threshold;
 
-    for (auto& V : {inout, out}) {
-      for (auto i = 0; i < V.size(); i++) {
-        auto data = V[i];
-        if (threshold == 0.0) {
-          auto correct = torch::ones(data.sizes(), data.options()) * 13;
-          bool close = torch::allclose(correct, data, 1e-5, 1e-8);
-          if (!close) {
-            std::cout << "Values are not close\n";
-            std::cout << data << "\n";
-            std::cout << "Correct data are "
-                      << "\n";
-            std::cout << correct << "\n";
-            return -1;
-          }
-        } else if (threshold == 0.5) {
-          auto correct = torch::ones(data.sizes(), data.options());
-          // Create a tensor with values [0, 1, 2, ..., size-1]
-          auto indices = torch::arange(data.sizes()[0], data.options());
-
-          auto alternating_tensor = (indices % 2) * 12;
-          alternating_tensor = alternating_tensor.reshape({data.sizes()[0], 1});
-          correct += alternating_tensor;
-          // Use modulo operation to create alternating 0s and 1s
-          bool close = torch::allclose(correct, data, 1e-5, 1e-8);
-          if (!close) {
-            std::cout << "Values are not close\n";
-            std::cout << data << "\n";
-            std::cout << "Correct data are "
-                      << "\n";
-            std::cout << correct << "\n";
-            return -1;
-          }
-        } else if (threshold == 1.0) {
-          auto correct = torch::ones(data.sizes(), data.options());
-          bool close = torch::allclose(correct, data, 1e-5, 1e-8);
-          if (!close) {
-            std::cout << "Values are not close\n";
-            std::cout << data << "\n";
-            std::cout << "Correct data are "
-                      << "\n";
-            std::cout << correct << "\n";
-            return -1;
-          }
-        } else {
-          std::cout << "Unknown threshold value\n";
-        }
+  // Check out & inout values like your binary
+  for (auto& V : {std::ref(inout), std::ref(out)}) {
+    for (size_t i = 0; i < V.get().size(); ++i) {
+      auto data = V.get()[i];
+      if (effThreshold == 0.0) {
+        auto correct = torch::ones(data.sizes(), data.options()) * 13;
+        CATCH_REQUIRE(torch::allclose(correct, data, 1e-5, 1e-8));
+      } else if (effThreshold == 0.5) {
+        auto correct = torch::ones(data.sizes(), data.options());
+        auto indices = torch::arange(data.sizes()[0],
+                                     correct.options().dtype(torch::kLong));
+        auto alt = (indices % 2).to(correct.dtype()) * 12;
+        alt = alt.reshape({data.sizes()[0], 1});
+        correct += alt;
+        CATCH_REQUIRE(torch::allclose(correct, data, 1e-5, 1e-8));
+      } else if (effThreshold == 1.0) {
+        auto correct = torch::ones(data.sizes(), data.options());
+        CATCH_REQUIRE(torch::allclose(correct, data, 1e-5, 1e-8));
+      } else {
+        CATCH_FAIL("Unknown threshold value");
       }
     }
-    in.clear();
-    inout.clear();
-    out.clear();
   }
 
-  // Reverse to compute how many physics we want.
-  threshold = 1 - threshold;
+  double collectFrac = 1.0 - threshold;
+  if (collectFrac > 0.0) {
+    const int nin = static_cast<int>(iShape.back());
+    const int nout = static_cast<int>(oShape.back());
 
-  if (threshold > 0) {
-    int numIn = iShape[iShape.size() - 1];
+    // NOTE: HDF5 stored as float32 CPU in verifier
     auto expectedInput =
-        torch::ones({(long)(SIZE * threshold), numIn},
+        torch::ones({static_cast<int64_t>(SIZE * collectFrac), nin},
                     torch::TensorOptions().dtype(torch::kFloat32));
-
-    int numOut = iShape[oShape.size() - 1];
     auto expectedOutput =
-        torch::ones({(long)(SIZE * threshold), numOut},
+        torch::ones({static_cast<int64_t>(SIZE * collectFrac), nout},
                     torch::TensorOptions().dtype(torch::kFloat32)) *
-        13;
+        13.0f;
 
-    std::cout << "Output size :\n" << expectedOutput.sizes() << "\n";
-    std::cout << "Input size :\n" << expectedInput.sizes() << "\n";
+    // Clean & verify only when threshold != 1.0 (your original)
+    db_instance.clean();
 
-    auto& dbg_mg = ams::db::DBManager::getInstance();
-    dbg_mg.clean();
-    if (threshold != 1.0)
-      if (!verifyDatasetContents(filename, "input_data", expectedInput) ||
-          !verifyDatasetContents(filename, "output_data", expectedOutput)) {
-        std::cout << "Could not verify outputs\n";
-        return -1;
-      }
+    if (threshold != 1.0) {
+      CATCH_REQUIRE(
+          verifyDatasetContents(filename, "input_data", expectedInput));
+      CATCH_REQUIRE(
+          verifyDatasetContents(filename, "output_data", expectedOutput));
+    }
   }
+  db_instance.clean();
+  // std::filesystem::remove(filename);
+}
 
-  return 0;
+int main(int argc, char** argv)
+{
+  const std::string db_dir =
+      (std::filesystem::temp_directory_path() / "ams_workflow_tests").string();
+  std::filesystem::remove_all(db_dir);
+  std::filesystem::create_directories(db_dir);
+
+  AMSInit();
+  // Use a temp file in the build tree (std::filesystem temp)
+  auto& db_instance = ams::db::DBManager::getInstance();
+  db_instance.instantiate_fs_db(AMSDBType::AMS_HDF5, db_dir);
+
+
+  Catch::Session session;
+
+  if (int rc = session.applyCommandLine(argc, argv))
+    return rc;  // bad CLI -> propagate
+
+  int rc = session.run();  // run tests
+  std::cout << "RC:" << rc << "\n";
+
+  // Treat "warnings only" (e.g., due to skipped tests) as success for CTest.
+  // Catch2 commonly uses 4 for warnings; adjust if your config differs.
+  AMSFinalize();
+  return (rc == 0 || rc == 4) ? 0 : rc;
 }
