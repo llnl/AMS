@@ -120,7 +120,7 @@ def generate_header(directory, tests):
     print(f"Writting model header under {directory}")
     with open(f"{directory}/simple_models.hpp", "w") as fd:
         fd.write('#include "./ams_test_simple_models.hpp"\n')
-        fd.write("const std::vector<const test_models> simple_models = {\n")
+        fd.write("const std::vector<test_models> simple_models = {\n")
         for t in tests:
             fd.write("{" + f'"{t[0]}", "{t[1]}", "{t[2]}", "{t[3]}"' + "},\n")
         fd.write("};\n")

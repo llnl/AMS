@@ -20,6 +20,7 @@ if [[ "$SYS_TYPE" == "toss_4_x86_64_ib_cray" ]]; then
     module load rocm/6.4.1
     module load cray-mpich/8.1.32
     ROCM_ARCH=$(rocm_agent_enumerator | sed -n 1p)
+    export CMAKE_CXX_FLAGS="-I${ROCM_PATH}/include/"
 elif [[ "$SYS_TYPE" == "toss_4_x86_64_ib" ]]; then
     # Dane
     module load cmake/3.30.5

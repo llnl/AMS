@@ -76,6 +76,7 @@ elseif (WITH_CUDA)
 elseif (WITH_HIP)
   find_package(HIP REQUIRED)
   list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_HIP__")
+  list(APPEND CMAKE_CXX_FLAGS "-I${ROCM_PATH}/include/")
 endif()
 
 # ------------------------------------------------------------------------------

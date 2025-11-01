@@ -1,4 +1,3 @@
-#define CATCH_CONFIG_PREFIX_ALL
 #include <ATen/core/TensorBody.h>
 #include <ATen/ops/rand.h>
 #include <c10/core/DeviceType.h>
