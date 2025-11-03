@@ -7,31 +7,31 @@
 
 # We define the following GitLab pipeline variables:
 variables:
-# In some pipelines we create only one allocation shared among jobs in
-# order to save time and resources. This allocation has to be uniquely
-# named so that we are sure to retrieve it and avoid collisions.
+  # In some pipelines we create only one allocation shared among jobs in
+  # order to save time and resources. This allocation has to be uniquely
+  # named so that we are sure to retrieve it and avoid collisions.
   ALLOC_NAME: ${CI_PROJECT_NAME}_ci_${CI_PIPELINE_ID}
 
-# Dane
-# Arguments for top level allocation
+  # Dane
+  # Arguments for top level allocation
   DANE_SHARED_ALLOC: "--exclusive --reservation=ci --time=45 --nodes=1"
-# Arguments for job level allocation
+  # Arguments for job level allocation
   DANE_JOB_ALLOC: "--mpi=none --reservation=ci --nodes=1"
-# Add variables that should apply to all the jobs on a machine:
-#  DANE_MY_VAR: "..."
+  # Add variables that should apply to all the jobs on a machine:
+  #  DANE_MY_VAR: "..."
 
-# Tioga
-# Arguments for top level allocation
-# OPTIONAL: "-o per-resource.count=2" allows to get 2 jobs running on each node.
+  # Tioga
+  # Arguments for top level allocation
+  # OPTIONAL: "-o per-resource.count=2" allows to get 2 jobs running on each node.
   TIOGA_SHARED_ALLOC: "--queue=pci --exclusive --time-limit=1h --nodes=1 -o per-resource.count=4"
-# Arguments for job level allocation, we need to match the time limit. Otherwise it immediately exits
+  # Arguments for job level allocation, we need to match the time limit. Otherwise it immediately exits
   TIOGA_JOB_ALLOC: "--nodes=1 --begin-time=+5s --time-limit=1h"
-# Add variables that should apply to all the jobs on a machine:
-#  TIOGA_MY_VAR: "..."
+  # Add variables that should apply to all the jobs on a machine:
+  #  TIOGA_MY_VAR: "..."
 
-# Tuo
-  TUOLUMNE_SHARED_ALLOC: "--queue=pci --exclusive --time-limit=45m --nodes=1 -o per-resource.count=4"
-# Arguments for job level allocation
+  # Tuo
+  TUOLUMNE_SHARED_ALLOC: "--queue=pci --exclusive --time-limit=1h --nodes=1 -o per-resource.count=4"
+  # Arguments for job level allocation
   TUOLUMNE_JOB_ALLOC: "--nodes=1 --begin-time=+5s --time-limit=1h"
 
 # Configuration shared by build and test jobs specific to this project.
