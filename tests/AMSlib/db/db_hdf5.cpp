@@ -289,7 +289,11 @@ CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
 {
   // temp dir + domain
   const auto tmpdir =
-      (std::filesystem::temp_directory_path() / "ams_db_append_verify");
+      (std::filesystem::temp_directory_path() / "ams_db_domain_meta");
+  char uniqueName[L_tmpnam];
+  if (std::tmpnam(uniqueName) == nullptr) {
+    throw std::runtime_error("Failed to generate unique temporary name.");
+  }
   std::filesystem::remove_all(tmpdir);
   std::filesystem::create_directories(tmpdir);
 
@@ -328,8 +332,13 @@ CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
 CATCH_TEST_CASE("HDF5 DB: 'domain_name' dataset matches provided name",
                 "[ams][db][hdf5][metadata]")
 {
-  const auto tmpdir =
-      (std::filesystem::temp_directory_path() / "ams_db_domain_meta");
+  auto tmpdir = (std::filesystem::temp_directory_path() / "ams_db_domain_meta");
+  char uniqueName[L_tmpnam];
+  if (std::tmpnam(uniqueName) == nullptr) {
+    throw std::runtime_error("Failed to generate unique temporary name.");
+  }
+  tmpdir /= uniqueName;
+
   std::filesystem::remove_all(tmpdir);
   std::filesystem::create_directories(tmpdir);
 
