@@ -53,7 +53,7 @@ static bool path_exists(std::string& path)
   std::error_code ec;
 
   if (!fs::exists(Path, ec)) {
-    FATAL(AMS, "Path %s does not exist", path.c_str());
+    AMS_FATAL(AMS, "Path %s does not exist", path.c_str());
     return false;
   }
   return true;
@@ -126,7 +126,7 @@ void Logger::initialize_std_io_err(const bool enable_log,
   ams_out = nullptr;
   ams_err = stderr;
 
-  CFATAL(AMS, !path_exists(log_path), "Log Directory does not exist");
+  AMS_CFATAL(AMS, !path_exists(log_path), "Log Directory does not exist");
 
   if (enable_log) {
     ams_out = stdout;
@@ -134,7 +134,7 @@ void Logger::initialize_std_io_err(const bool enable_log,
     if (!log_fn.empty()) {
       const std::string log_filename{concat_file_name(log_path, log_fn, "log")};
       ams_out = fopen(log_filename.c_str(), "a");
-      CFATAL(Logger,
+      AMS_CFATAL(Logger,
              ams_out == nullptr,
              "Could not open file for stdout redirection");
     }
@@ -177,7 +177,7 @@ void Logger::setup_loggers()
 
     char hostname[HOST_NAME_MAX];
     if (gethostname(hostname, HOST_NAME_MAX) != 0) {
-      FATAL(AMS, "Get hostname returns error");
+      AMS_FATAL(AMS, "Get hostname returns error");
     }
 
     int id = 0;

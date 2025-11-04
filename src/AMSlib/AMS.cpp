@@ -54,7 +54,7 @@ public:
     std::string path = "";
     if (jRoot.contains("model_path")) {
       path = jRoot["model_path"].get<std::string>();
-      CFATAL(AMS,
+      AMS_CFATAL(AMS,
              (!path.empty() && !fs::exists(path)),
              "Path '%s' to model does not exist\n",
              path.c_str());
@@ -133,7 +133,7 @@ private:
           KV.first.c_str(),
           KV.second);
       if (KV.second >= ams_candidate_models.size()) {
-        FATAL(AMS,
+        AMS_FATAL(AMS,
               "Candidate model mapped to AMSAbstractID that does not exist "
               "(%d)",
               KV.second);
@@ -172,7 +172,7 @@ private:
 
       if (ams_candidate_models.find(ml_domain_mapping[key]) !=
           ams_candidate_models.end()) {
-        FATAL(AMS,
+        AMS_FATAL(AMS,
               "Domain Model %s has multiple ml model mappings",
               ml_domain_mapping[key].c_str())
       }
@@ -239,7 +239,7 @@ private:
     if (rmq_entry.contains("rabbitmq-cert"))
       rmq_cert = getEntry<std::string>(rmq_entry, "rabbitmq-cert");
 
-    CFATAL(AMS,
+    AMS_CFATAL(AMS,
            (exchange == "" || routing_key == "") && update_surrogate,
            "Found empty RMQ exchange / routing-key, model update is not "
            "possible. "
@@ -288,7 +288,7 @@ private:
         setupRMQ(entry, dbStrType);
         break;
       default:
-        FATAL(AMS, "Unknown db-type");
+        AMS_FATAL(AMS, "Unknown db-type");
     }
     return;
   }
@@ -323,7 +323,7 @@ public:
   {
     auto model = ams_candidate_models.find(domain_name);
     if (model != ams_candidate_models.end()) {
-      FATAL(AMS,
+      AMS_FATAL(AMS,
             "Trying to register model on domain: %s but model already exists "
             "%s",
             domain_name,
@@ -348,7 +348,7 @@ public:
   std::pair<std::string, AMSAbstractModel> &get_model(int index)
   {
     if (index >= registered_models.size()) {
-      FATAL(AMS, "Model id: %d does not exist", index);
+      AMS_FATAL(AMS, "Model id: %d does not exist", index);
     }
 
     return registered_models[index];
@@ -371,7 +371,7 @@ ams::AMSWorkflow *_AMSCreateExecutor(AMSCAbstrModel model,
                                      int process_id,
                                      int world_size)
 {
-  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  AMS_CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   auto &model_descr = _amsWrap->get_model(model);
 
   ams::AMSWorkflow *WF = new ams::AMSWorkflow(model_descr.second.SPath,
@@ -385,7 +385,7 @@ ams::AMSWorkflow *_AMSCreateExecutor(AMSCAbstrModel model,
 
 AMSExecutor _AMSRegisterExecutor(ams::AMSWorkflow *workflow)
 {
-  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  AMS_CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   _amsWrap->executors.push_back(static_cast<void *>(workflow));
   return static_cast<AMSExecutor>(_amsWrap->executors.size()) - 1L;
 }
@@ -463,7 +463,7 @@ void AMSCExecute(AMSExecutor executor,
 
 void AMSDestroyExecutor(AMSExecutor executor)
 {
-  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  AMS_CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   int64_t index = static_cast<int64_t>(executor);
   if (index >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
@@ -491,7 +491,7 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
                                         const char *surrogate_path,
                                         bool store_data)
 {
-  CFATAL(AMS, !_amsWrap, "AMSInit has not been called.")
+  AMS_CFATAL(AMS, !_amsWrap, "AMSInit has not been called.")
   auto id = _amsWrap->get_model_index(domain_name);
   if (id == -1) {
     id = _amsWrap->register_model(domain_name,
@@ -506,7 +506,7 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
 
 AMSCAbstrModel AMSQueryModel(const char *domain_model)
 {
-  CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
+  AMS_CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   return _amsWrap->get_model_index(domain_model);
 }
 

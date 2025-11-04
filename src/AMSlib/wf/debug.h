@@ -30,7 +30,7 @@ void memUsage(double& vm_usage, double& resident_set);
     }                                              \
   } while (0);
 
-#define CFATAL(id, condition, ...)                  \
+#define AMS_CFATAL(id, condition, ...)              \
   do {                                              \
     if (condition) {                                \
       AMSPRINT(id,                                  \
@@ -43,10 +43,10 @@ void memUsage(double& vm_usage, double& resident_set);
     }                                               \
   } while (0);
 
-#define FATAL(id, ...) CFATAL(id, true, __VA_ARGS__)
+#define AMS_FATAL(id, ...) AMS_CFATAL(id, true, __VA_ARGS__)
 
 #define THROW(exception, msg) \
-  FATAL(Throw, "%s %s %s", __FILE__, std::to_string(__LINE__).c_str(), msg)
+  AMS_FATAL(Throw, "%s %s %s", __FILE__, std::to_string(__LINE__).c_str(), msg)
 
 #ifdef LIBAMS_VERBOSE
 
@@ -107,5 +107,39 @@ void memUsage(double& vm_usage, double& resident_set);
 
 
 #endif  // LIBAMS_VERBOSE
+//
+
+#if defined(__AMS_ENABLE_HIP__)
+
+#include <hip/hip_runtime.h>
+#define hipErrCheck(CALL)                 \
+  {                                       \
+    hipError_t err = CALL;                \
+    if (err != hipSuccess) {              \
+      AMS_FATAL("ERROR @ %s:%d ->  %s\n", \
+                __FILE__,                 \
+                __LINE__,                 \
+                hipGetErrorString(err));  \
+      abort();                            \
+    }                                     \
+  }
+
+#elif defined(__AMS_ENABLE_CUDA__)
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+#define cudaErrCheck(CALL)             \
+  {                                    \
+    cudaError_t err = CALL;            \
+    if (err != cudaSuccess) {          \
+      printf("ERROR @ %s:%d ->  %s\n", \
+             __FILE__,                 \
+             __LINE__,                 \
+             hipGetErrorString(err));  \
+      abort();                         \
+    }                                  \
+  }
+#endif
+
 
 #endif

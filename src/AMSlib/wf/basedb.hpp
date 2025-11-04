@@ -1644,7 +1644,7 @@ public:
   RMQInterface() : connected(false) {}
   bool connect()
   {
-    FATAL(RMQInterface, "RMQ Disabled yet we are requesting to connect")
+    AMS_FATAL(RMQInterface, "RMQ Disabled yet we are requesting to connect")
     return false;
   }
 
@@ -1895,7 +1895,7 @@ public:
                           routing_key,
                           update_surrogate);
 #else
-    FATAL(DBManager,
+    AMS_FATAL(DBManager,
           "Requsted RMQ database but AMS is not built with such support "
           "enabled")
 #endif
