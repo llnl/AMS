@@ -128,16 +128,17 @@ void memUsage(double& vm_usage, double& resident_set);
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#define cudaErrCheck(CALL)             \
-  {                                    \
-    cudaError_t err = CALL;            \
-    if (err != cudaSuccess) {          \
-      printf("ERROR @ %s:%d ->  %s\n", \
-             __FILE__,                 \
-             __LINE__,                 \
-             hipGetErrorString(err));  \
-      abort();                         \
-    }                                  \
+#define cudaErrCheck(CALL)                \
+  {                                       \
+    cudaError_t err = CALL;               \
+    if (err != cudaSuccess) {             \
+      printf("ERROR @ %s:%d ->  %s:%s\n", \
+             __FILE__,                    \
+             __LINE__,                    \
+             cudaGetErrorName(err),       \
+             cudaGetErrorString(err));    \
+      abort();                            \
+    }                                     \
   }
 #endif
 
