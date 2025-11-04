@@ -360,15 +360,19 @@ CATCH_TEST_CASE("Workflow Evaluate: In/Out/InOut + HDF5 verification",
 
 int main(int argc, char** argv)
 {
-  const std::string db_dir =
-      (std::filesystem::temp_directory_path() / "ams_workflow_tests").string();
+  auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
+  char uniqueName[L_tmpnam];
+  if (std::tmpnam(uniqueName) == nullptr) {
+    throw std::runtime_error("Failed to generate unique temporary name.");
+  }
+  db_dir /= uniqueName;
   std::filesystem::remove_all(db_dir);
   std::filesystem::create_directories(db_dir);
 
   AMSInit();
   // Use a temp file in the build tree (std::filesystem temp)
   auto& db_instance = ams::db::DBManager::getInstance();
-  db_instance.instantiate_fs_db(AMSDBType::AMS_HDF5, db_dir);
+  db_instance.instantiate_fs_db(AMSDBType::AMS_HDF5, db_dir.string());
 
 
   Catch::Session session;
