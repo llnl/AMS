@@ -353,7 +353,6 @@ CATCH_TEST_CASE("Workflow Evaluate: In/Out/InOut + HDF5 verification",
 int main(int argc, char** argv)
 {
   auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
-  std::filesystem::remove_all(db_dir);
   std::filesystem::create_directories(db_dir);
 
   std::string tmp_dir = db_dir / "ams-test-XXXXXX";
@@ -365,7 +364,6 @@ int main(int argc, char** argv)
   }
 
   db_dir = std::filesystem::path(dirname);
-  std::filesystem::remove_all(db_dir);
   std::filesystem::create_directories(db_dir);
 
   AMSInit();
@@ -385,5 +383,6 @@ int main(int argc, char** argv)
   // Treat "warnings only" (e.g., due to skipped tests) as success for CTest.
   // Catch2 commonly uses 4 for warnings; adjust if your config differs.
   AMSFinalize();
+  std::filesystem::remove_all(db_dir);
   return (rc == 0 || rc == 4) ? 0 : rc;
 }

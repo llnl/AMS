@@ -14,16 +14,23 @@ CATCH_TEST_CASE("DBManager tracks instances and materializes files",
 {
   namespace fs = std::filesystem;
 
-  // Unique temp dir so parallel runs don't collide
-  const fs::path base =
-      fs::temp_directory_path() / fs::path("ams_dbmgr").string();
+  auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
+  std::filesystem::create_directories(db_dir);
 
-  std::filesystem::remove_all(base);
-  std::filesystem::create_directories(base);
-  CATCH_INFO("Temp DB dir: " << base.string());
+  std::string tmp_dir = db_dir / "ams-test-XXXXXX";
+  std::vector<char> tmp(tmp_dir.begin(), tmp_dir.end());
+  tmp.push_back('\0');
+  char* dirname = mkdtemp(tmp.data());
+  if (!dirname) {
+    perror("mkdtemp");
+  }
+
+  db_dir = std::filesystem::path(dirname);
+  std::filesystem::create_directories(db_dir);
+
 
   auto& db = ams::db::DBManager::getInstance();
-  db.instantiate_fs_db(ams::AMSDBType::AMS_HDF5, base.string() + "/");
+  db.instantiate_fs_db(ams::AMSDBType::AMS_HDF5, db_dir.string() + "/");
 
   // Touch two domains twice each
   std::vector<std::string> domains = {"domain_1",
@@ -44,7 +51,7 @@ CATCH_TEST_CASE("DBManager tracks instances and materializes files",
 
   // Files must exist on disk even after clean()
   for (auto const& dn : {"domain_1", "domain_2"}) {
-    const fs::path fn = base / (std::string(dn) + "_0.h5");
+    const fs::path fn = db_dir / (std::string(dn) + "_0.h5");
     CATCH_INFO("Checking file exists: " << fn.string());
     CATCH_REQUIRE(fs::exists(fn));
   }
@@ -52,7 +59,7 @@ CATCH_TEST_CASE("DBManager tracks instances and materializes files",
   // Best-effort cleanup of temp artifacts
   std::error_code ec;
   db.clean();
-  fs::remove_all(base, ec);
+  fs::remove_all(db_dir, ec);
 }
 
 
@@ -111,36 +118,30 @@ CATCH_TEST_CASE("hdf5DB creates file and stores domain_name dataset",
   // Choose test inputs (you can parameterize if you like)
   const std::string domain_name = "domain_1";
 
-  // Unique temp dir for isolation
-  const auto base = std::filesystem::temp_directory_path();
-  std::string ss{"ams_hdf5_create"};
-  const std::filesystem::path test_dir = base / ss;
-  std::filesystem::create_directories(test_dir);
+  auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
+  std::filesystem::create_directories(db_dir);
 
-  // Ensure cleanup at end of scope
-  auto cleanup = [&]() {
-    std::error_code ec;
-    std::filesystem::remove_all(test_dir, ec);
-  };
-  struct ScopeGuard {
-    std::function<void()> f;
-    ~ScopeGuard()
-    {
-      if (f) f();
-    }
-  } guard{cleanup};
+  std::string tmp_dir = db_dir / "ams-test-XXXXXX";
+  std::vector<char> tmp(tmp_dir.begin(), tmp_dir.end());
+  tmp.push_back('\0');
+  char* dirname = mkdtemp(tmp.data());
+  if (!dirname) {
+    perror("mkdtemp");
+  }
 
+  db_dir = std::filesystem::path(dirname);
+  std::filesystem::create_directories(db_dir);
   // Create DB (rid=0), like your original code
   std::string filename;
   {
-    ams::db::hdf5DB db(test_dir.string() + "/", domain_name, /*rid*/ 0);
+    ams::db::hdf5DB db(db_dir.string() + "/", domain_name, /*rid*/ 0);
     filename = db.getFilename();
   }
 
   CATCH_REQUIRE(std::filesystem::exists(filename));
 
   {
-    ams::db::hdf5DB db(test_dir.string() + "/", domain_name, /*rid*/ 0);
+    ams::db::hdf5DB db(db_dir.string() + "/", domain_name, /*rid*/ 0);
     CATCH_REQUIRE(std::filesystem::exists(db.getFilename()));
   }
 
@@ -156,6 +157,8 @@ CATCH_TEST_CASE("hdf5DB creates file and stores domain_name dataset",
   CATCH_INFO("HDF5 file: " << filename);
   CATCH_INFO("Read domain_name dataset: '" << read_str << "'");
   CATCH_REQUIRE(read_str == domain_name);
+
+  std::filesystem::remove_all(db_dir);
 }
 
 static bool verifyDatasetContents_f32_flat(
@@ -288,7 +291,6 @@ CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
                 "[ams][db][hdf5]")
 {
   auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
-  std::filesystem::remove_all(db_dir);
   std::filesystem::create_directories(db_dir);
 
   std::string tmp_dir = db_dir / "ams-test-XXXXXX";
@@ -299,11 +301,10 @@ CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
     perror("mkdtemp");
   }
 
-  auto tmpdir = std::filesystem::path(dirname);
-  std::filesystem::remove_all(tmpdir);
-  std::filesystem::create_directories(tmpdir);
+  db_dir = std::filesystem::path(dirname);
+  std::filesystem::create_directories(db_dir);
 
-  const std::string directory = tmpdir.string() + "/";
+  const std::string directory = db_dir.string() + "/";
   const std::string domain_name = "domain_foo";
   std::string filename;
 
@@ -333,12 +334,15 @@ CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
     CATCH_REQUIRE(
         verifyDatasetContents_f32_flat(filename, "output_data", outputTensors));
   }
+  std::filesystem::remove_all(db_dir);
 }
 
 CATCH_TEST_CASE("HDF5 DB: 'domain_name' dataset matches provided name",
                 "[ams][db][hdf5][metadata]")
 {
   auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
+  std::filesystem::create_directories(db_dir);
+
   std::string tmp_dir = db_dir / "ams-test-XXXXXX";
   std::vector<char> tmp(tmp_dir.begin(), tmp_dir.end());
   tmp.push_back('\0');
@@ -346,12 +350,11 @@ CATCH_TEST_CASE("HDF5 DB: 'domain_name' dataset matches provided name",
   if (!dirname) {
     perror("mkdtemp");
   }
-  auto tmpdir = std::filesystem::path(dirname);
 
-  std::filesystem::remove_all(tmpdir);
-  std::filesystem::create_directories(tmpdir);
+  db_dir = std::filesystem::path(dirname);
+  std::filesystem::create_directories(db_dir);
 
-  const std::string directory = tmpdir.string() + "/";
+  const std::string directory = db_dir.string() + "/";
   const std::string domain_name = "domain_bar";
   std::string filename;
 
@@ -368,4 +371,5 @@ CATCH_TEST_CASE("HDF5 DB: 'domain_name' dataset matches provided name",
   auto vec = readVectorDataset<char>(filename, dataset, H5T_NATIVE_CHAR);
   // Helpful diagnostic if it ever differs
   CATCH_REQUIRE(vec == expected);
+  std::filesystem::remove_all(db_dir);
 }
