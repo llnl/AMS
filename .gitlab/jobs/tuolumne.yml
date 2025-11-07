@@ -40,8 +40,7 @@ build-run-tuolumne:
 .build-variants:
   parallel:
     matrix:
-      - WITH_HDF5: ["on", "off"]
-        WITH_MPI: ["on", "off"]
+      - WITH_MPI: ["on", "off"]
         WITH_WORKFLOW: ["on", "off"]
 
 build-run-tuolumne:

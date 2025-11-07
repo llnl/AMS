@@ -50,14 +50,14 @@ size_t AMSMsgHeader::encode(uint8_t* data_blob)
   current_offset += serialize_data(&data_blob[current_offset], domain_size);
   current_offset +=
       serialize_data(&data_blob[current_offset], static_cast<uint16_t>(in_dim));
-  current_offset +=
-      serialize_data(&data_blob[current_offset], static_cast<uint16_t>(out_dim));
+  current_offset += serialize_data(&data_blob[current_offset],
+                                   static_cast<uint16_t>(out_dim));
 
   // Domain Size (should be 2 bytes)
   AMS_DBG(AMSMsgHeader,
-      "Generating domain name of size %d --- %lu",
-      domain_size,
-      sizeof(domain_size));
+          "Generating domain name of size %d --- %lu",
+          domain_size,
+          sizeof(domain_size));
   return AMSMsgHeader::size();
 }
 
@@ -67,10 +67,10 @@ AMSMsgHeader AMSMsgHeader::decode(uint8_t* data_blob)
   // Header size (should be 1 bytes)
   uint8_t new_hsize = data_blob[current_offset];
   AMS_CWARNING(AMSMsgHeader,
-           new_hsize != AMSMsgHeader::size(),
-           "buffer is likely not a valid AMSMessage (%d / %ld)",
-           new_hsize,
-           current_offset)
+               new_hsize != AMSMsgHeader::size(),
+               "buffer is likely not a valid AMSMessage (%d / %ld)",
+               new_hsize,
+               current_offset)
 
   current_offset += sizeof(uint8_t);
   // Data type (should be 1 bytes)
@@ -131,7 +131,7 @@ AMSMessageInbound::AMSMessageInbound(uint64_t id,
       body(std::move(body)),
       exchange(std::move(exchange)),
       routing_key(std::move(routing_key)),
-      redelivered(redelivered){};
+      redelivered(redelivered) {};
 
 
 bool AMSMessageInbound::empty() { return body.empty() || routing_key.empty(); }
@@ -214,11 +214,11 @@ void MessagesBuffer::print()
   std::lock_guard<std::mutex> lock(_mutex);
   for (const auto& e : _msgs)
     AMS_DBG(MessagesBuffer,
-        "Message [%d] (addr=%p,use_count=%d, size=%d)",
-        e.second.id,
-        e.second.dPtr.get(),
-        e.second.dPtr.use_count(),
-        e.second.size);
+            "Message [%d] (addr=%p,use_count=%d, size=%d)",
+            e.second.id,
+            e.second.dPtr.get(),
+            e.second.dPtr.use_count(),
+            e.second.size);
 }
 
 size_t MessagesBuffer::size()

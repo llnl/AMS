@@ -62,8 +62,8 @@ public:
       auto torch_model = model->second;
 
       AMS_DBG(Surrogate,
-          "Returning existing model represented under (%s)",
-          model_path.empty() ? "" : model_path.c_str());
+              "Returning existing model represented under (%s)",
+              model_path.empty() ? "" : model_path.c_str());
       return torch_model;
     }
 

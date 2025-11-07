@@ -24,6 +24,4 @@ add_subdirectory(db)
 add_subdirectory(wf)
 add_subdirectory(ams_interface)
 #add_subdirectory(perf_regression)
-#if (WITH_HDF5)
-#add_subdirectory(ams_interface)
-#endif()
+

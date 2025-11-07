@@ -173,9 +173,9 @@ public:
     RMAllocators[resource] =
         ams::internal::_get_allocator(alloc_name, resource);
     AMS_DBG(ResourceManager,
-        "Set Allocator [%d] to pool with name : %s",
-        resource,
-        RMAllocators[resource]->getName().c_str());
+            "Set Allocator [%d] to pool with name : %s",
+            resource,
+            RMAllocators[resource]->getName().c_str());
   }
 
   bool isActive(AMSResourceType resource)

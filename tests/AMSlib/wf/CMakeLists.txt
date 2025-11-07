@@ -14,9 +14,7 @@ function(BUILD_UNIT_TEST exe source)
   target_link_libraries(${exe} PRIVATE stdc++fs AMS torch Catch2::Catch2WithMain)
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES} CATCH_CONFIG_PREFIX_ALL)
 
-  if (WITH_HDF5)
-    target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
-  endif()
+  target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
 
 
   if(WITH_CUDA)
@@ -47,8 +45,5 @@ endfunction()
 BUILD_UNIT_TEST(operations operations.cpp)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::OPERATIONS operations)
 
-if (WITH_HDF5)
 BUILD_UNIT_TEST(evaluate_in_and_outs evaluate_in_and_outs.cpp)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::EVALUATE_IN_OUTS evaluate_in_and_outs)
-endif()
-

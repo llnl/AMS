@@ -8,9 +8,7 @@ function(BUILD_UNIT_TEST exe source)
   target_include_directories(${exe} PRIVATE ${AMS_TEST_ROOT})
   target_compile_features(${exe} PRIVATE cxx_std_17)
 
-  if (WITH_HDF5)
-    target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
-  endif()
+  target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
 
   if (WITH_CALIPER)
     message(STATUS "Building witth caliper ${exe}")
@@ -39,8 +37,5 @@ function(ADD_DB_UNIT_TEST name exec)
   set_tests_properties(${name} PROPERTIES LABELS HDF5_UNIT_TEST)
 endfunction()
 
-if (WITH_HDF5)
-  BUILD_UNIT_TEST(db_hdf5 db_hdf5.cpp)
-  ADD_DB_UNIT_TEST(DB::HDF5 db_hdf5)
-endif()
-
+BUILD_UNIT_TEST(db_hdf5 db_hdf5.cpp)
+ADD_DB_UNIT_TEST(DB::HDF5 db_hdf5)

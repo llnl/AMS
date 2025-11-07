@@ -17,15 +17,10 @@ function(BUILD_UNIT_TEST exe source)
   target_include_directories(${exe} PRIVATE ${CMAKE_BINARY_DIR}/include/)
   target_include_directories(${exe} PRIVATE ${AMS_TEST_ROOT})
   target_link_libraries(${exe} PRIVATE stdc++fs AMS torch Catch2::Catch2WithMain)
-  if (WITH_HDF5)
-    target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
-  endif()
+  target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES} CATCH_CONFIG_PREFIX_ALL)
 endfunction()
 
-
-if (WITH_HDF5)
 BUILD_UNIT_TEST(ams_explicit_end_to_end ams_ete.cpp)
 ADD_AMS_UNIT_TEST(AMS_EXPLICIT ams_explicit_end_to_end)
-endif()
 

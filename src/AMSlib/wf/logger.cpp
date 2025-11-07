@@ -135,8 +135,8 @@ void Logger::initialize_std_io_err(const bool enable_log,
       const std::string log_filename{concat_file_name(log_path, log_fn, "log")};
       ams_out = fopen(log_filename.c_str(), "a");
       AMS_CFATAL(Logger,
-             ams_out == nullptr,
-             "Could not open file for stdout redirection");
+                 ams_out == nullptr,
+                 "Could not open file for stdout redirection");
     }
   }
 }
