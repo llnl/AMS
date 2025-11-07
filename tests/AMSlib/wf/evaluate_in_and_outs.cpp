@@ -355,6 +355,9 @@ CATCH_TEST_CASE("Workflow Evaluate: In/Out/InOut + HDF5 verification",
 int main(int argc, char** argv)
 {
   auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
+  std::filesystem::remove_all(db_dir);
+  std::filesystem::create_directories(db_dir);
+
   std::string tmp_dir = db_dir / "ams-test-XXXXXX";
   std::vector<char> tmp(tmp_dir.begin(), tmp_dir.end());
   tmp.push_back('\0');

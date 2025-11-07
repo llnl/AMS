@@ -288,6 +288,9 @@ CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
                 "[ams][db][hdf5]")
 {
   auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
+  std::filesystem::remove_all(db_dir);
+  std::filesystem::create_directories(db_dir);
+
   std::string tmp_dir = db_dir / "ams-test-XXXXXX";
   std::vector<char> tmp(tmp_dir.begin(), tmp_dir.end());
   tmp.push_back('\0');
