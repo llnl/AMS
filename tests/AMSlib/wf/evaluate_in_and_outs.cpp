@@ -249,81 +249,84 @@ CATCH_TEST_CASE("Workflow Evaluate: In/Out/InOut + HDF5 verification",
       (phys.Dev == "cuda") ? c10::DeviceType::CUDA : c10::DeviceType::CPU;
 
   std::string domain{next_test_name()};
+  std::string filename;
+  {
+    ams::AMSWorkflow wf(model_desc.ModelPath,
+                        /*domain*/ domain,
+                        /*threshold*/ threshold,
+                        0,
+                        1);
+    filename = std::string(wf.getDBFilename());
 
-  ams::AMSWorkflow wf(model_desc.ModelPath,
-                      /*domain*/ domain,
-                      /*threshold*/ threshold,
-                      0,
-                      1);
-  const std::string filename = wf.getDBFilename();
+    torch::TensorOptions tOptions =
+        torch::TensorOptions().dtype(DType).device(dev);
 
-  torch::TensorOptions tOptions =
-      torch::TensorOptions().dtype(DType).device(dev);
+    // Build inputs based on last dims and NumInOuts
+    const int numInOuts = phys.NumInOuts;
+    const int numIn = static_cast<int>(iShape.back()) - numInOuts;
+    const int numOut = static_cast<int>(oShape.back()) - numInOuts;
 
-  // Build inputs based on last dims and NumInOuts
-  const int numInOuts = phys.NumInOuts;
-  const int numIn = static_cast<int>(iShape.back()) - numInOuts;
-  const int numOut = static_cast<int>(oShape.back()) - numInOuts;
+    std::vector<torch::Tensor> in, inout, out;
+    in.reserve(numIn);
+    inout.reserve(numInOuts);
+    out.reserve(numOut);
 
-  std::vector<torch::Tensor> in, inout, out;
-  in.reserve(numIn);
-  inout.reserve(numInOuts);
-  out.reserve(numOut);
+    CATCH_CAPTURE(phys, model_desc, threshold, filename);
+    for (int i = 0; i < numIn; ++i)
+      in.push_back(torch::ones({SIZE, 1}, tOptions));
+    for (int i = 0; i < numInOuts; ++i)
+      inout.push_back(torch::ones({SIZE, 1}, tOptions));
+    for (int i = 0; i < numOut; ++i)
+      out.push_back(torch::zeros({SIZE, 1}, tOptions));
 
-  CATCH_CAPTURE(phys, model_desc, threshold, filename);
-  for (int i = 0; i < numIn; ++i)
-    in.push_back(torch::ones({SIZE, 1}, tOptions));
-  for (int i = 0; i < numInOuts; ++i)
-    inout.push_back(torch::ones({SIZE, 1}, tOptions));
-  for (int i = 0; i < numOut; ++i)
-    out.push_back(torch::zeros({SIZE, 1}, tOptions));
+    float fb = 0.0f;
+    double db = 0.0;
 
-  float fb = 0.0f;
-  double db = 0.0;
+    // Dispatch compute like your original (respecting compile-time AMS_TEST_CTYPE)
+    if (DType == torch::kFloat64 && dev == AMS_TEST_CTYPE)
+      compute<double, torch::kFloat64, AMS_TEST_CTYPE>(
+          wf, in, inout, out, db, false);
+    else if (DType == torch::kFloat32 && dev == AMS_TEST_CTYPE)
+      compute<float, torch::kFloat32, AMS_TEST_CTYPE>(
+          wf, in, inout, out, fb, false);
+    else if (DType == torch::kFloat64 && dev == c10::DeviceType::CPU)
+      compute<double, torch::kFloat64, c10::DeviceType::CPU>(
+          wf, in, inout, out, db, false);
+    else if (DType == torch::kFloat32 && dev == c10::DeviceType::CPU)
+      compute<float, torch::kFloat32, c10::DeviceType::CPU>(
+          wf, in, inout, out, fb, false);
+    else
+      CATCH_FAIL("Unsupported (dtype,dev) combo");
 
-  // Dispatch compute like your original (respecting compile-time AMS_TEST_CTYPE)
-  if (DType == torch::kFloat64 && dev == AMS_TEST_CTYPE)
-    compute<double, torch::kFloat64, AMS_TEST_CTYPE>(
-        wf, in, inout, out, db, false);
-  else if (DType == torch::kFloat32 && dev == AMS_TEST_CTYPE)
-    compute<float, torch::kFloat32, AMS_TEST_CTYPE>(
-        wf, in, inout, out, fb, false);
-  else if (DType == torch::kFloat64 && dev == c10::DeviceType::CPU)
-    compute<double, torch::kFloat64, c10::DeviceType::CPU>(
-        wf, in, inout, out, db, false);
-  else if (DType == torch::kFloat32 && dev == c10::DeviceType::CPU)
-    compute<float, torch::kFloat32, c10::DeviceType::CPU>(
-        wf, in, inout, out, fb, false);
-  else
-    CATCH_FAIL("Unsupported (dtype,dev) combo");
+    // If there is no model, AMS should ignore threshold -> treat like 0.0
+    double effThreshold = model_desc.ModelPath.empty() ? 0.0 : threshold;
 
-  // If there is no model, AMS should ignore threshold -> treat like 0.0
-  double effThreshold = model_desc.ModelPath.empty() ? 0.0 : threshold;
-
-  // Check out & inout values like your binary
-  for (auto& V : {std::ref(inout), std::ref(out)}) {
-    for (size_t i = 0; i < V.get().size(); ++i) {
-      auto data = V.get()[i];
-      if (effThreshold == 0.0) {
-        auto correct = torch::ones(data.sizes(), data.options()) * 13;
-        CATCH_REQUIRE(torch::allclose(correct, data, 1e-5, 1e-8));
-      } else if (effThreshold == 0.5) {
-        auto correct = torch::ones(data.sizes(), data.options());
-        auto indices = torch::arange(data.sizes()[0],
-                                     correct.options().dtype(torch::kLong));
-        auto alt = (indices % 2).to(correct.dtype()) * 12;
-        alt = alt.reshape({data.sizes()[0], 1});
-        correct += alt;
-        CATCH_REQUIRE(torch::allclose(correct, data, 1e-5, 1e-8));
-      } else if (effThreshold == 1.0) {
-        auto correct = torch::ones(data.sizes(), data.options());
-        CATCH_REQUIRE(torch::allclose(correct, data, 1e-5, 1e-8));
-      } else {
-        CATCH_FAIL("Unknown threshold value");
+    // Check out & inout values like your binary
+    for (auto& V : {std::ref(inout), std::ref(out)}) {
+      for (size_t i = 0; i < V.get().size(); ++i) {
+        auto data = V.get()[i];
+        if (effThreshold == 0.0) {
+          auto correct = torch::ones(data.sizes(), data.options()) * 13;
+          CATCH_REQUIRE(torch::allclose(correct, data, 1e-5, 1e-8));
+        } else if (effThreshold == 0.5) {
+          auto correct = torch::ones(data.sizes(), data.options());
+          auto indices = torch::arange(data.sizes()[0],
+                                       correct.options().dtype(torch::kLong));
+          auto alt = (indices % 2).to(correct.dtype()) * 12;
+          alt = alt.reshape({data.sizes()[0], 1});
+          correct += alt;
+          CATCH_REQUIRE(torch::allclose(correct, data, 1e-5, 1e-8));
+        } else if (effThreshold == 1.0) {
+          auto correct = torch::ones(data.sizes(), data.options());
+          CATCH_REQUIRE(torch::allclose(correct, data, 1e-5, 1e-8));
+        } else {
+          CATCH_FAIL("Unknown threshold value");
+        }
       }
     }
   }
 
+  db_instance.clean();
   double collectFrac = 1.0 - threshold;
   if (collectFrac > 0.0) {
     const int nin = static_cast<int>(iShape.back());
@@ -338,9 +341,6 @@ CATCH_TEST_CASE("Workflow Evaluate: In/Out/InOut + HDF5 verification",
                     torch::TensorOptions().dtype(torch::kFloat32)) *
         13.0f;
 
-    // Clean & verify only when threshold != 1.0 (your original)
-    db_instance.clean();
-
     if (threshold != 1.0) {
       CATCH_REQUIRE(
           verifyDatasetContents(filename, "input_data", expectedInput));
@@ -348,8 +348,6 @@ CATCH_TEST_CASE("Workflow Evaluate: In/Out/InOut + HDF5 verification",
           verifyDatasetContents(filename, "output_data", expectedOutput));
     }
   }
-  db_instance.clean();
-  // std::filesystem::remove(filename);
 }
 
 int main(int argc, char** argv)
