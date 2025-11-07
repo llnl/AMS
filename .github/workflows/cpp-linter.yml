@@ -14,7 +14,7 @@ jobs:
         shell: bash -el {0}
     steps:
       - uses: actions/checkout@v4
-      - name: Install deps (APT) 
+      - name: Install deps (APT)
         run: |
           sudo apt-get update
           sudo apt-get update
@@ -46,7 +46,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 18
-      - name: Install AMQCPP 
+      - name: Install AMQCPP
         run: |
           git clone --depth=1 https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git
           cd AMQP-CPP/
@@ -76,7 +76,6 @@ jobs:
             -DCMAKE_C_COMPILER=clang-18 \
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DWITH_CALIPER=On \
-            -DWITH_HDF5=On \
             -DWITH_RMQ=On \
             -DWITH_TESTS=On \
             -DWITH_AMS_DEBUG=On \
@@ -89,11 +88,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           version: 18
-          ignore: .github | .gitlab | scripts | build | .git 
+          ignore: .github | .gitlab | scripts | build | .git
           database: build
-          extra-args: '-D__AMS_ENABLE_CALIPER__ -D__AMS_ENABLE_HDF5__ -D__AMS_ENABLE_MPI__ -D__AMS_ENABLE_RMQ__'
+          extra-args: "-D__AMS_ENABLE_CALIPER__ -D__AMS_ENABLE_HDF5__ -D__AMS_ENABLE_MPI__ -D__AMS_ENABLE_RMQ__"
           style: file
-          tidy-checks: ''
+          tidy-checks: ""
           lines-changed-only: true
           format-review: true
           tidy-review: false
