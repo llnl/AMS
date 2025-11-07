@@ -23,7 +23,6 @@
 #include <string>
 #include <vector>
 
-#include "../utils.hpp"
 #include "AMS.h"
 #include "models/linear_models.hpp"
 #include "problems.hpp"
@@ -211,7 +210,8 @@ CATCH_TEST_CASE("Evaluate AMS explicit Interface 1D in/out")
       CATCH_REQUIRE(DomainNameTensor.has_value());
       auto data_ptr = DomainNameTensor.value().data_ptr<uint8_t>();
       std::string name{reinterpret_cast<const char*>(data_ptr),
-                       DomainNameTensor.value().numel()};
+                       static_cast<std::string::size_type>(
+                           DomainNameTensor.value().numel())};
 
       CATCH_REQUIRE(name == test_name);
       // WHen fraction is 0.0 we are not storing anything ...
@@ -309,7 +309,8 @@ CATCH_TEST_CASE("Evaluate AMS explicit Interface 2D in/inout/in")
       CATCH_REQUIRE(DomainNameTensor.has_value());
       auto data_ptr = DomainNameTensor.value().data_ptr<uint8_t>();
       std::string name{reinterpret_cast<const char*>(data_ptr),
-                       DomainNameTensor.value().numel()};
+                       static_cast<std::string::size_type>(
+                           DomainNameTensor.value().numel())};
 
       CATCH_REQUIRE(name == test_name);
       // WHen fraction is 0.0 we are not storing anything ...
@@ -404,7 +405,8 @@ CATCH_TEST_CASE("Evaluate AMS explicit Interface Broadcast in/out")
       CATCH_REQUIRE(DomainNameTensor.has_value());
       auto data_ptr = DomainNameTensor.value().data_ptr<uint8_t>();
       std::string name{reinterpret_cast<const char*>(data_ptr),
-                       DomainNameTensor.value().numel()};
+                       static_cast<std::string::size_type>(
+                           DomainNameTensor.value().numel())};
 
       CATCH_REQUIRE(name == test_name);
       // WHen fraction is 0.0 we are not storing anything ...

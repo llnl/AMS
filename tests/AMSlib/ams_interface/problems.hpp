@@ -1,6 +1,7 @@
 #include <torch/torch.h>
 
 #include "AMS.h"
+using namespace ams;
 
 template <typename DType>
 struct Problem2D {
