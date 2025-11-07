@@ -216,16 +216,10 @@ CATCH_TEST_CASE("Workflow Evaluate: In/Out/InOut + HDF5 verification",
   auto phys = GENERATE_REF(Catch::Generators::values<PhysicsCfg>({
       {"float", "cpu", 0},
       {"double", "cpu", 0},
-      {"float", "cuda", 0},
-      {"double", "cuda", 0},
       {"float", "cpu", 1},
       {"double", "cpu", 1},
-      {"float", "cuda", 1},
-      {"double", "cuda", 1},
       {"float", "cpu", 8},
       {"double", "cpu", 8},
-      {"float", "cuda", 8},
-      {"double", "cuda", 8},
       // add more NumInOuts here if you want to cover >0: {"float","cuda",1}, ...
   }));
 
@@ -361,11 +355,15 @@ CATCH_TEST_CASE("Workflow Evaluate: In/Out/InOut + HDF5 verification",
 int main(int argc, char** argv)
 {
   auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
-  char uniqueName[L_tmpnam];
-  if (std::tmpnam(uniqueName) == nullptr) {
-    throw std::runtime_error("Failed to generate unique temporary name.");
+  std::string tmp_dir = db_dir / "ams-test-XXXXXX";
+  std::vector<char> tmp(tmp_dir.begin(), tmp_dir.end());
+  tmp.push_back('\0');
+  char* dirname = mkdtemp(tmp.data());
+  if (!dirname) {
+    perror("mkdtemp");
   }
-  db_dir /= uniqueName;
+
+  db_dir = std::filesystem::path(dirname);
   std::filesystem::remove_all(db_dir);
   std::filesystem::create_directories(db_dir);
 

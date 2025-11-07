@@ -287,13 +287,16 @@ static std::vector<T> readVectorDataset(const std::string& filePath,
 CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
                 "[ams][db][hdf5]")
 {
-  // temp dir + domain
-  const auto tmpdir =
-      (std::filesystem::temp_directory_path() / "ams_db_domain_meta");
-  char uniqueName[L_tmpnam];
-  if (std::tmpnam(uniqueName) == nullptr) {
-    throw std::runtime_error("Failed to generate unique temporary name.");
+  auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
+  std::string tmp_dir = db_dir / "ams-test-XXXXXX";
+  std::vector<char> tmp(tmp_dir.begin(), tmp_dir.end());
+  tmp.push_back('\0');
+  char* dirname = mkdtemp(tmp.data());
+  if (!dirname) {
+    perror("mkdtemp");
   }
+
+  auto tmpdir = std::filesystem::path(dirname);
   std::filesystem::remove_all(tmpdir);
   std::filesystem::create_directories(tmpdir);
 
@@ -332,12 +335,15 @@ CATCH_TEST_CASE("HDF5 DB: append and verify input/output datasets",
 CATCH_TEST_CASE("HDF5 DB: 'domain_name' dataset matches provided name",
                 "[ams][db][hdf5][metadata]")
 {
-  auto tmpdir = (std::filesystem::temp_directory_path() / "ams_db_domain_meta");
-  char uniqueName[L_tmpnam];
-  if (std::tmpnam(uniqueName) == nullptr) {
-    throw std::runtime_error("Failed to generate unique temporary name.");
+  auto db_dir = (std::filesystem::temp_directory_path() / "ams_workflow_tests");
+  std::string tmp_dir = db_dir / "ams-test-XXXXXX";
+  std::vector<char> tmp(tmp_dir.begin(), tmp_dir.end());
+  tmp.push_back('\0');
+  char* dirname = mkdtemp(tmp.data());
+  if (!dirname) {
+    perror("mkdtemp");
   }
-  tmpdir /= uniqueName;
+  auto tmpdir = std::filesystem::path(dirname);
 
   std::filesystem::remove_all(tmpdir);
   std::filesystem::create_directories(tmpdir);

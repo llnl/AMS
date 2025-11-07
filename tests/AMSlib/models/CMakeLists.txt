@@ -55,8 +55,26 @@ endif()
 # A stamp to indicate models are present
 set(MODELS_STAMP "${CMAKE_CURRENT_BINARY_DIR}/.ams_models.stamp")
 
-# Only run at configure time when models are missing (or scripts changed -> reconfigure)
+set(GENERATOR_SCRIPTS
+  "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh"
+  "${CMAKE_CURRENT_SOURCE_DIR}/generate.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/generate_linear_model.py"
+)
+
+# 1. Stamp missing -> regenerate
 if (NOT EXISTS "${MODELS_STAMP}")
+  set(NEED_REGEN TRUE)
+else()
+  # 2. Any generator script newer than stamp -> regenerate
+  foreach(gen ${GENERATOR_SCRIPTS})
+    if (${gen} IS_NEWER_THAN "${MODELS_STAMP}")
+      set(NEED_REGEN TRUE)
+    endif()
+  endforeach()
+endif()
+
+# Only run at configure time when models are missing (or scripts changed -> reconfigure)
+if (NEED_REGEN)
   message(STATUS "Generating PyTorch models to be used at testing time")
   execute_process(
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh" "${CMAKE_CURRENT_BINARY_DIR}/"
@@ -79,5 +97,11 @@ add_custom_target(regenerate_ams_models
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/ams_test_simple_models.hpp
   ${CMAKE_CURRENT_BINARY_DIR}/ams_test_simple_models.hpp
+  COPYONLY
+)
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/ams_test_linear_models.hpp
+  ${CMAKE_CURRENT_BINARY_DIR}/ams_test_linear_models.hpp
   COPYONLY
 )

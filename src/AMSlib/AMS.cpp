@@ -39,7 +39,7 @@ public:
   double threshold;
   bool storeData;
 
-  bool parseStoreData(nlohmann::json &value)
+  bool parseStoreData(nlohmann::json& value)
   {
     if (!value.contains("store")) {
       return true;
@@ -48,22 +48,22 @@ public:
     return value["store"].get<bool>();
   }
 
-  std::string parseSurrogatePaths(nlohmann::json &jRoot)
+  std::string parseSurrogatePaths(nlohmann::json& jRoot)
   {
 
     std::string path = "";
     if (jRoot.contains("model_path")) {
       path = jRoot["model_path"].get<std::string>();
       AMS_CFATAL(AMS,
-             (!path.empty() && !fs::exists(path)),
-             "Path '%s' to model does not exist\n",
-             path.c_str());
+                 (!path.empty() && !fs::exists(path)),
+                 "Path '%s' to model does not exist\n",
+                 path.c_str());
     }
     return path;
   }
 
 public:
-  AMSAbstractModel(nlohmann::json &value)
+  AMSAbstractModel(nlohmann::json& value)
   {
 
     if (!value.contains("threshold")) {
@@ -78,7 +78,7 @@ public:
   }
 
 
-  AMSAbstractModel(const char *surrogate_path,
+  AMSAbstractModel(const char* surrogate_path,
                    double threshold,
                    bool store_data = true)
   {
@@ -88,10 +88,10 @@ public:
 
     this->threshold = threshold;
     AMS_CDEBUG(AMS,
-           surrogate_path != nullptr,
-           "Registered Model '%s' has threshold %g",
-           SPath.c_str(),
-           threshold);
+               surrogate_path != nullptr,
+               "Registered Model '%s' has threshold %g",
+               SPath.c_str(),
+               threshold);
   }
 
 
@@ -99,10 +99,10 @@ public:
   {
     if (!SPath.empty()) AMS_DBG(AMS, "Surrogate Model Path: %s", SPath.c_str());
     AMS_DBG(AMS,
-        "Threshold %f Model Path: %s StoreData: %s",
-        threshold,
-        SPath.c_str(),
-        storeData ? "true" : "false");
+            "Threshold %f Model Path: %s StoreData: %s",
+            threshold,
+            SPath.c_str(),
+            storeData ? "true" : "false");
   }
 };
 
@@ -116,42 +116,42 @@ class AMSWrap
   using json = nlohmann::json;
 
 public:
-  std::vector<void *> executors;
+  std::vector<void*> executors;
   std::vector<std::pair<std::string, AMSAbstractModel>> registered_models;
   std::unordered_map<std::string, int> ams_candidate_models;
   AMSDBType dbType = AMSDBType::AMS_NONE;
-  ams::ResourceManager &memManager;
+  ams::ResourceManager& memManager;
   int rId;
 
 private:
   void dumpEnv()
   {
-    for (auto &KV : ams_candidate_models) {
+    for (auto& KV : ams_candidate_models) {
       AMS_DBG(AMS, "\n")
       AMS_DBG(AMS,
-          "\t\t\t Model: %s With AMSAbstractID: %d",
-          KV.first.c_str(),
-          KV.second);
+              "\t\t\t Model: %s With AMSAbstractID: %d",
+              KV.first.c_str(),
+              KV.second);
       if (KV.second >= ams_candidate_models.size()) {
         AMS_FATAL(AMS,
-              "Candidate model mapped to AMSAbstractID that does not exist "
-              "(%d)",
-              KV.second);
+                  "Candidate model mapped to AMSAbstractID that does not exist "
+                  "(%d)",
+                  KV.second);
       }
-      auto &abstract_model = registered_models[KV.second].second;
+      auto& abstract_model = registered_models[KV.second].second;
       abstract_model.dump();
     }
   }
 
   void parseDomainModels(
-      json &jRoot,
-      std::unordered_map<std::string, std::string> &domain_map)
+      json& jRoot,
+      std::unordered_map<std::string, std::string>& domain_map)
   {
     if (!jRoot.contains("domain_models")) return;
 
     auto domain_models = jRoot["domain_models"];
-    for (auto &field : domain_models.items()) {
-      auto &name = field.key();
+    for (auto& field : domain_models.items()) {
+      auto& name = field.key();
       auto val = field.value().get<std::string>();
       domain_map.emplace(val, name);
     }
@@ -159,22 +159,22 @@ private:
   }
 
   void parseCandidateAMSModels(
-      json &jRoot,
+      json& jRoot,
       std::unordered_map<std::string, std::string> ml_domain_mapping)
   {
     if (!jRoot.contains("ml_models")) return;
     auto models = jRoot["ml_models"];
-    for (auto &field : models.items()) {
+    for (auto& field : models.items()) {
       // We skip models not registered to respective domains. We will not use
       // those.
-      auto &key = field.key();
+      auto& key = field.key();
       if (ml_domain_mapping.find(key) == ml_domain_mapping.end()) continue;
 
       if (ams_candidate_models.find(ml_domain_mapping[key]) !=
           ams_candidate_models.end()) {
         AMS_FATAL(AMS,
-              "Domain Model %s has multiple ml model mappings",
-              ml_domain_mapping[key].c_str())
+                  "Domain Model %s has multiple ml model mappings",
+                  ml_domain_mapping[key].c_str())
       }
 
       registered_models.push_back(
@@ -187,24 +187,24 @@ private:
     }
   }
 
-  void setupFSDB(json &entry, std::string &dbStrType)
+  void setupFSDB(json& entry, std::string& dbStrType)
   {
     if (!entry.contains("fs_path"))
       THROW(std::runtime_error,
             "JSON db-fields does not provide file system path");
 
     std::string db_path = entry["fs_path"].get<std::string>();
-    auto &DB = ams::db::DBManager::getInstance();
+    auto& DB = ams::db::DBManager::getInstance();
     DB.instantiate_fs_db(dbType, db_path);
     AMS_DBG(AMS,
-        "Configured AMS File system database to point to %s using file "
-        "type %s",
-        db_path.c_str(),
-        dbStrType.c_str());
+            "Configured AMS File system database to point to %s using file "
+            "type %s",
+            db_path.c_str(),
+            dbStrType.c_str());
   }
 
   template <typename T>
-  T getEntry(json &entry, std::string field)
+  T getEntry(json& entry, std::string field)
   {
     if (!entry.contains(field)) {
       THROW(std::runtime_error,
@@ -213,7 +213,7 @@ private:
     return entry[field].get<T>();
   }
 
-  void setupRMQ(json &entry, std::string &dbStrType)
+  void setupRMQ(json& entry, std::string& dbStrType)
   {
     if (!entry.contains("rmq_config")) {
       THROW(std::runtime_error,
@@ -240,20 +240,20 @@ private:
       rmq_cert = getEntry<std::string>(rmq_entry, "rabbitmq-cert");
 
     AMS_CFATAL(AMS,
-           (exchange == "" || routing_key == "") && update_surrogate,
-           "Found empty RMQ exchange / routing-key, model update is not "
-           "possible. "
-           "Please provide a RMQ exchange or deactivate surrogate model "
-           "update.")
+               (exchange == "" || routing_key == "") && update_surrogate,
+               "Found empty RMQ exchange / routing-key, model update is not "
+               "possible. "
+               "Please provide a RMQ exchange or deactivate surrogate model "
+               "update.")
 
     if (exchange == "" || routing_key == "") {
       AMS_WARNING(AMS,
-              "Found empty RMQ exchange or routing-key, deactivating model "
-              "update")
+                  "Found empty RMQ exchange or routing-key, deactivating model "
+                  "update")
       update_surrogate = false;
     }
 
-    auto &DB = ams::db::DBManager::getInstance();
+    auto& DB = ams::db::DBManager::getInstance();
     DB.instantiate_rmq_db(port,
                           host,
                           rmq_pass,
@@ -266,7 +266,7 @@ private:
                           update_surrogate);
   }
 
-  void parseDatabase(json &jRoot)
+  void parseDatabase(json& jRoot)
   {
     AMS_DBG(AMS, "Parsing Data Base Fields")
     if (!jRoot.contains("db")) return;
@@ -298,7 +298,7 @@ public:
   {
     memManager.init();
 
-    if (const char *object_descr = std::getenv("AMS_OBJECTS")) {
+    if (const char* object_descr = std::getenv("AMS_OBJECTS")) {
       AMS_DBG(AMS, "Opening env file %s", object_descr);
       std::ifstream json_file(object_descr);
       json data = json::parse(json_file);
@@ -316,18 +316,19 @@ public:
     dumpEnv();
   }
 
-  int register_model(const char *domain_name,
+  int register_model(const char* domain_name,
                      double threshold,
-                     const char *surrogate_path,
+                     const char* surrogate_path,
                      bool store_data = true)
   {
     auto model = ams_candidate_models.find(domain_name);
     if (model != ams_candidate_models.end()) {
       AMS_FATAL(AMS,
-            "Trying to register model on domain: %s but model already exists "
-            "%s",
-            domain_name,
-            registered_models[model->second].second.SPath.c_str());
+                "Trying to register model on domain: %s but model already "
+                "exists "
+                "%s",
+                domain_name,
+                registered_models[model->second].second.SPath.c_str());
     }
     registered_models.push_back(std::make_pair(
         std::string(domain_name),
@@ -337,7 +338,7 @@ public:
     return registered_models.size() - 1;
   }
 
-  int get_model_index(const char *domain_name)
+  int get_model_index(const char* domain_name)
   {
     auto model = ams_candidate_models.find(domain_name);
     if (model == ams_candidate_models.end()) return -1;
@@ -345,7 +346,7 @@ public:
     return model->second;
   }
 
-  std::pair<std::string, AMSAbstractModel> &get_model(int index)
+  std::pair<std::string, AMSAbstractModel>& get_model(int index)
   {
     if (index >= registered_models.size()) {
       AMS_FATAL(AMS, "Model id: %d does not exist", index);
@@ -357,7 +358,7 @@ public:
   ~AMSWrap()
   {
     for (auto E : executors) {
-      delete reinterpret_cast<ams::AMSWorkflow *>(E);
+      delete reinterpret_cast<ams::AMSWorkflow*>(E);
     }
     ams::util::close();
   }
@@ -367,14 +368,14 @@ static std::once_flag _amsInitFlag;
 static std::once_flag _amsFinalizeFlag;
 static std::unique_ptr<AMSWrap> _amsWrap;
 
-ams::AMSWorkflow *_AMSCreateExecutor(AMSCAbstrModel model,
+ams::AMSWorkflow* _AMSCreateExecutor(AMSCAbstrModel model,
                                      int process_id,
                                      int world_size)
 {
   AMS_CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
-  auto &model_descr = _amsWrap->get_model(model);
+  auto& model_descr = _amsWrap->get_model(model);
 
-  ams::AMSWorkflow *WF = new ams::AMSWorkflow(model_descr.second.SPath,
+  ams::AMSWorkflow* WF = new ams::AMSWorkflow(model_descr.second.SPath,
                                               model_descr.first,
                                               model_descr.second.threshold,
                                               process_id,
@@ -383,10 +384,10 @@ ams::AMSWorkflow *_AMSCreateExecutor(AMSCAbstrModel model,
   return WF;
 }
 
-AMSExecutor _AMSRegisterExecutor(ams::AMSWorkflow *workflow)
+AMSExecutor _AMSRegisterExecutor(ams::AMSWorkflow* workflow)
 {
   AMS_CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
-  _amsWrap->executors.push_back(static_cast<void *>(workflow));
+  _amsWrap->executors.push_back(static_cast<void*>(workflow));
   return static_cast<AMSExecutor>(_amsWrap->executors.size()) - 1L;
 }
 }  // namespace
@@ -415,45 +416,45 @@ AMSExecutor AMSCreateExecutor(AMSCAbstrModel model,
                               int process_id,
                               int world_size)
 {
-  auto *dWF = _AMSCreateExecutor(model, process_id, world_size);
+  auto* dWF = _AMSCreateExecutor(model, process_id, world_size);
   return _AMSRegisterExecutor(dWF);
 }
 
 
 void AMSExecute(AMSExecutor executor,
-                DomainLambda &OrigComputation,
-                const ams::SmallVector<ams::AMSTensor> &ins,
-                ams::SmallVector<ams::AMSTensor> &inouts,
-                ams::SmallVector<ams::AMSTensor> &outs)
+                DomainLambda& OrigComputation,
+                const ams::SmallVector<ams::AMSTensor>& ins,
+                ams::SmallVector<ams::AMSTensor>& inouts,
+                ams::SmallVector<ams::AMSTensor>& outs)
 {
   int64_t index = static_cast<int64_t>(executor);
   if (index >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
   auto currExec = _amsWrap->executors[index];
 
-  ams::AMSWorkflow *workflow = reinterpret_cast<ams::AMSWorkflow *>(currExec);
+  ams::AMSWorkflow* workflow = reinterpret_cast<ams::AMSWorkflow*>(currExec);
   AMS_DBG(AMS,
-      "Calling AMS with in:%ld, inout:%ld, out:%ld",
-      ins.size(),
-      inouts.size(),
-      outs.size());
+          "Calling AMS with in:%ld, inout:%ld, out:%ld",
+          ins.size(),
+          inouts.size(),
+          outs.size());
 
   callAMS(workflow, OrigComputation, ins, inouts, outs);
 }
 
 void AMSCExecute(AMSExecutor executor,
                  DomainCFn OrigCComputation,
-                 void *args,
-                 const ams::SmallVector<ams::AMSTensor> &ins,
-                 ams::SmallVector<ams::AMSTensor> &inouts,
-                 ams::SmallVector<ams::AMSTensor> &outs)
+                 void* args,
+                 const ams::SmallVector<ams::AMSTensor>& ins,
+                 ams::SmallVector<ams::AMSTensor>& inouts,
+                 ams::SmallVector<ams::AMSTensor>& outs)
 {
 
   // Define the lambda and let the compiler deduce the type conversion to std::function
   DomainLambda OrigComputation =
-      [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
-          ams::SmallVector<ams::AMSTensor> &ams_inouts,
-          ams::SmallVector<ams::AMSTensor> &ams_outs) {
+      [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
+          ams::SmallVector<ams::AMSTensor>& ams_inouts,
+          ams::SmallVector<ams::AMSTensor>& ams_outs) {
         OrigCComputation(args, ams_ins, ams_inouts, ams_outs);
       };
 
@@ -468,27 +469,28 @@ void AMSDestroyExecutor(AMSExecutor executor)
   if (index >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
   auto currExec = _amsWrap->executors[index];
+  _amsWrap->executors[index] = nullptr;
 
-  delete reinterpret_cast<ams::AMSWorkflow *>(currExec);
+  delete reinterpret_cast<ams::AMSWorkflow*>(currExec);
 }
 
 
-const char *AMSGetAllocatorName(AMSResourceType device)
+const char* AMSGetAllocatorName(AMSResourceType device)
 {
-  auto &rm = ams::ResourceManager::getInstance();
+  auto& rm = ams::ResourceManager::getInstance();
   return rm.getAllocatorName(device).c_str();
 }
 
-void AMSSetAllocator(AMSResourceType resource, const char *alloc_name)
+void AMSSetAllocator(AMSResourceType resource, const char* alloc_name)
 {
-  auto &rm = ams::ResourceManager::getInstance();
+  auto& rm = ams::ResourceManager::getInstance();
   std::string alloc(alloc_name);
   rm.setAllocator(alloc, resource);
 }
 
-AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
+AMSCAbstrModel AMSRegisterAbstractModel(const char* domain_name,
                                         double threshold,
-                                        const char *surrogate_path,
+                                        const char* surrogate_path,
                                         bool store_data)
 {
   AMS_CFATAL(AMS, !_amsWrap, "AMSInit has not been called.")
@@ -504,15 +506,15 @@ AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
 }
 
 
-AMSCAbstrModel AMSQueryModel(const char *domain_model)
+AMSCAbstrModel AMSQueryModel(const char* domain_model)
 {
   AMS_CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   return _amsWrap->get_model_index(domain_model);
 }
 
-void AMSConfigureFSDatabase(AMSDBType db_type, const char *db_path)
+void AMSConfigureFSDatabase(AMSDBType db_type, const char* db_path)
 {
-  auto &db_instance = ams::db::DBManager::getInstance();
+  auto& db_instance = ams::db::DBManager::getInstance();
   db_instance.instantiate_fs_db(db_type, std::string(db_path));
 }
 
@@ -524,9 +526,21 @@ AMSExecutor AMSCreateDistributedExecutor(AMSCAbstrModel model,
                                          int world_size)
 
 {
-  auto *dWF = _AMSCreateExecutor(model, process_id, world_size);
+  auto* dWF = _AMSCreateExecutor(model, process_id, world_size);
   dWF->set_communicator(Comm);
   return _AMSRegisterExecutor(dWF);
 }
 #endif
+
+
+const std::string AMSGetDatabaseName(AMSExecutor executor)
+{
+  int64_t index = static_cast<int64_t>(executor);
+  if (index >= _amsWrap->executors.size())
+    throw std::runtime_error("AMS Executor identifier does not exist\n");
+  auto currExec =
+      reinterpret_cast<ams::AMSWorkflow*>(_amsWrap->executors[index]);
+  return currExec->getDBFilename();
+}
+
 }  // namespace ams
