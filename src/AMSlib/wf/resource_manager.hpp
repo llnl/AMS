@@ -58,7 +58,7 @@ private:
   /** @brief  Used internally to map resource types (Device, host, pinned memory) to
    * umpire allocator ids. */
   std::vector<AMSAllocator*> RMAllocators;
-  ResourceManager() : RMAllocators({nullptr, nullptr, nullptr}){};
+  ResourceManager() : RMAllocators({nullptr, nullptr, nullptr}) {};
 
 public:
   ~ResourceManager()
@@ -149,13 +149,13 @@ public:
 
   void init()
   {
-    DBG(ResourceManager, "Initialization of allocators");
+    AMS_DBG(ResourceManager, "Initialization of allocators");
     std::string host_alloc("HOST");
     std::string device_alloc("DEVICE");
     std::string pinned_alloc("PINNED");
     if (!RMAllocators[AMSResourceType::AMS_HOST])
       setAllocator(host_alloc, AMSResourceType::AMS_HOST);
-#ifdef __AMS_ENABLE_CUDA__
+#if defined(__AMS_ENABLE_CUDA__)
     if (!RMAllocators[AMSResourceType::AMS_DEVICE])
       setAllocator(host_alloc, AMSResourceType::AMS_DEVICE);
 
@@ -172,10 +172,10 @@ public:
 
     RMAllocators[resource] =
         ams::internal::_get_allocator(alloc_name, resource);
-    DBG(ResourceManager,
-        "Set Allocator [%d] to pool with name : %s",
-        resource,
-        RMAllocators[resource]->getName().c_str());
+    AMS_DBG(ResourceManager,
+            "Set Allocator [%d] to pool with name : %s",
+            resource,
+            RMAllocators[resource]->getName().c_str());
   }
 
   bool isActive(AMSResourceType resource)

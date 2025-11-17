@@ -30,7 +30,7 @@ variables:
 ##### LC GITLAB CONFIGURATION
 # Use an LLNL service user to run CI. This prevents from running pipelines as
 # an actual user.
-  LLNL_SERVICE_USER: ""
+  LLNL_SERVICE_USER: "koparasy"
 # Use the service user workspace. Solves permission issues, stores everything
 # at the same location whoever triggers a pipeline.
   CUSTOM_CI_BUILDS_DIR: "/usr/workspace/AMS/gitlab-runner"
@@ -47,12 +47,6 @@ variables:
 # Required information about GitHub repository
   GITHUB_PROJECT_NAME: "AMS"
   GITHUB_PROJECT_ORG: "LLNL"
-# Set the build-and-test command.
-# Nested variables are allowed and useful to customize the job command. We
-# prevent variable expansion so that you can define them at job level.
-  JOB_CMD:
-    value: "scripts/gitlab/ci-build-test.sh"
-    expand: false
 # Override the pattern describing branches that will skip the "draft PR filter
 # test".  Add protected branches here. See default value in
 # preliminary-ignore-draft-pr.yml.

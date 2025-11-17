@@ -13,7 +13,7 @@ RUN apt-get update && \
 			curl \
 			rabbitmq-server supervisor \
 			python3-venv \
-			nlohmann-json3-dev \
+			nlohmann-json3-dev libjson-glib-dev \
 			build-essential cmake \
 		        libopenmpi-dev libmetis-dev libhypre-dev \
 		        libblas-dev liblapack-dev \

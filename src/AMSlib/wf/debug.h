@@ -30,7 +30,7 @@ void memUsage(double& vm_usage, double& resident_set);
     }                                              \
   } while (0);
 
-#define CFATAL(id, condition, ...)                  \
+#define AMS_CFATAL(id, condition, ...)              \
   do {                                              \
     if (condition) {                                \
       AMSPRINT(id,                                  \
@@ -43,27 +43,27 @@ void memUsage(double& vm_usage, double& resident_set);
     }                                               \
   } while (0);
 
-#define FATAL(id, ...) CFATAL(id, true, __VA_ARGS__)
+#define AMS_FATAL(id, ...) AMS_CFATAL(id, true, __VA_ARGS__)
 
 #define THROW(exception, msg) \
-  FATAL(Throw, "%s %s %s", __FILE__, std::to_string(__LINE__).c_str(), msg)
+  AMS_FATAL(Throw, "%s %s %s", __FILE__, std::to_string(__LINE__).c_str(), msg)
 
 #ifdef LIBAMS_VERBOSE
 
-#define CWARNING(id, condition, ...) \
+#define AMS_CWARNING(id, condition, ...) \
   AMSPRINT(id, condition, ams::util::LogVerbosityLevel::Warning, __VA_ARGS__)
 
-#define WARNING(id, ...) CWARNING(id, true, __VA_ARGS__)
+#define AMS_WARNING(id, ...) AMS_CWARNING(id, true, __VA_ARGS__)
 
-#define CINFO(id, condition, ...) \
+#define AMS_CINFO(id, condition, ...) \
   AMSPRINT(id, condition, ams::util::LogVerbosityLevel::Info, __VA_ARGS__)
 
-#define INFO(id, ...) CINFO(id, true, __VA_ARGS__)
+#define AMS_INFO(id, ...) AMS_CINFO(id, true, __VA_ARGS__)
 
-#define CDEBUG(id, condition, ...) \
+#define AMS_CDEBUG(id, condition, ...) \
   AMSPRINT(id, condition, ams::util::LogVerbosityLevel::Debug, __VA_ARGS__)
 
-#define DBG(id, ...) CDEBUG(id, true, __VA_ARGS__)
+#define AMS_DBG(id, ...) AMS_CDEBUG(id, true, __VA_ARGS__)
 
 // clang-format off
 #define REPORT_MEM_USAGE(id, phase)                                    \
@@ -72,7 +72,7 @@ void memUsage(double& vm_usage, double& resident_set);
     size_t watermark, current_size, actual_size;                       \
     auto& rm = ams::ResourceManager::getInstance();                    \
     memUsage(vm, rs);                                                  \
-    DBG(MEM, "Memory usage at %s is VM:%g RS:%g", phase, vm, rs); \
+    AMS_DBG(MEM, "Memory usage at %s is VM:%g RS:%g", phase, vm, rs); \
                                                                        \
     for (int i = 0; i < AMSResourceType::AMS_RSEND; i++) {             \
       if (rm.isActive((AMSResourceType)i)) {                           \
@@ -80,7 +80,7 @@ void memUsage(double& vm_usage, double& resident_set);
                              watermark,                                \
                              current_size,                             \
                              actual_size);                             \
-        DBG(MEM,                                                        \
+        AMS_DBG(MEM,                                                        \
               "Allocator: %s HWM:%lu CS:%lu AS:%lu) ",                 \
               rm.getAllocatorName((AMSResourceType)i).c_str(),         \
               watermark,                                               \
@@ -93,19 +93,54 @@ void memUsage(double& vm_usage, double& resident_set);
 // clang-format on
 
 #else  // LIBAMS_VERBOSE is disabled
-#define CWARNING(id, condition, ...)
+#define AMS_CWARNING(id, condition, ...)
 
-#define WARNING(id, ...)
+#define AMS_WARNING(id, ...)
 
-#define CINFO(id, condition, ...)
+#define AMS_CINFO(id, condition, ...)
 
-#define INFO(id, ...)
+#define AMS_INFO(id, ...)
 
-#define CDEBUG(id, condition, ...)
+#define AMS_CDEBUG(id, condition, ...)
 
-#define DBG(id, ...)
+#define AMS_DBG(id, ...)
 
 
 #endif  // LIBAMS_VERBOSE
+//
+
+#if defined(__AMS_ENABLE_HIP__)
+
+#include <hip/hip_runtime.h>
+#define hipErrCheck(CALL)                 \
+  {                                       \
+    hipError_t err = CALL;                \
+    if (err != hipSuccess) {              \
+      AMS_FATAL("ERROR @ %s:%d ->  %s\n", \
+                __FILE__,                 \
+                __LINE__,                 \
+                hipGetErrorString(err));  \
+      abort();                            \
+    }                                     \
+  }
+
+#elif defined(__AMS_ENABLE_CUDA__)
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+#define cudaErrCheck(CALL)                \
+  {                                       \
+    cudaError_t err = CALL;               \
+    if (err != cudaSuccess) {             \
+      printf("ERROR @ %s:%d ->  %s:%s\n", \
+             __FILE__,                    \
+             __LINE__,                    \
+             cudaGetErrorName(err),       \
+             cudaGetErrorString(err));    \
+      abort();                            \
+    }                                     \
+  }
+#endif
+
 
 #endif

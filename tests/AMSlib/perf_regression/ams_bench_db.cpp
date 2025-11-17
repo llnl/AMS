@@ -34,7 +34,7 @@ struct Problem {
   {
   }
 
-  void run(long num_elements, DType **inputs, DType **outputs)
+  void run(long num_elements, DType** inputs, DType** outputs)
   {
     for (int i = 0; i < num_elements; i++) {
       DType sum = 0;
@@ -49,7 +49,7 @@ struct Problem {
     std::this_thread::sleep_for(std::chrono::milliseconds(sleep_msec));
   }
 
-  DType *initialize_inputs(DType *inputs, long length)
+  DType* initialize_inputs(DType* inputs, long length)
   {
     for (int i = 0; i < length; i++) {
       inputs[i] = static_cast<DType>(i);
@@ -57,7 +57,7 @@ struct Problem {
     return inputs;
   }
 
-  void ams_run(AMSExecutor &wf,
+  void ams_run(AMSExecutor& wf,
                AMSResourceType resource,
                int iterations,
                int num_elements)
@@ -74,8 +74,8 @@ struct Problem {
 
       // Allocate Input memory
       for (int j = 0; j < num_inputs; j++) {
-        DType *data = new DType[num_elements];
-        DType *ptr = initialize_inputs(data, num_elements);
+        DType* data = new DType[num_elements];
+        DType* ptr = initialize_inputs(data, num_elements);
         input_tensors.push_back(AMSTensor::view(
             ptr,
             SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
@@ -94,11 +94,11 @@ struct Problem {
       }
 
       DomainLambda OrigComputation =
-          [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
-              ams::SmallVector<ams::AMSTensor> &ams_inouts,
-              ams::SmallVector<ams::AMSTensor> &ams_outs) {
-            DType *ins[num_inputs];
-            DType *outs[num_outputs];
+          [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
+              ams::SmallVector<ams::AMSTensor>& ams_inouts,
+              ams::SmallVector<ams::AMSTensor>& ams_outs) {
+            DType* ins[num_inputs];
+            DType* outs[num_outputs];
             if (num_inputs != ams_ins.size())
               throw std::runtime_error(
                   "Expecting dimensions of inputs to remain the same");
@@ -139,7 +139,7 @@ struct Problem {
   }
 };
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
   // Number of ranks in this run
   int wS = 1;
@@ -180,7 +180,7 @@ int main(int argc, char **argv)
   args.AddOption(&device_name,
                  "-d",
                  "--device",
-                 "Device config string (cpu or cuda)");
+                 "Device config string (cpu or gpu)");
 
   // set precision
   args.AddOption(&precision_opt,
@@ -242,7 +242,7 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  const char *object_descr = std::getenv("AMS_OBJECTS");
+  const char* object_descr = std::getenv("AMS_OBJECTS");
   if (dbType == AMSDBType::AMS_RMQ && !object_descr) {
     std::cerr << "Error: RabbitMQ backend required to set env variable "
                  "AMS_OBJECTS\n";
@@ -253,12 +253,12 @@ int main(int argc, char **argv)
   // AMS allocators setup
   // -------------------------------------------------------------------------
   AMSResourceType resource = AMSResourceType::AMS_HOST;
-  const bool use_device = device_name == "cuda";
+  const bool use_device = device_name == "gpu";
   if (use_device) {
-#ifdef __AMS_ENABLE_CUDA__
+#if defined(__AMS_ENABLE_CUDA__) || defined(__AMS_ENABLE_HIP__)
     resource = AMSResourceType::AMS_DEVICE;
 #else
-    std::cerr << "Error: Benchmark has not been compiled with CUDA support\n";
+    std::cerr << "Error: Benchmark has not been compiled with Device support\n";
     return -1;
 #endif
   }

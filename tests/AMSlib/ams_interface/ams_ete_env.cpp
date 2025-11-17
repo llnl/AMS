@@ -8,7 +8,7 @@
 
 using namespace ams;
 
-AMSDType getDataType(char *d_type)
+AMSDType getDataType(char* d_type)
 {
   AMSDType dType = AMSDType::AMS_DOUBLE;
   if (std::strcmp(d_type, "float") == 0) {
@@ -28,7 +28,7 @@ struct Problem {
   int multiplier;
   Problem(int ni, int no) : num_inputs(ni), num_outputs(no), multiplier(100) {}
 
-  void run(long num_elements, DType **inputs, DType **outputs)
+  void run(long num_elements, DType** inputs, DType** outputs)
   {
     for (int i = 0; i < num_elements; i++) {
       DType sum = 0;
@@ -43,7 +43,7 @@ struct Problem {
   }
 
 
-  DType *initialize_inputs(DType *inputs, long length)
+  DType* initialize_inputs(DType* inputs, long length)
   {
     for (int i = 0; i < length; i++) {
       inputs[i] = static_cast<DType>(i);
@@ -51,7 +51,7 @@ struct Problem {
     return inputs;
   }
 
-  void ams_run(AMSExecutor &wf,
+  void ams_run(AMSExecutor& wf,
                AMSResourceType resource,
                int iterations,
                int num_elements)
@@ -63,7 +63,7 @@ struct Problem {
 
       // Allocate Input memory
       for (int j = 0; j < num_inputs; j++) {
-        DType *data = new DType[elements];
+        DType* data = new DType[elements];
         input_tensors.push_back(AMSTensor::view(
             initialize_inputs(data, elements),
             SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
@@ -82,11 +82,11 @@ struct Problem {
       }
 
       DomainLambda OrigComputation =
-          [&](const ams::SmallVector<ams::AMSTensor> &ams_ins,
-              ams::SmallVector<ams::AMSTensor> &ams_inouts,
-              ams::SmallVector<ams::AMSTensor> &ams_outs) {
-            DType *ins[num_inputs];
-            DType *outs[num_outputs];
+          [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
+              ams::SmallVector<ams::AMSTensor>& ams_inouts,
+              ams::SmallVector<ams::AMSTensor>& ams_outs) {
+            DType* ins[num_inputs];
+            DType* outs[num_outputs];
             if (num_inputs != ams_ins.size())
               throw std::runtime_error(
                   "Expecting dimensions of inputs to remain the same");
@@ -126,25 +126,25 @@ struct Problem {
   }
 };
 
-void callBackDouble(void *cls, long elements, void **inputs, void **outputs)
+void callBackDouble(void* cls, long elements, void** inputs, void** outputs)
 {
   std::cout << "Called the double model\n";
-  static_cast<Problem<double> *>(cls)->run(elements,
-                                           (double **)(inputs),
-                                           (double **)(outputs));
+  static_cast<Problem<double>*>(cls)->run(elements,
+                                          (double**)(inputs),
+                                          (double**)(outputs));
 }
 
 
-void callBackSingle(void *cls, long elements, void **inputs, void **outputs)
+void callBackSingle(void* cls, long elements, void** inputs, void** outputs)
 {
   std::cout << "Called the single model\n";
-  static_cast<Problem<float> *>(cls)->run(elements,
-                                          (float **)(inputs),
-                                          (float **)(outputs));
+  static_cast<Problem<float>*>(cls)->run(elements,
+                                         (float**)(inputs),
+                                         (float**)(outputs));
 }
 
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
 
   AMSInit();
@@ -164,8 +164,8 @@ int main(int argc, char **argv)
   AMSDType data_type = getDataType(argv[4]);
   int num_iterations = std::atoi(argv[5]);
   int avg_elements = std::atoi(argv[6]);
-  const char *model1 = argv[7];
-  const char *model2 = argv[8];
+  const char* model1 = argv[7];
+  const char* model2 = argv[8];
   AMSResourceType resource = AMSResourceType::AMS_HOST;
   srand(time(NULL));
 
@@ -181,7 +181,8 @@ int main(int argc, char **argv)
       prob.ams_run(wf, resource, num_iterations, avg_elements);
     }
   }
-
+  std::cout << "Finalize\n";
   AMSFinalize();
+  std::cout << "Done with finalize\n";
   return 0;
 }

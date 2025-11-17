@@ -251,12 +251,12 @@ void hdf5DB::writeDataToDataset(ams::MutableArrayRef<hsize_t> currentShape,
 
 void hdf5DB::_store(const at::Tensor& inputs, const at::Tensor& outputs)
 {
-  DBG(DB,
-      "DB of type %s stores input/output tensors of  shapes %s, "
-      "%s",
-      type().c_str(),
-      tensorSizeToString(inputs.sizes()).c_str(),
-      tensorSizeToString(outputs.sizes()).c_str());
+  AMS_DBG(DB,
+          "DB of type %s stores input/output tensors of  shapes %s, "
+          "%s",
+          type().c_str(),
+          tensorSizeToString(inputs.sizes()).c_str(),
+          tensorSizeToString(outputs.sizes()).c_str());
 
   if (HDIset == -1 || HDOset == -1) {
     createDataSets(inputs.sizes(), outputs.sizes());
@@ -264,16 +264,16 @@ void hdf5DB::_store(const at::Tensor& inputs, const at::Tensor& outputs)
 
   writeDataToDataset(currentInputShape, HDIset, inputs);
   writeDataToDataset(currentOutputShape, HDOset, outputs);
-  DBG(DB,
-      "DB (file:%s) next elements to be stored at Input:%s Output: %s",
-      fn.c_str(),
-      SmallVectorToString(currentOutputShape).c_str(),
-      SmallVectorToString(currentInputShape).c_str());
+  AMS_DBG(DB,
+          "DB (file:%s) next elements to be stored at Input:%s Output: %s",
+          fn.c_str(),
+          SmallVectorToString(currentOutputShape).c_str(),
+          SmallVectorToString(currentInputShape).c_str());
 }
 
 
 hdf5DB::hdf5DB(std::string path, std::string domain_name, uint64_t rId)
-    : FileDB(path, domain_name, ".h5", rId), HDOset(-1), HDIset(-1)
+    : FileDB(path, domain_name, ".h5", rId), HDOset(-1), HDIset(-1), HDType(-1)
 {
   std::error_code ec;
   bool exists = fs::exists(this->fn);
@@ -308,10 +308,12 @@ hdf5DB::hdf5DB(std::string path, std::string domain_name, uint64_t rId)
 
 hdf5DB::~hdf5DB()
 {
-  DBG(DB, "Closing File: %s %s", type().c_str(), this->fn.c_str())
+  AMS_DBG(DB, "Closing File: %s %s", type().c_str(), this->fn.c_str())
   // HDF5 Automatically closes all opened fds at exit of application.
-  //    herr_t err = H5Fclose(HFile);
-  //    HDF5_ERROR(err);
+  herr_t err = H5Fclose(HFile);
+  // NOTE: WE need to investigate this further. I recall that older HDF5 version may not need to close
+  // explicitly their handlers. Cause they keep an internal state.
+  HDF5_ERROR(err);
 }
 
 void hdf5DB::store(ArrayRef<torch::Tensor> Inputs,

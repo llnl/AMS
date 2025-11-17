@@ -198,7 +198,7 @@ public:
     dbfn += std::to_string(rId) + suffix;
     Path /= fs::path(dbfn);
     this->fn = fs::absolute(Path).string();
-    DBG(DB, "File System DB writes to file %s", this->fn.c_str())
+    AMS_DBG(DB, "File System DB writes to file %s", this->fn.c_str())
   }
 
   std::string getFilename() const { return fn; }
@@ -528,11 +528,12 @@ public:
       serializeTensor(tensor, blob);
     for (auto& tensor : _outputs)
       serializeTensor(tensor, blob);
-    DBG(AMSMessage,
-        "Allocated message %d: %p with size: %ld",
-        _id,
-        _data,
-        reinterpret_cast<uintptr_t>(blob) - reinterpret_cast<uintptr_t>(_data));
+    AMS_DBG(AMSMessage,
+            "Allocated message %d: %p with size: %ld",
+            _id,
+            _data,
+            reinterpret_cast<uintptr_t>(blob) -
+                reinterpret_cast<uintptr_t>(_data));
   }
 
   /**
@@ -545,12 +546,12 @@ public:
 
   AMSMessage(const AMSMessage& other)
   {
-    DBG(AMSMessage,
-        "Copy AMSMessage (%d, %p) <- (%d, %p)",
-        _id,
-        _data,
-        other._id,
-        other._data);
+    AMS_DBG(AMSMessage,
+            "Copy AMSMessage (%d, %p) <- (%d, %p)",
+            _id,
+            _data,
+            other._id,
+            other._data);
     swap(other);
   };
 
@@ -561,7 +562,7 @@ public:
   struct AMSMessageDeleter {
     void operator()(void* x)
     {
-      DBG(AMSMessageDeleter, "Deallocating %p", x)
+      AMS_DBG(AMSMessageDeleter, "Deallocating %p", x)
       auto& rm = ams::ResourceManager::getInstance();
       rm.deallocate(x, AMSResourceType::AMS_HOST);
     }
@@ -581,12 +582,12 @@ public:
 
   AMSMessage& operator=(AMSMessage&& other) noexcept
   {
-    DBG(AMSMessage,
-        "Move AMSMessage (%d, %p) <- (%d, %p)",
-        _id,
-        _data,
-        other._id,
-        other._data);
+    AMS_DBG(AMSMessage,
+            "Move AMSMessage (%d, %p) <- (%d, %p)",
+            _id,
+            _data,
+            other._id,
+            other._data);
     if (this != &other) {
       swap(other);
       other._data = nullptr;
@@ -974,22 +975,23 @@ public:
 #ifdef EVTHREAD_USE_PTHREADS_IMPLEMENTED
     evthread_use_pthreads();
 #else
-    WARNING(ConnectionManagerAMQP, "Libevent does not support pthreads")
+    AMS_WARNING(ConnectionManagerAMQP, "Libevent does not support pthreads")
 #endif
 
-    DBG(ConnectionManagerAMQP,
-        "%s (OPENSSL_VERSION_NUMBER = %#010x)",
-        OPENSSL_VERSION_TEXT,
-        OPENSSL_VERSION_NUMBER);
+    AMS_DBG(ConnectionManagerAMQP,
+            "%s (OPENSSL_VERSION_NUMBER = %#010x)",
+            OPENSSL_VERSION_TEXT,
+            OPENSSL_VERSION_NUMBER);
 
-    DBG(ConnectionManagerAMQP,
-        "[%ld] RabbitMQ address: %s:%d/%s (exchange = %s / routing key = %s)",
-        _rId,
-        _address.hostname().c_str(),
-        _address.port(),
-        _address.vhost().c_str(),
-        _exchange.c_str(),
-        _routing_key.c_str())
+    AMS_DBG(ConnectionManagerAMQP,
+            "[%ld] RabbitMQ address: %s:%d/%s (exchange = %s / routing key = "
+            "%s)",
+            _rId,
+            _address.hostname().c_str(),
+            _address.port(),
+            _address.vhost().c_str(),
+            _exchange.c_str(),
+            _routing_key.c_str())
 
     _base = event_base_new();
     _handler = std::make_shared<AMQPHandler>(_base, rmq_cert);
@@ -1067,10 +1069,10 @@ public:
    */
   void publish(const PublishMessage& msg)
   {
-    DBG(ConnectionManagerAMQP,
-        "Pushing message #%d (%p) to queue",
-        msg.id,
-        msg.dPtr.get())
+    AMS_DBG(ConnectionManagerAMQP,
+            "Pushing message #%d (%p) to queue",
+            msg.id,
+            msg.dPtr.get())
     _msgQueue.push(msg);
     // Counter tracking how many messages we are supposed to publish
     _nbProcessingMsg++;
@@ -1086,7 +1088,7 @@ public:
   {
     if (_connection) {
       close(_connection->fileno());  // Close the connection
-      DBG(ConnectionManagerAMQP, "Connection closed")
+      AMS_DBG(ConnectionManagerAMQP, "Connection closed")
     }
     _isConnected = false;
   }
@@ -1097,7 +1099,7 @@ public:
   static void simulateConnectionDrop(evutil_socket_t, short, void* arg)
   {
     ConnectionManagerAMQP* mgr = reinterpret_cast<ConnectionManagerAMQP*>(arg);
-    WARNING(ConnectionManagerAMQP, "Simulating connection drop...");
+    AMS_WARNING(ConnectionManagerAMQP, "Simulating connection drop...");
     // Close the current connection (simulate a drop)
     mgr->closeConnection();
   }
@@ -1139,11 +1141,11 @@ public:
    */
   void stop()
   {
-    DBG(ConnectionManagerAMQP,
-        "Stopping connection: %d messages not processed (%d messages not "
-        "acked)",
-        pendingMessages(),
-        unacknowledged())
+    AMS_DBG(ConnectionManagerAMQP,
+            "Stopping connection: %d messages not processed (%d messages not "
+            "acked)",
+            pendingMessages(),
+            unacknowledged())
 
     _stop = true;
     _connection->close();
@@ -1172,41 +1174,41 @@ private:
                     reinterpret_cast<char*>(msg.dPtr.get()),
                     msg.size)
           .onAck([this, msg]() {
-            DBG(ConnectionManagerAMQP,
-                "message #%d (%p / %ld) got acknowledged "
-                "successfully ",
-                msg.id,
-                msg.dPtr.get(),
-                msg.size)
+            AMS_DBG(ConnectionManagerAMQP,
+                    "message #%d (%p / %ld) got acknowledged "
+                    "successfully ",
+                    msg.id,
+                    msg.dPtr.get(),
+                    msg.size)
             // If msg is in the MessagesBuffer, we erase it
             MessagesBuffer::getInstance().erase(msg.id);
             _nbProcessingMsg--;
           })
           .onNack([this, msg]() {
-            DBG(ConnectionManagerAMQP,
-                "message #%d (%p / %ld) received negative "
-                "acknowledgment ",
-                msg.id,
-                msg.dPtr.get(),
-                msg.size)
+            AMS_DBG(ConnectionManagerAMQP,
+                    "message #%d (%p / %ld) received negative "
+                    "acknowledgment ",
+                    msg.id,
+                    msg.dPtr.get(),
+                    msg.size)
             if (MessagesBuffer::getInstance().insert(msg)) _nbProcessingMsg++;
           })
           .onError([this, msg](const char* errMsg) {
-            DBG(ConnectionManagerAMQP,
-                "message #%d (%p / %ld) did not get send: \"%s\"",
-                msg.id,
-                msg.dPtr.get(),
-                msg.size,
-                errMsg)
+            AMS_DBG(ConnectionManagerAMQP,
+                    "message #%d (%p / %ld) did not get send: \"%s\"",
+                    msg.id,
+                    msg.dPtr.get(),
+                    msg.size,
+                    errMsg)
             // onNack and onError can be both called by AMQP-CPP
             // We make sure that if the message was not in the buffer
             // we do increment _nbProcessingMsg
             if (MessagesBuffer::getInstance().insert(msg)) _nbProcessingMsg++;
           });
     } else {
-      DBG(ConnectionManagerAMQP,
-          "No valid channel for publishing message #%d",
-          msg.id);
+      AMS_DBG(ConnectionManagerAMQP,
+              "No valid channel for publishing message #%d",
+              msg.id);
       MessagesBuffer::getInstance().insert(msg);
     }
   }
@@ -1220,7 +1222,7 @@ private:
     PublishMessage msg;
     while (_msgQueue.size() > 0) {
       if (_msgQueue.pop(msg)) {
-        DBG(ConnectionManagerAMQP, "Processing message: %d", msg.id)
+        AMS_DBG(ConnectionManagerAMQP, "Processing message: %d", msg.id)
         internalPublish(msg);
       }
     }
@@ -1231,7 +1233,7 @@ private:
    */
   void flushNAckMessages()
   {
-    DBG(ConnectionManagerAMQP, "Flushing messages")
+    AMS_DBG(ConnectionManagerAMQP, "Flushing messages")
     auto lambda = [this](const std::pair<int, PublishMessage>& item) {
       this->internalPublish(item.second);
     };
@@ -1254,7 +1256,7 @@ private:
    */
   static void flushNAckMessageCallback(evutil_socket_t, short, void* arg)
   {
-    DBG(ConnectionManagerAMQP, "Sending flush message callback")
+    AMS_DBG(ConnectionManagerAMQP, "Sending flush message callback")
     ConnectionManagerAMQP* mgr = reinterpret_cast<ConnectionManagerAMQP*>(arg);
     mgr->flushNAckMessages();
   }
@@ -1269,10 +1271,10 @@ private:
 
     _channel = std::make_shared<AMQP::TcpChannel>(_connection.get());
     _channel->onError([&](const char* message) {
-      WARNING(ConnectionManagerAMQP,
-              "Error on channel: "
-              "%s",
-              message)
+      AMS_WARNING(ConnectionManagerAMQP,
+                  "Error on channel: "
+                  "%s",
+                  message)
       _isConnected = false;
     });
 
@@ -1280,18 +1282,18 @@ private:
         .onSuccess([](const std::string& name,
                       uint32_t messagecount,
                       uint32_t consumercount) {
-          DBG(ConnectionManagerAMQP,
-              "declared queue: %s (messagecount=%d, "
-              "consumercount=%d)",
-              name.c_str(),
-              messagecount,
-              consumercount)
+          AMS_DBG(ConnectionManagerAMQP,
+                  "declared queue: %s (messagecount=%d, "
+                  "consumercount=%d)",
+                  name.c_str(),
+                  messagecount,
+                  consumercount)
         })
         .onError([&](const char* message) {
-          WARNING(ConnectionManagerAMQP,
-                  "Error while creating broker queue: "
-                  "%s",
-                  message)
+          AMS_WARNING(ConnectionManagerAMQP,
+                      "Error while creating broker queue: "
+                      "%s",
+                      message)
           _isConnected = false;
         });
     _isConnected = true;
@@ -1325,9 +1327,9 @@ private:
   static void reconnectTimerCallback(evutil_socket_t, short, void* arg)
   {
     ConnectionManagerAMQP* mgr = static_cast<ConnectionManagerAMQP*>(arg);
-    DBG(ConnectionManagerAMQP, "Reconnecting ...")
+    AMS_DBG(ConnectionManagerAMQP, "Reconnecting ...")
     mgr->reconnect();
-    DBG(ConnectionManagerAMQP, "Reconnection complete")
+    AMS_DBG(ConnectionManagerAMQP, "Reconnection complete")
   }
 
   /**
@@ -1448,7 +1450,7 @@ public:
                bool updateSurrogate)
   {
     bool amsRMQFailure = checkEnvVariable("AMS_SIMULATE_RMQ_FAILURE");
-    CWARNING(RMQInterface, amsRMQFailure, "Simulating connetion drops")
+    AMS_CWARNING(RMQInterface, amsRMQFailure, "Simulating connetion drops")
 
     _publishingManager = std::make_unique<ConnectionManagerAMQP>(_rId,
                                                                  rmq_user,
@@ -1512,12 +1514,12 @@ public:
                ArrayRef<torch::Tensor> Outputs)
   {
     CALIPER(CALI_MARK_BEGIN("STORE_RMQ");)
-    DBG(RMQInterface,
-        "[tag=%d] stores %ld elements of input/output "
-        "dimensions (%ld, %ld)",
-        _msg_tag,
-        Inputs.size(),
-        Outputs.size())
+    AMS_DBG(RMQInterface,
+            "[tag=%d] stores %ld elements of input/output "
+            "dimensions (%ld, %ld)",
+            _msg_tag,
+            Inputs.size(),
+            Outputs.size())
 
     AMSMessage msg(_msg_tag, _rId, domain_name, Inputs, Outputs);
 
@@ -1541,10 +1543,10 @@ public:
     _publishingManager->flush();
     int iters = 0;
     while (_publishingManager->pendingMessages() > 0 && (iters++ < repeat)) {
-      DBG(RMQInterface,
-          "[r%ld] Flushing messages %d messages ...",
-          _rId,
-          _publishingManager->pendingMessages())
+      AMS_DBG(RMQInterface,
+              "[r%ld] Flushing messages %d messages ...",
+              _rId,
+              _publishingManager->pendingMessages())
       std::this_thread::sleep_for(std::chrono::milliseconds(ms));
     }
   }
@@ -1558,7 +1560,7 @@ public:
     _publishingManager->stop();
     auto size = MessagesBuffer::getInstance().size();
     if (size != 0)
-      DBG(RMQInterface, "Rank %ju did not ack %d messages", _rId, size)
+      AMS_DBG(RMQInterface, "Rank %ju did not ack %d messages", _rId, size)
   }
 
   ~RMQInterface()
@@ -1644,7 +1646,7 @@ public:
   RMQInterface() : connected(false) {}
   bool connect()
   {
-    FATAL(RMQInterface, "RMQ Disabled yet we are requesting to connect")
+    AMS_FATAL(RMQInterface, "RMQ Disabled yet we are requesting to connect")
     return false;
   }
 
@@ -1709,7 +1711,7 @@ private:
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
-  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false){};
+  DBManager() : dbType(AMSDBType::AMS_NONE), updateSurrogate(false) {};
 
 protected:
   RMQInterface rmq_interface;
@@ -1725,16 +1727,16 @@ public:
   ~DBManager()
   {
     for (auto& e : db_instances) {
-      DBG(DBManager,
-          "Closing DB %s (%p) (#client=%lu)",
-          e.first.c_str(),
-          e.second.get(),
-          e.second.use_count() - 1);
+      AMS_DBG(DBManager,
+              "Closing DB %s (%p) (#client=%lu)",
+              e.first.c_str(),
+              e.second.get(),
+              e.second.use_count() - 1);
       if (e.second.use_count() > 0) e.second->close();
     }
 
     if (rmq_interface.isConnected()) {
-      DBG(DBManager, "Closing RMQ Connection");
+      AMS_DBG(DBManager, "Closing RMQ Connection");
       rmq_interface.close();
     }
   }
@@ -1763,7 +1765,7 @@ public:
                                    uint64_t rId = 0)
   {
 
-    DBG(DBManager, "Instantiating data base");
+    AMS_DBG(DBManager, "Instantiating data base");
 
     if ((dbType == AMSDBType::AMS_HDF5) && !fs_interface.isConnected()) {
       THROW(std::runtime_error,
@@ -1800,11 +1802,11 @@ public:
   */
   std::shared_ptr<BaseDB> getDB(std::string& domainName, uint64_t rId = 0)
   {
-    DBG(DBManager,
-        "Requested DB for domain: '%s' DB Configured to "
-        "operate with '%s'",
-        domainName.c_str(),
-        getDBTypeAsStr(dbType).c_str())
+    AMS_DBG(DBManager,
+            "Requested DB for domain: '%s' DB Configured to "
+            "operate with '%s'",
+            domainName.c_str(),
+            getDBTypeAsStr(dbType).c_str())
 
     if (dbType == AMSDBType::AMS_NONE) return nullptr;
 
@@ -1814,9 +1816,9 @@ public:
     if (db_iter == db_instances.end()) {
       auto db = createDB(domainName, dbType, rId);
       db_instances.insert(std::make_pair(std::string(domainName), db));
-      DBG(DBManager,
-          "Creating new Database writting to file: %s",
-          domainName.c_str());
+      AMS_DBG(DBManager,
+              "Creating new Database writting to file: %s",
+              domainName.c_str());
       return db;
     }
 
@@ -1834,31 +1836,59 @@ public:
     if (db->getId() != rId) {
       THROW(std::runtime_error, "Requesting databases from different ranks");
     }
-    DBG(DBManager,
-        "Using existing Database writting to file: %s",
-        domainName.c_str());
+    AMS_DBG(DBManager,
+            "Using existing Database writting to file: %s",
+            domainName.c_str());
 
     return db;
+  }
+
+  void dropDB(std::string& domainName, uint64_t rId = 0)
+  {
+    AMS_DBG(DBManager,
+            "Requested DB for domain: '%s' DB Configured to "
+            "operate with '%s'",
+            domainName.c_str(),
+            getDBTypeAsStr(dbType).c_str())
+
+    if (dbType == AMSDBType::AMS_NONE) return;
+
+    std::string key = domainName;
+    auto db_iter = db_instances.find(std::string(key));
+    if (db_iter == db_instances.end()) return;
+
+    if (db_iter->second == nullptr) {
+      return;
+    }
+
+    if (db_iter->second->getId() != rId) {
+      THROW(std::runtime_error, "Deleting databases from different ranks");
+    }
+
+    if (db_iter->second.use_count() == 2) {
+      AMS_DBG(DBManager, "Removing element");
+      db_instances.erase(db_iter);
+    }
   }
 
   void instantiate_fs_db(AMSDBType type,
                          std::string db_path,
                          bool is_debug = false)
   {
-    CWARNING(DBManager,
-             isInitialized(),
-             "Data Base is already initialized. Reconfiguring can result "
-             "into "
-             "issues")
+    AMS_CWARNING(DBManager,
+                 isInitialized(),
+                 "Data Base is already initialized. Reconfiguring can result "
+                 "into "
+                 "issues")
 
-    CWARNING(DBManager,
-             dbType != AMSDBType::AMS_NONE,
-             "Setting DBManager default DB when already set")
+    AMS_CWARNING(DBManager,
+                 dbType != AMSDBType::AMS_NONE,
+                 "Setting DBManager default DB when already set")
     dbType = type;
 
-    CWARNING(DBManager,
-             (is_debug && dbType != AMSDBType::AMS_HDF5),
-             "Only HDF5 supports debug")
+    AMS_CWARNING(DBManager,
+                 (is_debug && dbType != AMSDBType::AMS_HDF5),
+                 "Only HDF5 supports debug")
 
     if (dbType != AMSDBType::AMS_NONE) fs_interface.connect(db_path);
   }
@@ -1876,11 +1906,12 @@ public:
   {
     fs::path Path(rmq_cert);
     std::error_code ec;
-    CWARNING(AMS,
-             !fs::exists(Path, ec),
-             "Certificate file '%s' for RMQ server does not exist. AMS will "
-             "try to connect without it.",
-             rmq_cert.c_str());
+    AMS_CWARNING(AMS,
+                 !fs::exists(Path, ec),
+                 "Certificate file '%s' for RMQ server does not exist. AMS "
+                 "will "
+                 "try to connect without it.",
+                 rmq_cert.c_str());
     dbType = AMSDBType::AMS_RMQ;
     updateSurrogate = update_surrogate;
 #ifdef __AMS_ENABLE_RMQ__
@@ -1895,9 +1926,9 @@ public:
                           routing_key,
                           update_surrogate);
 #else
-    FATAL(DBManager,
-          "Requsted RMQ database but AMS is not built with such support "
-          "enabled")
+    AMS_FATAL(DBManager,
+              "Requsted RMQ database but AMS is not built with such support "
+              "enabled")
 #endif
   }
 

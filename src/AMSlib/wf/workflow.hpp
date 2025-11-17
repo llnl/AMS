@@ -85,9 +85,9 @@ class AMSWorkflow
       StoreOutputTensors.push_back(Tensor);
     }
 
-    DBG(Workflow,
-        "Storing data (#elements = %ld) to database",
-        StoreInputTensors[0].sizes()[0]);
+    AMS_DBG(Workflow,
+            "Storing data (#elements = %ld) to database",
+            StoreInputTensors[0].sizes()[0]);
     DB->store(StoreInputTensors, StoreOutputTensors);
     CALIPER(CALI_MARK_END("DBSTORE");)
   }
@@ -111,8 +111,8 @@ class AMSWorkflow
   }
 
 public:
-  AMSWorkflow(std::string &surrogate_path,
-              std::string &domain_name,
+  AMSWorkflow(std::string& surrogate_path,
+              std::string& domain_name,
               float threshold,
               int _pId = 0,
               int _wSize = 1,
@@ -128,7 +128,7 @@ public:
         ePolicy(AMSExecPolicy::AMS_UBALANCED)
   {
     DB = nullptr;
-    auto &dbm = ams::db::DBManager::getInstance();
+    auto& dbm = ams::db::DBManager::getInstance();
 
     if (storeData) DB = dbm.getDB(domainName, rId);
     MLModel = nullptr;
@@ -161,7 +161,7 @@ public:
 
   static SmallVector<torch::Tensor> subSelectTensors(
       ArrayRef<torch::Tensor> Tensors,
-      torch::Tensor &Mask)
+      torch::Tensor& Mask)
   {
     SmallVector<torch::Tensor> NewVector;
     for (auto O : Tensors) {
@@ -172,7 +172,7 @@ public:
 
   static void ScatterPhysicOutputsToOrigDomain(
       ArrayRef<torch::Tensor> computedDomain,
-      torch::Tensor &Predicate,
+      torch::Tensor& Predicate,
       MutableArrayRef<torch::Tensor> entireDomain)
   {
     if (computedDomain.size() != entireDomain.size()) {
@@ -194,7 +194,7 @@ public:
                                    int offset)
   {
     int outerDim = Src.dim() - 1;
-    for (auto &dst : Dest) {
+    for (auto& dst : Dest) {
       int ConcatAxisSize = dst.sizes()[dst.dim() - 1];
       torch::Tensor Slice =
           Src.narrow(outerDim, offset, ConcatAxisSize).to(dst.options());
@@ -205,7 +205,14 @@ public:
   }
 
 
-  ~AMSWorkflow() { DBG(Workflow, "Destroying Workflow Handler"); }
+  ~AMSWorkflow()
+  {
+    AMS_DBG(Workflow, "Destroying Workflow Handler, DB: %d", DB.use_count());
+    if (DB.use_count() == 2) {
+      auto& dbm = ams::db::DBManager::getInstance();
+      dbm.dropDB(domainName, rId);
+    }
+  }
 
   /** @brief This is the main entry point of AMSLib and replaces the original
      * execution path of the application.
@@ -259,37 +266,37 @@ public:
                 ams::MutableArrayRef<torch::Tensor> Outs)
   {
     CALIPER(CALI_MARK_BEGIN("AMSEvaluate");)
-    DBG(Workflow,
-        "Entering Workflow with TorchIn:%ld, TochInOut:%ld, TorchOut:%ld",
-        Ins.size(),
-        InOuts.size(),
-        Outs.size());
+    AMS_DBG(Workflow,
+            "Entering Workflow with TorchIn:%ld, TochInOut:%ld, TorchOut:%ld",
+            Ins.size(),
+            InOuts.size(),
+            Outs.size());
 
     std::string msg{"ApplicationInput: [ "};
-    for (auto &TI : Ins)
+    for (auto& TI : Ins)
       msg += shapeToString(TI) + " ";
     msg += "]";
-    DBG(Workflow, "%s", msg.c_str());
+    AMS_DBG(Workflow, "%s", msg.c_str());
 
     msg = "ApplicationInOut: [ ";
-    for (auto &TIO : InOuts)
+    for (auto& TIO : InOuts)
       msg += shapeToString(TIO) + " ";
     msg += "]";
-    DBG(Workflow, "%s", msg.c_str());
+    AMS_DBG(Workflow, "%s", msg.c_str());
 
     msg = "ApplicationOutput: [ ";
-    for (auto &TO : Outs)
+    for (auto& TO : Outs)
       msg += shapeToString(TO) + " ";
     msg += "]";
-    DBG(Workflow, "%s", msg.c_str());
+    AMS_DBG(Workflow, "%s", msg.c_str());
 
 
     SmallVector<torch::Tensor> InputTensors(Ins.begin(), Ins.end());
     SmallVector<torch::Tensor> OutputTensors(Outs.begin(), Outs.end());
-    DBG(Workflow,
-        "Entering Workflow with TorchIn:%ld, TorchOut:%ld",
-        InputTensors.size(),
-        OutputTensors.size());
+    AMS_DBG(Workflow,
+            "Entering Workflow with TorchIn:%ld, TorchOut:%ld",
+            InputTensors.size(),
+            OutputTensors.size());
     for (auto Tensor : InOuts) {
       InputTensors.push_back(Tensor);
       OutputTensors.push_back(Tensor);
@@ -301,7 +308,7 @@ public:
     REPORT_MEM_USAGE(Workflow, "Start")
 
     if (!MLModel) {
-      DBG(Workflow, "Model does not exist, calling entire application");
+      AMS_DBG(Workflow, "Model does not exist, calling entire application");
       // We need to clone only inout data to guarantee
       // we have a copy of them when writting the database
       SmallVector<torch::Tensor> PhysicInOutsBefore;
@@ -320,10 +327,10 @@ public:
     CALIPER(CALI_MARK_BEGIN("UPDATEMODEL");)
     if (updateModel()) {
       auto model = DB->getLatestModel();
-      CINFO(Workflow,
-            rId == 0,
-            "Updating surrogate model with %s",
-            model.c_str())
+      AMS_CINFO(Workflow,
+                rId == 0,
+                "Updating surrogate model with %s",
+                model.c_str())
     }
     CALIPER(CALI_MARK_END("UPDATEMODEL");)
 
@@ -383,7 +390,7 @@ public:
     CALIPER(CALI_MARK_END("UNPACK");)
 
 
-    DBG(Workflow, "Finished physics evaluation")
+    AMS_DBG(Workflow, "Finished physics evaluation")
 
     if (DB) {
       storeComputedData(PhysicIns,
@@ -392,7 +399,7 @@ public:
                         PhysicInOuts);
     }
 
-    DBG(Workflow, "Finished AMSExecution")
+    AMS_DBG(Workflow, "Finished AMSExecution")
 
     auto sizePhysics = (PhysicIns.size() > 0) ? PhysicIns[0].sizes()[0] : 0;
     auto sizeInput = (InputTensors.size() > 0) ? InputTensors[0].sizes()[0] : 0;
@@ -401,16 +408,22 @@ public:
       ratioComputedPhysics =
           (float)(PhysicIns[0].sizes()[0]) / float(InputTensors[0].sizes()[0]);
 
-    CINFO(Workflow,
-          rId == 0,
-          "Computed %ld elems"
-          "using physics out of the %ld items (%.2f)",
-          sizePhysics,
-          sizeInput,
-          ratioComputedPhysics);
+    AMS_CINFO(Workflow,
+              rId == 0,
+              "Computed %ld elems"
+              "using physics out of the %ld items (%.2f)",
+              sizePhysics,
+              sizeInput,
+              ratioComputedPhysics);
 
     REPORT_MEM_USAGE(Workflow, "End")
     CALIPER(CALI_MARK_END("AMSEvaluate");)
+  }
+
+  std::string getDBName()
+  {
+    if (!DB) return "";
+    return DB->getFilename();
   }
 };
 

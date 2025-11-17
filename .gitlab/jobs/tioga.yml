@@ -1,0 +1,43 @@
+###############################################################################
+# Copyright (c) 2022-25, Lawrence Livermore National Security, LLC and RADIUSS
+# project contributors. See the COPYRIGHT file for details.
+#
+# SPDX-License-Identifier: (MIT)
+###############################################################################
+
+.tioga_reproducer_vars:
+  script:
+    - export WITH_CUDA="Off"
+    - export WITH_HIP="On"
+
+# With GitLab CI, included files cannot be empty.
+variables:
+  INCLUDED_FILE_CANNOT_BE_EMPTY: "True"
+
+###############
+# Explanations:
+###############
+
+## Adding jobs defined by the project.
+## Note: placing the extends section first allows you to override part of the
+## shared implementation if needed (and if you know what you are doing).
+#<job-name (typically build target description)>:
+#  extends: .job_on_dane
+#  variables:
+#    <A_VARIABLE>: "<with job specific value>"
+
+.base-job:
+  extends: .job_on_tioga
+  before_script:
+    - echo "=== Start CI Build and Test on Tioga ==="
+  after_script:
+    - echo "=== End CI Build and Test on Tioga ==="
+
+.build-variants:
+  parallel:
+    matrix:
+      - WITH_MPI: ["on", "off"]
+        WITH_WORKFLOW: ["on", "off"]
+
+build-run-tioga:
+  extends: [.base-job, .build-variants]

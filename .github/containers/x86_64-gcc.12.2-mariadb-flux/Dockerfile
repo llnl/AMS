@@ -4,16 +4,13 @@ USER root
 # Install MariaDB + tools
 # Install extra packages (e.g., git, python3-pip)
 RUN apt-get update && \
-    apt-get install -y git python3 python3-pip mariadb-server mariadb-client python3-venv && \
+    apt-get install -y git python3 python3-pip mariadb-server mariadb-client python3-venv libjson-glib-dev && \
     apt-get clean
 
 RUN echo "[mysqld]\nbind-address = 127.0.0.1" > /etc/mysql/mariadb.conf.d/99-local.cnf
 
 # Set a working directory
 WORKDIR /workspace
-
-# Copy your files into the container (optional)
-# COPY ./my_script.py /workspace/
 
 COPY init.sql /init.sql
 
@@ -30,7 +27,6 @@ RUN gcc --version | head -n1 > /gcc-version.txt
 RUN uname -m > /arch.txt
 
 # Create virtualenv and activate in shell
-
 RUN python3 -m venv /venv --system-site-packages
 
 # Set an entrypoint or default command (optional)

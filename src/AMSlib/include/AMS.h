@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 #include "AMSTensor.hpp"
 #include "AMSTypes.hpp"
@@ -15,15 +16,15 @@ namespace ams
 {
 
 using DomainLambda =
-    std::function<void(const ams::SmallVector<ams::AMSTensor> & /*inputs */,
-                       ams::SmallVector<ams::AMSTensor> & /*input - outputs */,
-                       ams::SmallVector<ams::AMSTensor> & /* outputs */)>;
+    std::function<void(const ams::SmallVector<ams::AMSTensor>& /*inputs */,
+                       ams::SmallVector<ams::AMSTensor>& /*input - outputs */,
+                       ams::SmallVector<ams::AMSTensor>& /* outputs */)>;
 
 
-using DomainCFn = void (*)(void *,
-                           const ams::SmallVector<ams::AMSTensor> &,
-                           ams::SmallVector<ams::AMSTensor> &,
-                           ams::SmallVector<ams::AMSTensor> &);
+using DomainCFn = void (*)(void*,
+                           const ams::SmallVector<ams::AMSTensor>&,
+                           ams::SmallVector<ams::AMSTensor>&,
+                           ams::SmallVector<ams::AMSTensor>&);
 
 using AMSExecutor = int64_t;
 using AMSCAbstrModel = int;
@@ -59,30 +60,31 @@ Simple implementations of the current duq(mean), duq(max), random can be found o
 model generation files used in testing.
 */
 
-AMSCAbstrModel AMSRegisterAbstractModel(const char *domain_name,
+AMSCAbstrModel AMSRegisterAbstractModel(const char* domain_name,
                                         double threshold,
-                                        const char *surrogate_path,
+                                        const char* surrogate_path,
                                         bool store_data = true);
 
-AMSCAbstrModel AMSQueryModel(const char *domain_model);
+AMSCAbstrModel AMSQueryModel(const char* domain_model);
 
 void AMSExecute(AMSExecutor executor,
-                DomainLambda &OrigComputation,
-                const ams::SmallVector<ams::AMSTensor> &ins,
-                ams::SmallVector<ams::AMSTensor> &inouts,
-                ams::SmallVector<ams::AMSTensor> &outs);
+                DomainLambda& OrigComputation,
+                const ams::SmallVector<ams::AMSTensor>& ins,
+                ams::SmallVector<ams::AMSTensor>& inouts,
+                ams::SmallVector<ams::AMSTensor>& outs);
 
 void AMSCExecute(AMSExecutor executor,
                  DomainCFn OrigComputation,
-                 void *args,
-                 const ams::SmallVector<ams::AMSTensor> &ins,
-                 ams::SmallVector<ams::AMSTensor> &inouts,
-                 ams::SmallVector<ams::AMSTensor> &outs);
+                 void* args,
+                 const ams::SmallVector<ams::AMSTensor>& ins,
+                 ams::SmallVector<ams::AMSTensor>& inouts,
+                 ams::SmallVector<ams::AMSTensor>& outs);
 
 void AMSDestroyExecutor(AMSExecutor executor);
 
-void AMSSetAllocator(ams::AMSResourceType resource, const char *alloc_name);
-const char *AMSGetAllocatorName(ams::AMSResourceType device);
-void AMSConfigureFSDatabase(AMSDBType db_type, const char *db_path);
+void AMSSetAllocator(ams::AMSResourceType resource, const char* alloc_name);
+const char* AMSGetAllocatorName(ams::AMSResourceType device);
+void AMSConfigureFSDatabase(AMSDBType db_type, const char* db_path);
+const std::string AMSGetDatabaseName(AMSExecutor wf);
 
 };  // namespace ams

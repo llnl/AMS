@@ -10,6 +10,7 @@
 
 #include <ATen/core/interned_strings.h>
 #include <ATen/core/ivalue.h>
+// NOTE: AFAIK torch does not provide the respective hip.h, and we should not guard here.
 #include <torch/cuda.h>
 #include <torch/script.h>  // One-stop header.
 
@@ -60,14 +61,14 @@ public:
       // Model Found
       auto torch_model = model->second;
 
-      DBG(Surrogate,
-          "Returning existing model represented under (%s)",
-          model_path.empty() ? "" : model_path.c_str());
+      AMS_DBG(Surrogate,
+              "Returning existing model represented under (%s)",
+              model_path.empty() ? "" : model_path.c_str());
       return torch_model;
     }
 
     // Model does not exist. We need to create one
-    DBG(Surrogate, "Generating new model under (%s)", model_path.c_str());
+    AMS_DBG(Surrogate, "Generating new model under (%s)", model_path.c_str());
     std::shared_ptr<SurrogateModel> torch_model =
         std::shared_ptr<SurrogateModel>(new SurrogateModel(model_path));
     instances.insert(std::make_pair(std::string(model_path), torch_model));
@@ -76,7 +77,7 @@ public:
 
   ~SurrogateModel()
   {
-    DBG(Surrogate, "Destroying surrogate model at %s", _model_path.c_str());
+    AMS_DBG(Surrogate, "Destroying surrogate model at %s", _model_path.c_str());
   }
 
   std::tuple<torch::Tensor, torch::Tensor> _evaluate(torch::Tensor& inputs,

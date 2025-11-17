@@ -55,10 +55,10 @@ SurrogateModel::SurrogateModel(std::string& model_path)
   std::error_code ec;
 
   if (!std::experimental::filesystem::exists(Path, ec)) {
-    FATAL(Surrogate,
-          "Path to Surrogate Model (%s) Does not "
-          "exist",
-          model_path.c_str())
+    AMS_FATAL(Surrogate,
+              "Path to Surrogate Model (%s) Does not "
+              "exist",
+              model_path.c_str())
   }
 
   try {
@@ -69,10 +69,10 @@ SurrogateModel::SurrogateModel(std::string& model_path)
 
   auto method_ptr = module.find_method("get_ams_info");
   if (!method_ptr) {
-    FATAL(Surrogate,
-          "The Surrogate %s is not a valid "
-          "AMSModel",
-          model_path.c_str());
+    AMS_FATAL(Surrogate,
+              "The Surrogate %s is not a valid "
+              "AMSModel",
+              model_path.c_str());
   }
 
   torch::IValue meta_ivalue = module.run_method("get_ams_info");
@@ -88,15 +88,15 @@ SurrogateModel::SurrogateModel(std::string& model_path)
     }
   }
 
-  CFATAL(SurrogateModel,
-         model_dtype == ams::AMS_UNKNOWN_TYPE ||
-             model_device == ams::AMSResourceType::AMS_UNKNOWN,
-         "Model has unknown datatype or device");
+  AMS_CFATAL(SurrogateModel,
+             model_dtype == ams::AMS_UNKNOWN_TYPE ||
+                 model_device == ams::AMSResourceType::AMS_UNKNOWN,
+             "Model has unknown datatype or device");
 
-  DBG(SurrogateModel,
-      "Loaded model with type %s on device %s",
-      getAMSDTypeAsString(model_dtype).c_str(),
-      getAMSResourceTypeAsString(model_device).c_str());
+  AMS_DBG(SurrogateModel,
+          "Loaded model with type %s on device %s",
+          getAMSDTypeAsString(model_dtype).c_str(),
+          getAMSResourceTypeAsString(model_device).c_str());
 }
 
 
@@ -123,10 +123,10 @@ std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
     return std::make_tuple(AMS_DEVICE, c10::DeviceType::CUDA);
   }
   // If no parameters or buffers are found, default to unknown
-  FATAL(Surrogate,
-        "Cannot determine device type of model "
-        "%s",
-        value.c_str());
+  AMS_FATAL(Surrogate,
+            "Cannot determine device type of model "
+            "%s",
+            value.c_str());
   return std::make_tuple(AMS_UNKNOWN,
                          c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES);
 }
@@ -142,7 +142,7 @@ std::tuple<AMSDType, torch::Dtype> SurrogateModel::convertModelDataType(
     return std::make_tuple(AMSDType::AMS_DOUBLE, at ::kDouble);
   }
 
-  FATAL(Surrogate, "unknown data type of model %s", type.c_str());
+  AMS_FATAL(Surrogate, "unknown data type of model %s", type.c_str());
 
   return std::make_tuple(dParamType, torchType);
 }
@@ -161,6 +161,7 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_evaluate(
   }
   c10::InferenceMode guard(true);
   auto out = module.forward({inputs});
+  AMS_DBG(Surrogate, "Addess of module is %p", &module);
 
   at::Tensor prediction =
       out.toTuple()->elements()[0].toTensor().set_requires_grad(false).detach();
@@ -211,9 +212,9 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
   }
 
   auto ITensor = torch::cat(ConvertedInputs, CAxis);
-  DBG(Surrogate,
-      "Input concatenated tensor is %s",
-      shapeToString(ITensor).c_str());
+  AMS_DBG(Surrogate,
+          "Input concatenated tensor is %s",
+          shapeToString(ITensor).c_str());
 
   auto [OTensor, Predicate] = _evaluate(ITensor, threshold);
   if (InputDevice != torch_device) {

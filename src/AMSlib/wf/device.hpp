@@ -18,29 +18,29 @@
 
 #define UNDEFINED_FUNC -1
 
-#ifdef __AMS_ENABLE_CUDA__
+#if defined(__AMS_ENABLE_CUDA__) || defined(__AMS_ENABLE_HIP__)
 namespace ams
 {
-void DtoDMemcpy(void *dest, void *src, size_t nBytes);
+void DtoDMemcpy(void* dest, void* src, size_t nBytes);
 
-void HtoHMemcpy(void *dest, void *src, size_t nBytes);
+void HtoHMemcpy(void* dest, void* src, size_t nBytes);
 
-void HtoDMemcpy(void *dest, void *src, size_t nBytes);
+void HtoDMemcpy(void* dest, void* src, size_t nBytes);
 
-void DtoHMemcpy(void *dest, void *src, size_t nBytes);
+void DtoHMemcpy(void* dest, void* src, size_t nBytes);
 
-void *DeviceAllocate(size_t nBytes);
+void* DeviceAllocate(size_t nBytes);
 
-void DeviceFree(void *ptr);
+void DeviceFree(void* ptr);
 
-void *DevicePinnedAlloc(size_t nBytes);
+void* DevicePinnedAlloc(size_t nBytes);
 
-void DeviceFreePinned(void *ptr);
+void DeviceFreePinned(void* ptr);
 
-void deviceCheckErrors(const char *file, int line);
+void deviceCheckErrors(const char* file, int line);
 
 void device_random_uq(int seed,
-                      bool *uq_flags,
+                      bool* uq_flags,
                       int ndata,
                       double acceptable_error);
 

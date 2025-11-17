@@ -6,9 +6,7 @@
 # handle sources and headers
 set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/surrogate.cpp wf/basedb.cpp AMSTensor.cpp wf/interface.cpp wf/resource_manager.cpp AMS.cpp)
 
-if (WITH_HDF5)
   list(APPEND AMS_LIB_SRC wf/hdf5db.cpp)
-endif()
 
 if (WITH_RMQ)
   list(APPEND AMS_LIB_SRC wf/rmqdb.cpp)
@@ -33,11 +31,11 @@ target_include_directories(AMS PUBLIC
 
 if (WITH_CUDA)
   target_link_libraries(AMS PRIVATE CUDA::cudart)
+elseif (WITH_HIP)
+  target_link_libraries(AMS PRIVATE hip::host)
 endif()
 
-if (WITH_HDF5)
-  target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:${AMS_HDF5_TARGET}> PRIVATE $<INSTALL_INTERFACE:${AMS_HDF5_TARGET}>)
-endif()
+target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:${AMS_HDF5_TARGET}> PRIVATE $<INSTALL_INTERFACE:${AMS_HDF5_TARGET}>)
 
 if (WITH_CALIPER)
   target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:caliper> PRIVATE $<INSTALL_INTERFACE:caliper>)
