@@ -4,9 +4,16 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 cmake_minimum_required(VERSION 3.18)
-project(AMS VERSION 0.1.1 LANGUAGES CXX C)
+
+
+if(POLICY CMP0135)
+  cmake_policy(SET CMP0135 NEW)
+endif()
 
 cmake_policy(SET CMP0074 NEW)
+
+project(AMS VERSION 0.1.1 LANGUAGES CXX C)
+
 
 # NOTE: This may break some of our integrations with the applications. But flux requires > C++20, RMQ requires C++17 and although AMS does not have 
 # any restrictions on the CXX standard the application may impose those. The solution would be to compile RMQ with an older GCC version  (8) and 
@@ -51,6 +58,17 @@ list(APPEND AMS_APP_LIBRARIES nlohmann_json::nlohmann_json)
 # ------------------------------------------------------------------------------
 find_package(Threads REQUIRED)
 # ------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
+include(cmake/FetchAndAddFmt.cmake)
+FetchAndAddFmt("On")
+#-------------------------------------------------------------------------------
+
+#-------------------------------------------------------------------------------
+include(cmake/FetchAndAddTlExpected.cmake)
+FetchAndAddTlExpected("On")
+#-------------------------------------------------------------------------------
+
 
 set(MPI_DIRECTORIES "")
 if (WITH_MPI)

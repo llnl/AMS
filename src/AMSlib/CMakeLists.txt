@@ -28,6 +28,7 @@ target_include_directories(AMS PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
+target_link_libraries(AMS PUBLIC fmt::fmt tl-expected)
 
 if (WITH_CUDA)
   target_link_libraries(AMS PRIVATE CUDA::cudart)
