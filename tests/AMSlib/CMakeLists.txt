@@ -3,8 +3,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-include(${CMAKE_SOURCE_DIR}/cmake/FetchAndAddCatch.cmake)
-FetchAndAddCatch(ON)
+include(FetchContent)
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG        v3.6.0
+)
+FetchContent_MakeAvailable(Catch2)
+
+# Optional: bring in Catch2's CTest adapter (catch_discover_tests)
+# (The module lives under Catch2/extras)
+list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
+include(Catch)
 
 set(AMS_TEST_ROOT "${CMAKE_CURRENT_BINARY_DIR}")
 message(INFO "AMS_TEST_ROOT is ${AMS_TEST_ROOT}")
