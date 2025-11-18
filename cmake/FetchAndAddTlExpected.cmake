@@ -5,7 +5,9 @@ function(FetchAndAddTlExpected FETCH_TL_EXPECTED)
 
   if(FETCH_TL_EXPECTED_UC STREQUAL "ON")
     message(STATUS "AMS: Fetching tl-expected via FetchContent")
-
+    # --- IMPORTANT: disable tl-expected's own tests & packaging ---
+    set(EXPECTED_BUILD_TESTS   OFF CACHE BOOL "Disable TlExpected tests"    FORCE)
+    set(EXPECTED_BUILD_PACKAGE OFF CACHE BOOL "Disable TlExpected package"  FORCE)
     FetchContent_Declare(
       tl-expected
       GIT_REPOSITORY https://github.com/TartanLlama/expected.git

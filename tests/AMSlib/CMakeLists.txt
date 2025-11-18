@@ -7,7 +7,7 @@ include(FetchContent)
 FetchContent_Declare(
   Catch2
   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  GIT_TAG        v3.6.0
+  GIT_TAG        v3.11.0        # <- pick a version you like
 )
 FetchContent_MakeAvailable(Catch2)
 
@@ -24,3 +24,4 @@ add_subdirectory(db)
 add_subdirectory(wf)
 add_subdirectory(ams_interface)
 #add_subdirectory(perf_regression)
+
