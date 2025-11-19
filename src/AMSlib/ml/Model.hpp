@@ -4,6 +4,7 @@
 #include <torch/script.h>  // torch::jit::Module, torch::Device, torch::Dtype
 #include <torch/torch.h>
 
+#include <optional>
 #include <type_traits>
 
 #include "AMSError.hpp"
