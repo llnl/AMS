@@ -40,38 +40,65 @@ AMSExpected<BaseModel> BaseModel::load(const AbstractModel& Descriptor)
   auto BModel = std::move(*BModelOrErr);
 
   auto& Module = BModel.getJITModel();
-  auto AMSModelInfoMethod = Module.find_method("get_ams_info");
-  if (!AMSModelInfoMethod) {
-    return AMS_MAKE_ERROR(AMSErrorType::InvalidModel,
-                          fmt::format("Model store under: {} is not JIT-ed and "
-                                      "stored through AMS infrastructure",
-                                      Descriptor.getPath()));
-  }
 
-  auto ams_info = Module.run_method("get_ams_info");
-  auto AMSModelDict = ams_info.toGenericDict();
-  for (const auto& Item : AMSModelDict) {
-    const auto& Key = Item.key().toStringRef();
-    if (Key == "ams_type") {
-      BModel.setDType(Item.value().toScalarType());
-    } else if (Key == "ams_device") {
-      if (Item.value().isDevice()) {
-        BModel.setDevice(Item.value().toDevice());
-      } else {
-        return AMS_MAKE_ERROR(AMSErrorType::InvalidModel,
-                              fmt::format("Cannot infer device type of Model "
-                                          "stored under: {}"
-                                          "the model is likely nnot store "
-                                          "using AMS infrastructure",
-                                          Descriptor.getPath()));
-      }
-    } else {
+  try {
+    auto AMSModelDTypeMethod = Module.find_method("get_ams_dtype");
+    if (!AMSModelDTypeMethod) {
       return AMS_MAKE_ERROR(AMSErrorType::InvalidModel,
-                            fmt::format("Unrecognized key entry '{}' under "
-                                        "'get_ams_info' in model : {}",
-                                        Key,
+                            fmt::format("Model store under: {} is not JIT-ed "
+                                        "and "
+                                        "stored through AMS infrastructure "
+                                        "unable to access 'get_ams_dtype' "
+                                        "method",
                                         Descriptor.getPath()));
     }
+
+    auto& DTypeIMethod = AMSModelDTypeMethod.value();
+    const auto& DTypeIValue = DTypeIMethod({});
+    if (!DTypeIValue.isScalar()) {
+      return AMS_MAKE_ERROR(AMSErrorType::InvalidModel,
+                            fmt::format("Model stored under: {} does not "
+                                        "provide "
+                                        "the proper data-type type",
+                                        Descriptor.getPath()));
+    }
+    BModel.setDType(DTypeIValue.toScalarType());
+  } catch (const c10::Error& EC) {
+    return AMS_MAKE_ERROR(AMSErrorType::TorchInternal,
+                          fmt::format("Error when getting the model data "
+                                      "type\n{}",
+                                      EC.what()));
   }
+
+
+  try {
+    const auto& AMSModelDeviceTypeMethod = Module.find_method("get_ams_device");
+    if (!AMSModelDeviceTypeMethod) {
+      return AMS_MAKE_ERROR(AMSErrorType::InvalidModel,
+                            fmt::format("Model store under: {} is not JIT-ed "
+                                        "and "
+                                        "stored through AMS infrastructure "
+                                        "unable to access 'get_ams_device' "
+                                        "method",
+                                        Descriptor.getPath()));
+    }
+
+    auto& DeviceIVMethod = *AMSModelDeviceTypeMethod;
+    const auto& DeviceIVal = DeviceIVMethod({});
+
+    if (!DeviceIVal.isDevice())
+      return AMS_MAKE_ERROR(AMSErrorType::InvalidModel,
+                            fmt::format("Model stored under: {} does not "
+                                        "return "
+                                        "a proper "
+                                        "torch::device",
+                                        Descriptor.getPath()));
+    BModel.setDevice(DeviceIVal.toDevice());
+  } catch (const c10::Error& EC) {
+    return AMS_MAKE_ERROR(AMSErrorType::TorchInternal,
+                          fmt::format("Error when setting the model device\n",
+                                      EC.what()));
+  }
+
   return BModel;
 }

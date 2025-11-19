@@ -15,5 +15,7 @@ echo $device
 
 python ${root_dir}/generate.py ${directory}
 
+python ${root_dir}/generate_base_models.py --out-dir ${directory}
+
 python ${root_dir}/generate_linear_model.py ${directory} 8 9
 

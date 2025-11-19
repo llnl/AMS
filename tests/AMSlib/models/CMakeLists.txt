@@ -2,6 +2,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate_linear_model.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/generate_base_models.py"
 )
 
 # Where to drop the .pt files
@@ -59,6 +60,7 @@ set(GENERATOR_SCRIPTS
   "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate_linear_model.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/generate_base_models.py"
 )
 
 # 1. Stamp missing -> regenerate

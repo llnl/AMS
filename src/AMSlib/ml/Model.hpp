@@ -121,10 +121,7 @@ public:
   AMSStatus convertTo(std::optional<torch::Device> TargetDevice = std::nullopt)
   {
     constexpr auto ReqModelType = toTorchDType<ScalarT>();
-    static_assert(ReqModelType != c10::ScalarType::Undefined,
-                  "BaseModel::convertTo: unsupported ScalarT (no matching "
-                  "PyTorch "
-                  "dtype)");
+
     auto ReqDevice = TargetDevice.value_or(ModelDevice);
     // Fast path: nothing to do
     if (ReqModelType == ModelDType && ReqDevice == ModelDevice) return {};
@@ -174,18 +171,24 @@ protected:
 
 
 private:
+  template <class T>
+  struct dependent_false : std::false_type {
+  };
+
   template <typename ScalarT>
-  static DType toTorchDType()
+  static constexpr DType toTorchDType()
   {
+    // Floats
     if constexpr (std::is_floating_point_v<ScalarT>) {
       if constexpr (std::is_same_v<ScalarT, float>)
         return c10::ScalarType::Float;
       else if constexpr (std::is_same_v<ScalarT, double>)
         return c10::ScalarType::Double;
       else
-        return c10::ScalarType::Undefined;
+        static_assert(dependent_false<ScalarT>::value,
+                      "Unsupported floating-point type in toTorchDType");
     }
-    // ----- INTEGER CASE -----
+    // Integers
     else if constexpr (std::is_integral_v<ScalarT>) {
       constexpr bool is_signed = std::is_signed_v<ScalarT>;
       constexpr size_t bits = sizeof(ScalarT) * 8;
@@ -200,19 +203,28 @@ private:
             return c10::ScalarType::Int;
           case 64:
             return c10::ScalarType::Long;
+          default:
+            static_assert(dependent_false<ScalarT>::value,
+                          "Unsupported signed integer width in toTorchDType");
         }
       } else {  // unsigned
         switch (bits) {
           case 8:
             return c10::ScalarType::Byte;
+          default:
+            static_assert(dependent_false<ScalarT>::value,
+                          "Unsupported unsigned integer width in toTorchDType");
         }
       }
-      return c10::ScalarType::Undefined;
     } else {
-      static_assert(!sizeof(ScalarT), "Unsupported type in isType()");
+      static_assert(dependent_false<ScalarT>::value,
+                    "Unsupported type in toTorchDType");
     }
+
+    // Unreachable, but keeps some compilers happy
     return c10::ScalarType::Undefined;
   }
+
   /// \brief Underlying Torch module representing the loaded model.
   torch::jit::script::Module JITModel;
 
