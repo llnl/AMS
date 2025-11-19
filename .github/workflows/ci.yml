@@ -3,9 +3,8 @@ name: CI
 on:
   # Triggers the workflow on pull request events only for the "develop" branch
   pull_request:
-    branches: [ "develop" ]
+    branches: ["develop"]
   workflow_dispatch:
-
 
 jobs:
   build-run-tests:
@@ -16,11 +15,13 @@ jobs:
     strategy:
       matrix:
         with_caliper: [ON, OFF]
-        with_mpi : [ON, OFF]
+        with_mpi: [ON, OFF]
 
     steps:
       - uses: actions/checkout@v3
-      - name: Build WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }} 
+      - name: Ensure git safe directory
+        run: git config --global --add safe.directory '*'
+      - name: Build WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
           module load gcc/11.2.1
@@ -48,14 +49,14 @@ jobs:
             -DWITH_WORKFLOW=Off \
             $GITHUB_WORKSPACE
             make -j$(nproc)
-      - name: Run Tests WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }} 
+      - name: Run Tests WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         run: |
           cd build
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           env CTEST_OUTPUT_ON_FAILURE=1 make test
 
-      - name: Install AMS WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }} 
+      - name: Install AMS WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         run: |
           cd build
           source /spack/share/spack/setup-env.sh
@@ -68,12 +69,14 @@ jobs:
     container: ghcr.io/llnl/ams-ci-cuda11.6.1:latest
 
     strategy:
-        matrix:
-          with_caliper: [ON, OFF]
-          with_mpi : [ON, OFF]
+      matrix:
+        with_caliper: [ON, OFF]
+        with_mpi: [ON, OFF]
     steps:
       - uses: actions/checkout@v3
-      - name: Build WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }} 
+      - name: Ensure git safe directory
+        run: git config --global --add safe.directory '*'
+      - name: Build WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
           module load gcc/11.2.1
@@ -101,13 +104,12 @@ jobs:
             -DWITH_WORKFLOW=Off \
             $GITHUB_WORKSPACE
             make -j$(nproc)
-      - name: Install AMS WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }} 
+      - name: Install AMS WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         run: |
           cd build
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           make -j$(nproc) install
-
 
   install-link-cpu-tests:
     # The type of runner that the job will run on
@@ -115,10 +117,12 @@ jobs:
     container: ghcr.io/llnl/ams-ci-almalinux8:latest
 
     strategy:
-        matrix:
-          with_shared: [ON, OFF]
+      matrix:
+        with_shared: [ON, OFF]
     steps:
       - uses: actions/checkout@v3
+      - name: Ensure git safe directory
+        run: git config --global --add safe.directory '*'
       - name: Build SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
@@ -175,10 +179,12 @@ jobs:
     container: ghcr.io/llnl/ams-ci-cuda11.6.1:latest
 
     strategy:
-        matrix:
-          with_shared: [ON, OFF]
+      matrix:
+        with_shared: [ON, OFF]
     steps:
       - uses: actions/checkout@v3
+      - name: Ensure git safe directory
+        run: git config --global --add safe.directory '*'
       - name: Build SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
@@ -257,6 +263,8 @@ jobs:
         RABBITMQ_PORT: 5672
     steps:
       - uses: actions/checkout@v4
+      - name: Ensure git safe directory
+        run: git config --global --add safe.directory '*'
       - name: Build Torch=On FAISS=On RMQ=On AMS
         shell: bash -l {0}
         run: |
@@ -322,7 +330,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
+      - name: Ensure git safe directory
+        run: git config --global --add safe.directory '*'
       - name: Install AMS package (editable)
         shell: bash -l {0}
         run: |
@@ -340,7 +349,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
+      - name: Ensure git safe directory
+        run: git config --global --add safe.directory '*'
       - name: Start MariaDB
         shell: bash -l {0}
         run: |
