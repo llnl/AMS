@@ -12,7 +12,6 @@ function(FetchAndAddTlExpected FETCH_TL_EXPECTED)
       tl-expected
       GIT_REPOSITORY https://github.com/TartanLlama/expected.git
       GIT_TAG        v1.3.1
-      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
 
     FetchContent_MakeAvailable(tl-expected)
