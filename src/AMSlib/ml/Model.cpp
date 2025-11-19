@@ -27,7 +27,7 @@ AMSExpected<BaseModel> BaseModel::load(const AbstractModel& Descriptor)
 
   AMSExpected<BaseModel> BModelOrErr = [&]() -> AMSExpected<BaseModel> {
     try {
-      return BaseModel(Descriptor);
+      return AMSExpected<BaseModel>{BaseModel(Descriptor)};
     } catch (const c10::Error& EC) {
       // Here I am using a more verbose error message (that will inlclude stack frames and line info of the internal torch library).
       // These tend to be useful to debug.
@@ -35,7 +35,7 @@ AMSExpected<BaseModel> BaseModel::load(const AbstractModel& Descriptor)
     }
   }();
 
-  if (!BModelOrErr) return BModelOrErr;
+  if (!BModelOrErr) return std::move(BModelOrErr);
 
   auto BModel = std::move(*BModelOrErr);
 
@@ -100,5 +100,5 @@ AMSExpected<BaseModel> BaseModel::load(const AbstractModel& Descriptor)
                                       EC.what()));
   }
 
-  return BModel;
+  return AMSExpected<BaseModel>{std::move(BModel)};
 }
