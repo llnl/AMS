@@ -4,13 +4,18 @@
 #include <string>
 #include <tl/expected.hpp>
 
+#include "wf/debug.h"
+
 namespace ams
 {
 
 /// \brief Error category for AMS operations.
 enum class AMSErrorType {
-  Success,  ///< No erro
-  Generic,  ///< Unspecified error.
+  Success,           ///< No erro
+  Generic,           ///< Unspecified error.
+  FileDoesNotExist,  ///< Path to file or directory does not exist
+  TorchInternal,     ///< An internal error that happens to the torch library
+  InvalidModel,  ///< A torchscripted model that has not been serialized through AMS
 };
 
 /// \brief Strongly-typed error object used across AMS.
@@ -76,6 +81,8 @@ private:
 template <typename T>
 using AMSExpected = tl::expected<T, AMSError>;
 
+using AMSStatus = AMSExpected<void>;
+
 /// \brief Convenience helper to construct an AMSExpected<T> that holds an error.
 ///
 /// This wraps tl::unexpected internally but does not expose it in the API.
@@ -95,16 +102,17 @@ inline AMSExpected<T> MakeError(AMSError Error)
 /// available). Otherwise, only the message is printed.
 inline std::ostream& operator<<(std::ostream& OS, const AMSError& Error)
 {
-  if constexpr (AMS_DEBUG) {
+  if (!amsDebug()) {
     OS << Error.getMessage();
-  } else {
-    if (!Error.getFile().empty()) {
-      OS << " [" << Error.getFile();
-      if (Error.getLine() > 0) OS << ":" << Error.getLine();
-      OS << "]";
-    }
-    OS << Error.getMessage();
+    return OS;
   }
+
+  if (!Error.getFile().empty()) {
+    OS << " [" << Error.getFile();
+    if (Error.getLine() > 0) OS << ":" << Error.getLine();
+    OS << "]";
+  }
+  OS << Error.getMessage();
   return OS;
 }
 
@@ -123,7 +131,10 @@ inline std::ostream& operator<<(std::ostream& OS, const AMSError& Error)
 /// return MakeError<int>(AMS_MAKE_ERROR(AMSErrorType::InvalidArgument,
 ///                                      "Bad configuration"));
 /// \endcode
-#define AMS_MAKE_ERROR(Type_, Message_) \
+#define AMS_MAKE_ERROR_OBJ(Type_, Message_) \
   ::ams::AMSError((Type_), (Message_), __AMS_FILE__, __AMS_LINE__)
+
+#define AMS_MAKE_ERROR(Type_, Message_) \
+  ::tl::unexpected(AMS_MAKE_ERROR_OBJ((Type_), (Message_)))
 
 }  // namespace ams

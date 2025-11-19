@@ -105,6 +105,7 @@ endif()
 
 if (WITH_AMS_DEBUG)
   list(APPEND AMS_APP_DEFINES "LIBAMS_VERBOSE")
+  list(APPEND AMS_APP_DEFINES "__AMS_DEBUG__")
 endif()
 
 if (AMS_HDF5_DIR)
