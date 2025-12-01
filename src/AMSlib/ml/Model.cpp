@@ -105,3 +105,38 @@ AMSExpected<std::unique_ptr<BaseModel>> BaseModel::load(
 
   return AMSExpected<std::unique_ptr<BaseModel>>{std::move(BModel)};
 }
+
+InferenceModel::InferenceModel(BaseModel&& BM) : BaseModel(std::move(BM))
+{
+  getJITModel().eval();
+}
+
+AMSExpected<std::unique_ptr<InferenceModel>> InferenceModel::load(
+    const AbstractModel& Descriptor)
+{
+  {
+    auto BMExp = BaseModel::load(Descriptor);
+    if (!BMExp) return tl::unexpected(BMExp.error());
+
+    return AMSExpected<std::unique_ptr<InferenceModel>>(
+        new InferenceModel(std::move(*BMExp.value())));
+  }
+}
+
+AMSExpected<torch::jit::IValue> InferenceModel::operator()(
+    std::vector<torch::jit::IValue> Inputs)
+{
+  auto& JModel = getJITModel();
+  try {
+    return AMSExpected<torch::jit::IValue>{JModel.forward(std::move(Inputs))};
+  } catch (const c10::Error& EC) {
+    return AMS_MAKE_ERROR(AMSErrorType::TorchInternal, EC.what());
+  } catch (const torch::jit::ErrorReport& e) {
+    return tl::unexpected(AMSError(AMSErrorType::TorchInternal, e.what()));
+  } catch (const std::runtime_error& e) {
+    return tl::unexpected(AMSError(AMSErrorType::TorchInternal, e.what()));
+  } catch (...) {
+    return tl::unexpected(
+        AMSError(AMSErrorType::TorchInternal, "Unknown TorchScript exception"));
+  }
+}
