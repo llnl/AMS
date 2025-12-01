@@ -147,8 +147,8 @@ public:
   BaseModel(const BaseModel&) = delete;
   BaseModel& operator=(const BaseModel&) = delete;
 
-  BaseModel(BaseModel&&) noexcept = default;
-  BaseModel& operator=(BaseModel&&) noexcept = default;
+  BaseModel(BaseModel&&) = default;
+  BaseModel& operator=(BaseModel&&) = default;
 
 protected:
   ///  \brief Construct a BaseModel from an existing Torch module, device, and dtype.

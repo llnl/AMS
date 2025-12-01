@@ -164,7 +164,7 @@ CATCH_TEST_CASE("BaseModel::convertTo changes dtype correctly",
         CATCH_INFO("BaseModel::load failed with error: " << result.error());
       }
       CATCH_REQUIRE(result);
-      BaseModel model = std::move(*result.value());
+      auto& model = *result.value();
 
       // Convert everything to double on same device
       auto status = model.convertTo<double>();
