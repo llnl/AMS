@@ -10,6 +10,9 @@ set(AMS_WITH_HDF5 @WITH_HDF5@)
 set(AMS_WITH_RMQ @WITH_RMQ@)
 include(CMakeFindDependencyMacro)
 
+find_dependency(fmt REQUIRED)
+find_dependency(tl-expected REQUIRED)
+
 if (NOT TARGET Torch)
   set(AMS_TORCH_DIR @Torch_DIR@)
   if (NOT Torch_DIR)
