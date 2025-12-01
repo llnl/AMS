@@ -61,6 +61,9 @@ private:
 
   /// Model version identifier.
   int Version = 0;
+
+  /// Module unique id
+  int UUID = 0;
 };
 
 }  // namespace ml

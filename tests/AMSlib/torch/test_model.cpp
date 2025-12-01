@@ -108,7 +108,11 @@ CATCH_TEST_CASE("BaseModel::load succeeds for simple models",
                          tm.ModelPrecision + "_" + tm.ModelDevice,
                          /*Version=*/0);
 
-      BaseModel model = REQUIRE_AMS_VALUE_EXPR(BaseModel::load(desc));
+      std::unique_ptr<BaseModel> modelUPtr =
+          REQUIRE_AMS_VALUE_EXPR(BaseModel::load(desc));
+      CATCH_REQUIRE(modelUPtr);
+      auto& model = *modelUPtr;
+
 
       // ---- Check dtype ----
       if (tm.ModelPrecision == "single") {
@@ -159,8 +163,8 @@ CATCH_TEST_CASE("BaseModel::convertTo changes dtype correctly",
       if (!result) {
         CATCH_INFO("BaseModel::load failed with error: " << result.error());
       }
-      CATCH_REQUIRE(result.has_value());
-      BaseModel model = std::move(result.value());
+      CATCH_REQUIRE(result);
+      BaseModel model = std::move(*result.value());
 
       // Convert everything to double on same device
       auto status = model.convertTo<double>();

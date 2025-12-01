@@ -46,13 +46,17 @@ public:
   /// \brief Device type on which the model resides.
   using DeviceType = torch::Device;
 
+  /// \brief An integer identifier for the model
+  using HashT = uint64_t;
+
   /// \brief Load a model from an AbstractModel descriptor using the
   ///        on-disk dtype and device encoded in the model file.
   ///
   /// On success, returns a fully constructed BaseModel instance.
   /// On error, returns an AMSError describing the failure.
   ///
-  static AMSExpected<BaseModel> load(const AbstractModel& Descriptor);
+  static AMSExpected<std::unique_ptr<BaseModel>> load(
+      const AbstractModel& Descriptor);
 
 
   /// \brief Return true if the model is resident on a device (e.g. GPU).
@@ -234,6 +238,9 @@ private:
 
   /// \brief Scalar dtype of the model weights.
   DType ModelDType;
+
+  /// \brief unique id/hash of the model. Currently unused
+  HashT UUID;
 };
 
 }  // namespace ml

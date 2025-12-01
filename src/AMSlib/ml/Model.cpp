@@ -19,15 +19,18 @@ BaseModel::BaseModel(const AbstractModel& AModel)
 {
 }
 
-AMSExpected<BaseModel> BaseModel::load(const AbstractModel& Descriptor)
+AMSExpected<std::unique_ptr<BaseModel>> BaseModel::load(
+    const AbstractModel& Descriptor)
 {
   std::error_code EC;
   if (!fs::exists(Descriptor.getPath(), EC))
     return AMS_MAKE_ERROR(AMSErrorType::FileDoesNotExist, EC.message());
 
-  AMSExpected<BaseModel> BModelOrErr = [&]() -> AMSExpected<BaseModel> {
+  AMSExpected<std::unique_ptr<BaseModel>> BModelOrErr =
+      [&]() -> AMSExpected<std::unique_ptr<BaseModel>> {
     try {
-      return AMSExpected<BaseModel>{BaseModel(Descriptor)};
+      return AMSExpected<std::unique_ptr<BaseModel>>{
+          std::unique_ptr<BaseModel>(new BaseModel(Descriptor))};
     } catch (const c10::Error& EC) {
       // Here I am using a more verbose error message (that will inlclude stack frames and line info of the internal torch library).
       // These tend to be useful to debug.
@@ -39,7 +42,7 @@ AMSExpected<BaseModel> BaseModel::load(const AbstractModel& Descriptor)
 
   auto BModel = std::move(*BModelOrErr);
 
-  auto& Module = BModel.getJITModel();
+  auto& Module = BModel->getJITModel();
 
   try {
     auto AMSModelDTypeMethod = Module.find_method("get_ams_dtype");
@@ -62,7 +65,7 @@ AMSExpected<BaseModel> BaseModel::load(const AbstractModel& Descriptor)
                                         "the proper data-type type",
                                         Descriptor.getPath()));
     }
-    BModel.setDType(DTypeIValue.toScalarType());
+    BModel->setDType(DTypeIValue.toScalarType());
   } catch (const c10::Error& EC) {
     return AMS_MAKE_ERROR(AMSErrorType::TorchInternal,
                           fmt::format("Error when getting the model data "
@@ -93,12 +96,12 @@ AMSExpected<BaseModel> BaseModel::load(const AbstractModel& Descriptor)
                                         "a proper "
                                         "torch::device",
                                         Descriptor.getPath()));
-    BModel.setDevice(DeviceIVal.toDevice());
+    BModel->setDevice(DeviceIVal.toDevice());
   } catch (const c10::Error& EC) {
     return AMS_MAKE_ERROR(AMSErrorType::TorchInternal,
                           fmt::format("Error when setting the model device\n",
                                       EC.what()));
   }
 
-  return AMSExpected<BaseModel>{std::move(BModel)};
+  return AMSExpected<std::unique_ptr<BaseModel>>{std::move(BModel)};
 }
