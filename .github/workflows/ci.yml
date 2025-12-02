@@ -170,7 +170,7 @@ jobs:
           cd build_idealgas/
           export AMS_MFEM_PATH=$(spack location -i mfem)
           echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
-          cmake -DWITH_CUDA=Off -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
+          cmake -DWITH_CUDA=Off -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
           make -j$(nproc) VERBOSE=1
 
   install-link-cuda-tests:
@@ -229,7 +229,7 @@ jobs:
           mkdir build_idealgas/
           cd build_idealgas/
           export AMS_MFEM_PATH=$(spack location -i mfem)
-          cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
+          cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
           make -j$(nproc) VERBOSE=1
       - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
