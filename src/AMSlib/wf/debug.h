@@ -5,9 +5,7 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
-
-#ifndef __AMS_DEBUG__
-#define __AMS_DEBUG__
+#pragma once
 
 #include <atomic>
 #include <mutex>
@@ -142,5 +140,8 @@ void memUsage(double& vm_usage, double& resident_set);
   }
 #endif
 
-
+#ifdef __AMS_DEBUG__
+constexpr bool amsDebug() { return true; }
+#else
+constexpr bool amsDebug() { return false; }
 #endif

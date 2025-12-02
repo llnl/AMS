@@ -4,7 +4,7 @@
 
 # ------------------------------------------------------------------------------
 # handle sources and headers
-set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/surrogate.cpp wf/basedb.cpp AMSTensor.cpp wf/interface.cpp wf/resource_manager.cpp AMS.cpp)
+set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/surrogate.cpp wf/basedb.cpp AMSTensor.cpp wf/interface.cpp wf/resource_manager.cpp ml/Model.cpp ml/AbstractModel.cpp AMS.cpp)
 
   list(APPEND AMS_LIB_SRC wf/hdf5db.cpp)
 
@@ -28,6 +28,7 @@ target_include_directories(AMS PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
+target_link_libraries(AMS PUBLIC fmt::fmt tl::expected)
 
 if (WITH_CUDA)
   target_link_libraries(AMS PRIVATE CUDA::cudart)

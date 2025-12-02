@@ -1,12 +1,17 @@
 import argparse
 import math
+import os
 import sys
 from pathlib import Path
 from typing import Dict, Tuple
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(CURRENT_DIR)
+
 import numpy as np
 import torch
 import torch.nn as nn
+from ams_model import create_ams_model_old as create_ams_model
 from torch import Tensor
 
 
@@ -70,50 +75,6 @@ class SimpleModel(nn.Module):
 
     def forward(self, x) -> Tuple[Tensor, Tensor]:
         return random_tuple(self.fc(x))
-
-
-class AMSModel(torch.nn.Module):
-    ams_info: Dict[str, str]
-
-    def __init__(self, model, meta: Dict[str, str]):
-        super(AMSModel, self).__init__()
-        self._model = model
-        self.ams_info = meta
-
-    @torch.jit.export
-    def get_ams_info(self) -> Dict[str, str]:
-        return self.ams_info
-
-    def forward(self, x):
-        return self._model(x)
-
-
-def create_ams_model(model, device, precision, trace_input=None):
-    if not isinstance(device, torch.device):
-        raise RuntimeError(f"Expected a model to be of type torch.device instead got {type(device)}")
-
-    if not isinstance(precision, torch.dtype):
-        raise RuntimeError(f"Expected a model precision of type torch.dtype instead got {type(precision)}")
-
-    ams_device = device.type
-
-    if precision == torch.float32:
-        ams_dtype = "float32"
-    elif precision == torch.float64:
-        ams_dtype = "float64"
-    else:
-        raise RuntimeError(f"AMS library does not support type of {precision}")
-
-    model.eval()
-    with torch.jit.optimized_execution(True):
-        model = model.to(device, dtype=precision)
-        ams_model = AMSModel(model, meta={"ams_type": ams_dtype, "ams_device": ams_device})
-
-        if trace_input is None:
-            return torch.jit.script(ams_model)
-
-        inp = trace_input.to(device, dtype=precision)
-        return torch.jit.trace(ams_model, inp)
 
 
 def generate_header(directory, tests):
