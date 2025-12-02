@@ -295,6 +295,7 @@ public:
     return (*this)(std::move(V));
   }
 
+  /// \brief Returns whether the model is in training mode (should always be false for InferenceModel).
   bool isTraining() const { return getJITModel().is_training(); }
 
 
