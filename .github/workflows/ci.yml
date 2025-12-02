@@ -239,7 +239,7 @@ jobs:
           spack env activate -p /ams-spack-env
           mkdir build_bnm_opt/
           cd build_bnm_opt/
-          cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS $GITHUB_WORKSPACE/examples/bnm_opt/
+          cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS $GITHUB_WORKSPACE/examples/bnm_opt/
           make -j$(nproc) VERBOSE=1
 
   build-rmq-tests:
