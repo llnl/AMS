@@ -1,7 +1,5 @@
 @PACKAGE_INIT@
 
-include("${CMAKE_CURRENT_LIST_DIR}/AMSTargets.cmake")
-
 # Expose configuration options with AMS_ prefix
 set(AMS_WITH_MPI @WITH_MPI@)
 set(AMS_WITH_CUDA @WITH_CUDA@)
@@ -10,8 +8,8 @@ set(AMS_WITH_HDF5 @WITH_HDF5@)
 set(AMS_WITH_RMQ @WITH_RMQ@)
 include(CMakeFindDependencyMacro)
 
-find_dependency(fmt REQUIRED)
-find_dependency(tl-expected REQUIRED)
+find_dependency(fmt)
+find_dependency(tl-expected)
 
 if (NOT TARGET Torch)
   set(AMS_TORCH_DIR @Torch_DIR@)
@@ -76,4 +74,5 @@ if (AMS_WITH_RMQ)
   endif()
 endif()
 
+include("${CMAKE_CURRENT_LIST_DIR}/AMSTargets.cmake")
 check_required_components("@PROJECT_NAME@")
