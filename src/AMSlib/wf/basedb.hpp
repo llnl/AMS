@@ -1728,9 +1728,9 @@ public:
   {
     for (auto& e : db_instances) {
       AMS_DBG(DBManager,
-              "Closing DB %s (%p) (#client=%lu)",
+              "Closing DB {} {} (#client={})",
               e.first.c_str(),
-              e.second.get(),
+              static_cast<void*>(e.second.get()),
               e.second.use_count() - 1);
       if (e.second.use_count() > 0) e.second->close();
     }

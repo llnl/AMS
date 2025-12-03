@@ -9,6 +9,7 @@
 #define __AMS_UTILS_HPP__
 
 #include <ATen/core/TensorBody.h>
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <array>
@@ -84,6 +85,37 @@ namespace tensor
 {
 SmallVector<at::Tensor> maskTensor(at::Tensor& Src, at::Tensor& Mask);
 }  // namespace tensor
+
 }  // namespace ams
+
+template <>
+struct fmt::formatter<ams::AMSResourceType> : fmt::formatter<std::string_view> {
+  template <typename FormatContext>
+  auto format(const ams::AMSResourceType& t, FormatContext& ctx) const
+  {
+    std::string_view name;
+
+    switch (t) {
+      case ams::AMSResourceType::AMS_UNKNOWN:
+        name = "MemResource::unknown";
+        break;
+      case ams::AMSResourceType::AMS_DEVICE:
+        name = "MemResource::Device";
+        break;
+      case ams::AMSResourceType::AMS_PINNED:
+        name = "MemResource::Pinned";
+        break;
+      case ams::AMSResourceType::AMS_HOST:
+        name = "MemResource::Pinned";
+        break;
+      default:
+        name = "UNKNOWN";
+        break;
+    }
+
+    return formatter<std::string_view>::format(name, ctx);
+  }
+};
+
 
 #endif

@@ -55,10 +55,11 @@ SurrogateModel::SurrogateModel(std::string& model_path)
   std::error_code ec;
 
   if (!std::experimental::filesystem::exists(Path, ec)) {
+    std::cout << "We are here\n";
     AMS_FATAL(Surrogate,
-              "Path to Surrogate Model (%s) Does not "
+              "Path to Surrogate Model {} Does not "
               "exist",
-              model_path.c_str())
+              model_path)
   }
 
   try {
@@ -94,9 +95,9 @@ SurrogateModel::SurrogateModel(std::string& model_path)
              "Model has unknown datatype or device");
 
   AMS_DBG(SurrogateModel,
-          "Loaded model with type %s on device %s",
-          getAMSDTypeAsString(model_dtype).c_str(),
-          getAMSResourceTypeAsString(model_device).c_str());
+          "Loaded model with type {} on device {}",
+          getAMSDTypeAsString(model_dtype),
+          getAMSResourceTypeAsString(model_device));
 }
 
 
@@ -161,7 +162,7 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_evaluate(
   }
   c10::InferenceMode guard(true);
   auto out = module.forward({inputs});
-  AMS_DBG(Surrogate, "Addess of module is %p", &module);
+  AMS_DBG(Surrogate, "Addess of module is {}", static_cast<void*>(&module));
 
   at::Tensor prediction =
       out.toTuple()->elements()[0].toTensor().set_requires_grad(false).detach();
@@ -212,9 +213,7 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
   }
 
   auto ITensor = torch::cat(ConvertedInputs, CAxis);
-  AMS_DBG(Surrogate,
-          "Input concatenated tensor is %s",
-          shapeToString(ITensor).c_str());
+  AMS_DBG(Surrogate, "Input concatenated tensor is {}", shapeToString(ITensor));
 
   auto [OTensor, Predicate] = _evaluate(ITensor, threshold);
   if (InputDevice != torch_device) {

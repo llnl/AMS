@@ -360,7 +360,6 @@ public:
     for (auto E : executors) {
       delete reinterpret_cast<ams::AMSWorkflow*>(E);
     }
-    ams::util::close();
   }
 };
 
