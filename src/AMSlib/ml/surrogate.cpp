@@ -55,7 +55,6 @@ SurrogateModel::SurrogateModel(std::string& model_path)
   std::error_code ec;
 
   if (!std::experimental::filesystem::exists(Path, ec)) {
-    std::cout << "We are here\n";
     AMS_FATAL(Surrogate,
               "Path to Surrogate Model {} Does not "
               "exist",
