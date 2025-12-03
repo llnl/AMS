@@ -267,7 +267,7 @@ public:
   {
     CALIPER(CALI_MARK_BEGIN("AMSEvaluate");)
     AMS_DBG(Workflow,
-            "Entering Workflow with TorchIn:{}, TochInOut:{}, TorchOut:{}",
+            "Entering Workflow with TorchIn:{}, TorchInOut:{}, TorchOut:{}",
             Ins.size(),
             InOuts.size(),
             Outs.size());
