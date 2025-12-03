@@ -79,20 +79,16 @@ jobs:
       - name: Build WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          . /venv/bin/activate 
           rm -rf build/
           mkdir build
           cd build
           export AMS_INSTALL_PATH=$(pwd)/install
-          export AMS_TORCH_PATH=$(spack location -i py-torch)/lib64/python3.9/site-packages/torch/share/cmake/Torch
-          export AMS_HDF5_PATH=$(spack location -i hdf5)
           cmake \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=On \
             -DCMAKE_INSTALL_PREFIX=${AMS_INSTALL_PATH} \
             -DWITH_CALIPER=${{ matrix.with_caliper }} \
-            -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
             -DCMAKE_BUILD_TYPE=Release \
             -DWITH_MPI=${{ matrix.with_mpi }} \
             -DWITH_TESTS=On \
@@ -101,7 +97,6 @@ jobs:
             -DWITH_WORKFLOW=Off \
             -DWITH_CUDA=On \
             -DTORCH_CUDA_ARCH_LIST="9.0" \
-            -DCMAKE_PREFIX_PATH=${SPACK_VIEW} \
             $GITHUB_WORKSPACE
             make -j$(nproc)
       - name: Install AMS WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
@@ -160,18 +155,18 @@ jobs:
             make -j$(nproc) install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
-      - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
-        shell: bash -l {0}
-        run: |
-          module load gcc/11.2.1
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
-          mkdir build_idealgas/
-          cd build_idealgas/
-          export AMS_MFEM_PATH=$(spack location -i mfem)
-          echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
-          cmake -DWITH_CUDA=Off -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
-          make -j$(nproc) VERBOSE=1
+      # - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
+      #   shell: bash -l {0}
+      #   run: |
+      #     module load gcc/11.2.1
+      #     source /spack/share/spack/setup-env.sh
+      #     spack env activate -p /ams-spack-env
+      #     mkdir build_idealgas/
+      #     cd build_idealgas/
+      #     export AMS_MFEM_PATH=$(spack location -i mfem)
+      #     echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
+      #     cmake -DWITH_CUDA=Off -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
+      #     make -j$(nproc) VERBOSE=1
 
   install-link-cuda-tests:
     # The type of runner that the job will run on
@@ -218,7 +213,6 @@ jobs:
             make -j$(nproc) install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
             ls ${AMS_INSTALL_PATH}
-<<<<<<< HEAD
       - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
@@ -230,8 +224,6 @@ jobs:
           export AMS_MFEM_PATH=$(spack location -i mfem)
           cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
           make -j$(nproc) VERBOSE=1
-=======
->>>>>>> ad76dd6 (Added new container for CUDA tests. Updated tests, removed IdealGas test for CUDA (depends on mfem))
       - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
@@ -239,15 +231,11 @@ jobs:
           spack env activate -p /ams-spack-env
           mkdir build_bnm_opt/
           cd build_bnm_opt/
-<<<<<<< HEAD
-          cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS $GITHUB_WORKSPACE/examples/bnm_opt/
-=======
           cmake \
             -DCMAKE_PREFIX_PATH=${SPACK_VIEW} \
             -DTORCH_CUDA_ARCH_LIST="9.0" \
             -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS \
             $GITHUB_WORKSPACE/examples/bnm_opt/
->>>>>>> ad76dd6 (Added new container for CUDA tests. Updated tests, removed IdealGas test for CUDA (depends on mfem))
           make -j$(nproc) VERBOSE=1
 
   build-rmq-tests:

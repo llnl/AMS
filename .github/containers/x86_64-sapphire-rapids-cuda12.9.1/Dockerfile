@@ -1,26 +1,40 @@
-FROM nvidia/cuda:12.9.1-devel-ubi9 AS base
+FROM pytorch/pytorch:2.7.1-cuda12.6-cudnn9-devel AS base
 MAINTAINER Loic Pottier <pottier1@llnl.gov>
-RUN \
-    yum install -y dnf && \
-    dnf install -y git xz perl cmake curl-devel libcurl-devel autoconf automake unzip patch gcc-gfortran bzip2 bzip2-devel file libevent libevent-devel openssl openssl-devel openblas openblas-devel zlib zlib-devel python3-devel && \
-    dnf upgrade -y && \
-    dnf clean all
-COPY repo repo
-RUN \
-    mkdir -p ams-spack-env
-COPY spack.yaml ams-spack-env/spack.yaml
 
-FROM base AS setup-spack-env
-RUN \
-    git clone --depth=1 https://github.com/spack/spack.git -b v1.0.2 && \
-    source spack/share/spack/setup-env.sh && \
-    spack env activate -p ams-spack-env && \
-    spack external find --all --not-buildable --exclude openssl --exclude openblas
-RUN \
-    source spack/share/spack/setup-env.sh && \
-    spack env activate -p ams-spack-env && \
-    spack install && \
-    spack env view enable && \
-    spack clean --all
+RUN apt-get update && \
+    apt-get install -y lsb-release gnupg software-properties-common  \
+    		git \
 
-ENV SPACK_VIEW=/ams-spack-env/.spack-env/view/share/cmake/
+			nlohmann-json3-dev \
+			build-essential cmake \
+		    libopenmpi-dev \
+		    libblas-dev liblapack-dev \
+			libhdf5-dev hdf5-tools && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV AMS_INSTALL=/usr/local/
+
+#CALIPER + AMQCPP
+RUN mkdir -p /archives/ && \
+    cd /archives/ && \
+    git clone --depth 1 https://github.com/LLNL/Caliper.git && \
+    cd Caliper && \
+    mkdir build && cd build && \
+    cmake -DCMAKE_INSTALL_PREFIX=${AMS_INSTALL} .. && \
+    make  && \
+    make install && \
+    cd /archives/ && \
+	git clone --depth=1 https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git && \
+	mkdir -p /archives/AMQP-CPP/build/ && \
+	cd /archives/AMQP-CPP/build/ && \
+	cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_CXX_FLAGS="-D_GLIBCXX_USE_CXX11_ABI=0"  -DAMQP-CPP_LINUX_TCP=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${AMS_INSTALL} -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DAMQP-CPP_BUILD_SHARED=On .. && \
+	make && \
+	make install
+
+RUN \
+    python3 -m venv /venv --system-site-packages && \
+    . /venv/bin/activate && \
+    python3 -m pip install --no-cache-dir h5py
+
+ENV AMS_TORCH_PATH=/opt/conda/lib/python3.11/site-packages/torch/share/cmake/Torch/
