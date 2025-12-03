@@ -1729,7 +1729,7 @@ public:
     for (auto& e : db_instances) {
       AMS_DBG(DBManager,
               "Closing DB {} {} (#client={})",
-              e.first.c_str(),
+              e.first,
               static_cast<void*>(e.second.get()),
               e.second.use_count() - 1);
       if (e.second.use_count() > 0) e.second->close();
