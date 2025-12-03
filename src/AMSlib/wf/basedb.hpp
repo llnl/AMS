@@ -562,7 +562,7 @@ public:
   struct AMSMessageDeleter {
     void operator()(void* x)
     {
-      AMS_DBG(AMSMessageDeleter, "Deallocating {}", x)
+      AMS_DBG(AMSMessageDeleter, "Deallocating {}", static_cast<void*>(x))
       auto& rm = ams::ResourceManager::getInstance();
       rm.deallocate(x, AMSResourceType::AMS_HOST);
     }
