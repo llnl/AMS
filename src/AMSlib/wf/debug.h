@@ -111,7 +111,7 @@ void memUsage(double& vm_usage, double& resident_set);
   {                                       \
     hipError_t err = CALL;                \
     if (err != hipSuccess) {              \
-      AMS_FATAL("ERROR @ %s:%d ->  %s\n", \
+      AMS_FATAL("ERROR @ {}:{} ->  {}\n", \
                 __FILE__,                 \
                 __LINE__,                 \
                 hipGetErrorString(err));  \
@@ -123,17 +123,16 @@ void memUsage(double& vm_usage, double& resident_set);
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#define cudaErrCheck(CALL)                \
-  {                                       \
-    cudaError_t err = CALL;               \
-    if (err != cudaSuccess) {             \
-      printf("ERROR @ %s:%d ->  %s:%s\n", \
-             __FILE__,                    \
-             __LINE__,                    \
-             cudaGetErrorName(err),       \
-             cudaGetErrorString(err));    \
-      abort();                            \
-    }                                     \
+#define cudaErrCheck(CALL)                   \
+  {                                          \
+    cudaError_t err = CALL;                  \
+    if (err != cudaSuccess) {                \
+      AMS_FATAL("ERROR @ {}:{} ->  {}:{}\n", \
+                __FILE__,                    \
+                __LINE__,                    \
+                cudaGetErrorName(err),       \
+                cudaGetErrorString(err));    \
+    }                                        \
   }
 #endif
 

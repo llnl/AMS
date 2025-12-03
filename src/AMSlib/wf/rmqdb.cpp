@@ -55,7 +55,7 @@ size_t AMSMsgHeader::encode(uint8_t* data_blob)
 
   // Domain Size (should be 2 bytes)
   AMS_DBG(AMSMsgHeader,
-          "Generating domain name of size %d --- %lu",
+          "Generating domain name of size {} --- {}",
           domain_size,
           sizeof(domain_size));
   return AMSMsgHeader::size();
@@ -68,7 +68,7 @@ AMSMsgHeader AMSMsgHeader::decode(uint8_t* data_blob)
   uint8_t new_hsize = data_blob[current_offset];
   AMS_CWARNING(AMSMsgHeader,
                new_hsize != AMSMsgHeader::size(),
-               "buffer is likely not a valid AMSMessage (%d / %ld)",
+               "buffer is likely not a valid AMSMessage ({} / {})",
                new_hsize,
                current_offset)
 
@@ -214,7 +214,7 @@ void MessagesBuffer::print()
   std::lock_guard<std::mutex> lock(_mutex);
   for (const auto& e : _msgs)
     AMS_DBG(MessagesBuffer,
-            "Message [%d] (addr=%p,use_count=%d, size=%d)",
+            "Message [{}] (addr={},use_count={}, size={})",
             e.second.id,
             e.second.dPtr.get(),
             e.second.dPtr.use_count(),
@@ -240,7 +240,7 @@ void AMQPHandler::onDetached(AMQP::TcpConnection* connection)
 
 void AMQPHandler::onError(AMQP::TcpConnection* connection, const char* message)
 {
-  AMS_WARNING(AMQPHandler, "Connection error: \"%s\"", message)
+  AMS_WARNING(AMQPHandler, "Connection error: '{}'", message)
   if (reconnectCallback) reconnectCallback();
 }
 
@@ -266,7 +266,7 @@ bool AMQPHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
       error += std::string(ERR_reason_error_string(err));
     }
     error += "]";
-    AMS_WARNING(AMQPHandler, "%s", error.c_str())
+    AMS_WARNING(AMQPHandler, "{}", error)
     return false;
   } else {
     AMS_DBG(AMQPHandler, "Success logged with ca-chain")

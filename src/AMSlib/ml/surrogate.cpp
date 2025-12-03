@@ -65,15 +65,15 @@ SurrogateModel::SurrogateModel(std::string& model_path)
   try {
     module = torch::jit::load(model_path);
   } catch (const c10::Error& e) {
-    printf("Error opening %s\n", model_path.c_str());
+    AMS_FATAL("Error opening {}", model_path);
   }
 
   auto method_ptr = module.find_method("get_ams_info");
   if (!method_ptr) {
     AMS_FATAL(Surrogate,
-              "The Surrogate %s is not a valid "
+              "The Surrogate {} is not a valid "
               "AMSModel",
-              model_path.c_str());
+              model_path);
   }
 
   torch::IValue meta_ivalue = module.run_method("get_ams_info");
@@ -126,8 +126,8 @@ std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
   // If no parameters or buffers are found, default to unknown
   AMS_FATAL(Surrogate,
             "Cannot determine device type of model "
-            "%s",
-            value.c_str());
+            "{}",
+            value);
   return std::make_tuple(AMS_UNKNOWN,
                          c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES);
 }
@@ -143,7 +143,7 @@ std::tuple<AMSDType, torch::Dtype> SurrogateModel::convertModelDataType(
     return std::make_tuple(AMSDType::AMS_DOUBLE, at ::kDouble);
   }
 
-  AMS_FATAL(Surrogate, "unknown data type of model %s", type.c_str());
+  AMS_FATAL(Surrogate, "unknown data type of model {}", type);
 
   return std::make_tuple(dParamType, torchType);
 }
