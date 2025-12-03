@@ -65,10 +65,10 @@ void Logger::setOutputFile(const std::string& path)
   Output = f;
 }
 
-inline fmt::text_style style_for(bool UseColor, LogLevel lvl)
+inline fmt::text_style style_for(bool UseColor, LogLevel Lvl)
 {
   if (!UseColor) return {};  // default (no color)
-  switch (lvl) {
+  switch (Lvl) {
     case LogLevel::Debug:
       return fg(fmt::color::cyan);
     case LogLevel::Info:
@@ -81,12 +81,12 @@ inline fmt::text_style style_for(bool UseColor, LogLevel lvl)
   return {};  // default (no color)
 }
 
-void Logger::printPrefix(LogLevel lvl)
+void Logger::printPrefix(LogLevel Lvl)
 {
   using fmt::color;
   using fmt::fg;
-  auto Color = style_for(Config.UseColor, lvl);
-  fmt::print(Output, Color, "[AMS:{}:", toString(lvl));
+  auto Color = style_for(Config.UseColor, Lvl);
+  fmt::print(Output, Color, "[AMS:{}:", toString(Lvl));
 
   if (Config.ShowHostname) fmt::print(Output, Color, "{}", Hostname);
 
