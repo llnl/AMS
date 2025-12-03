@@ -106,7 +106,7 @@ struct fmt::formatter<ams::AMSResourceType> : fmt::formatter<std::string_view> {
         name = "MemResource::Pinned";
         break;
       case ams::AMSResourceType::AMS_HOST:
-        name = "MemResource::Pinned";
+        name = "MemResource::Host";
         break;
       default:
         name = "UNKNOWN";
