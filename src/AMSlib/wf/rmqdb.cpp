@@ -216,7 +216,7 @@ void MessagesBuffer::print()
     AMS_DBG(MessagesBuffer,
             "Message [{}] (addr={},use_count={}, size={})",
             e.second.id,
-            e.second.dPtr.get(),
+            static_cast<void*>(e.second.dPtr.get()),
             e.second.dPtr.use_count(),
             e.second.size);
 }

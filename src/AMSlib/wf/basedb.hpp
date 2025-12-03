@@ -549,9 +549,9 @@ public:
     AMS_DBG(AMSMessage,
             "Copy AMSMessage ({}, {}) <- ({}, {})",
             _id,
-            _data,
+            static_cast<void*>(_data),
             other._id,
-            other._data);
+            static_cast<void*>(other._data));
     swap(other);
   };
 
@@ -585,9 +585,9 @@ public:
     AMS_DBG(AMSMessage,
             "Move AMSMessage ({}, {}) <- ({}, {})",
             _id,
-            _data,
+            static_cast<void*>(_data),
             other._id,
-            other._data);
+            static_cast<void*>(other._data));
     if (this != &other) {
       swap(other);
       other._data = nullptr;
@@ -1072,7 +1072,7 @@ public:
     AMS_DBG(ConnectionManagerAMQP,
             "Pushing message #{} ({}) to queue",
             msg.id,
-            static_cast<void*>(msg.dPtr))
+            static_cast<void*>(msg.dPtr.get()))
     _msgQueue.push(msg);
     // Counter tracking how many messages we are supposed to publish
     _nbProcessingMsg++;
