@@ -531,7 +531,7 @@ public:
     AMS_DBG(AMSMessage,
             "Allocated message {}: {} with size: {}",
             _id,
-            _data,
+            static_cast<void*>(_data),
             reinterpret_cast<uintptr_t>(blob) -
                 reinterpret_cast<uintptr_t>(_data));
   }
