@@ -64,7 +64,7 @@ SurrogateModel::SurrogateModel(std::string& model_path)
   try {
     module = torch::jit::load(model_path);
   } catch (const c10::Error& e) {
-    AMS_FATAL("Error opening {}", model_path);
+    AMS_FATAL(Surrogate, "Error opening {}", model_path);
   }
 
   auto method_ptr = module.find_method("get_ams_info");
