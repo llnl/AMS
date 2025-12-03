@@ -1072,7 +1072,7 @@ public:
     AMS_DBG(ConnectionManagerAMQP,
             "Pushing message #{} ({}) to queue",
             msg.id,
-            msg.dPtr)
+            static_cast<void*>(msg.dPtr))
     _msgQueue.push(msg);
     // Counter tracking how many messages we are supposed to publish
     _nbProcessingMsg++;
@@ -1142,7 +1142,7 @@ public:
   void stop()
   {
     AMS_DBG(ConnectionManagerAMQP,
-            "Stopping connection: {} messages not processed ({} messages not "
+            "Stopping connection: {} messages not processed ({}) messages not "
             "acked)",
             pendingMessages(),
             unacknowledged())
@@ -1178,7 +1178,7 @@ private:
                     "message #{} ({} / {}) got acknowledged "
                     "successfully ",
                     msg.id,
-                    msg.dPtr.get(),
+                    static_cast<void*>(msg.dPtr.get()),
                     msg.size)
             // If msg is in the MessagesBuffer, we erase it
             MessagesBuffer::getInstance().erase(msg.id);
@@ -1189,7 +1189,7 @@ private:
                     "message #{} ({} / {}) received negative "
                     "acknowledgment ",
                     msg.id,
-                    msg.dPtr.get(),
+                    static_cast<void*>(msg.dPtr.get()),
                     msg.size)
             if (MessagesBuffer::getInstance().insert(msg)) _nbProcessingMsg++;
           })
@@ -1197,7 +1197,7 @@ private:
             AMS_DBG(ConnectionManagerAMQP,
                     "message #{} ({} / {}) did not get send: \"{}\"",
                     msg.id,
-                    msg.dPtr.get(),
+                    static_cast<void*>(msg.dPtr.get()),
                     msg.size,
                     errMsg)
             // onNack and onError can be both called by AMQP-CPP
@@ -1285,7 +1285,7 @@ private:
           AMS_DBG(ConnectionManagerAMQP,
                   "declared queue: {} (messagecount={}, "
                   "consumercount={})",
-                  name.c_str(),
+                  name,
                   messagecount,
                   consumercount)
         })
