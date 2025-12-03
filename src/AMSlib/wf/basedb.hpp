@@ -1142,7 +1142,7 @@ public:
   void stop()
   {
     AMS_DBG(ConnectionManagerAMQP,
-            "Stopping connection: {} messages not processed ({}) messages not "
+            "Stopping connection: {} messages not processed ({} messages not "
             "acked)",
             pendingMessages(),
             unacknowledged())
