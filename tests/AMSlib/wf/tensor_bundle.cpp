@@ -92,3 +92,32 @@ CATCH_TEST_CASE("TensorBundle clear()", "[tensorbundle]")
   CATCH_REQUIRE(tb.size() == 0);
   CATCH_REQUIRE(tb.empty());
 }
+
+CATCH_TEST_CASE("TensorBundle at() bounds checking", "[tensorbundle]")
+{
+  ams::TensorBundle tb;
+  tb.add("x", at::ones({2}));
+  tb.add("y", at::zeros({3}));
+
+  // Valid access should work
+  CATCH_REQUIRE(tb.at(0).name == "x");
+  CATCH_REQUIRE(tb.at(1).name == "y");
+
+  // Out of bounds access should throw
+  CATCH_REQUIRE_THROWS_AS(tb.at(2), std::out_of_range);
+  CATCH_REQUIRE_THROWS_AS(tb.at(100), std::out_of_range);
+}
+
+CATCH_TEST_CASE("TensorBundle const at() bounds checking", "[tensorbundle]")
+{
+  ams::TensorBundle tb;
+  tb.add("a", at::full({1}, 42));
+
+  const ams::TensorBundle& const_tb = tb;
+
+  // Valid access should work
+  CATCH_REQUIRE(const_tb.at(0).name == "a");
+
+  // Out of bounds access should throw
+  CATCH_REQUIRE_THROWS_AS(const_tb.at(1), std::out_of_range);
+}

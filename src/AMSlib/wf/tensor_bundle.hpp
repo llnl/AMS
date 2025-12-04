@@ -47,10 +47,17 @@ struct TensorBundle {
   /// Number of tensors in the bundle.
   size_t size() const noexcept { return items.size(); }
 
-  /// Random access to items.
+  /// Random access to items (unchecked).
+  /// Callers must ensure 0 <= i < size() to avoid undefined behavior.
   Item& operator[](size_t i) noexcept { return items[i]; }
 
   const Item& operator[](size_t i) const noexcept { return items[i]; }
+
+  /// Bounds-checked random access to items.
+  /// Throws std::out_of_range if i >= size().
+  Item& at(size_t i) { return items.at(i); }
+
+  const Item& at(size_t i) const { return items.at(i); }
 
   /// Iterators.
   auto begin() noexcept { return items.begin(); }
