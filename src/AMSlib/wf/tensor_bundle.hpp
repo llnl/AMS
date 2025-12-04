@@ -47,10 +47,17 @@ struct TensorBundle {
   /// Number of tensors in the bundle.
   size_t size() const noexcept { return items.size(); }
 
-  /// Random access to items.
+  /// Random access to items (unchecked).
+  /// Callers must ensure 0 <= i < size() to avoid undefined behavior.
   Item& operator[](size_t i) noexcept { return items[i]; }
 
   const Item& operator[](size_t i) const noexcept { return items[i]; }
+
+  /// Bounds-checked random access to items.
+  /// Throws std::out_of_range if i >= size().
+  Item& at(size_t i) { return items.at(i); }
+
+  const Item& at(size_t i) const { return items.at(i); }
 
   /// Iterators.
   auto begin() noexcept { return items.begin(); }
@@ -65,7 +72,8 @@ struct TensorBundle {
   void clear() noexcept { items.clear(); }
 
   /// Find an item by name. Returns pointer to Item if found, nullptr otherwise.
-  Item* find(const std::string& name) noexcept {
+  Item* find(const std::string& name) noexcept
+  {
     for (auto& item : items) {
       if (item.name == name) {
         return &item;
@@ -75,7 +83,8 @@ struct TensorBundle {
   }
 
   /// Const overload of find.
-  const Item* find(const std::string& name) const noexcept {
+  const Item* find(const std::string& name) const noexcept
+  {
     for (const auto& item : items) {
       if (item.name == name) {
         return &item;
