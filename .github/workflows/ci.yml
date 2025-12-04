@@ -32,7 +32,6 @@ jobs:
           cd build
           export AMS_MFEM_PATH=$(spack location -i mfem)
           export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
-          export AMS_FAISS_PATH=$(spack location -i faiss)
           export AMS_UMPIRE_PATH=$(spack location -i umpire)
           export AMS_HDF5_PATH=$(spack location -i hdf5)
           cmake \
@@ -131,7 +130,6 @@ jobs:
           echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
           export AMS_MFEM_PATH=$(spack location -i mfem)
           export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
-          export AMS_FAISS_PATH=$(spack location -i faiss)
           export AMS_UMPIRE_PATH=$(spack location -i umpire)
           export AMS_HDF5_PATH=$(spack location -i hdf5)
           export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
@@ -256,7 +254,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
-      - name: Build Torch=On FAISS=On RMQ=On AMS
+      - name: Build Torch=On RMQ=On AMS
         shell: bash -l {0}
         run: |
           module load gcc/11.2.1
@@ -268,7 +266,6 @@ jobs:
           cd build
           export AMS_MFEM_PATH=$(spack location -i mfem)
           export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
-          export AMS_FAISS_PATH=$(spack location -i faiss)
           export AMS_UMPIRE_PATH=$(spack location -i umpire)
           export AMS_HDF5_PATH=$(spack location -i hdf5)
           export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
@@ -302,7 +299,7 @@ jobs:
             -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make
-      - name: Run tests Torch=On FAISS=On RMQ=On AMSlib RabbitMQ egress
+      - name: Run tests Torch=On RMQ=On AMSlib RabbitMQ egress
         run: |
           cd build
           export SPACK_ROOT=/spack/
