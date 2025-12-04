@@ -29,8 +29,8 @@ static inline AbstractModel::Path parsePath(const json& Root)
 
     AMS_CFATAL(AMS,
                (!Path.empty() && !fs::exists(Path)),
-               "Path '%s' to model does not exist\n",
-               Path.string().c_str());
+               "Path '{}' to model does not exist\n",
+               Path.string());
   }
 
   return Path;

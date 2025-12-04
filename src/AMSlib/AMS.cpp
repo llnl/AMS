@@ -56,8 +56,8 @@ public:
       path = jRoot["model_path"].get<std::string>();
       AMS_CFATAL(AMS,
                  (!path.empty() && !fs::exists(path)),
-                 "Path '%s' to model does not exist\n",
-                 path.c_str());
+                 "Path '{}' to model does not exist\n",
+                 path);
     }
     return path;
   }
@@ -89,20 +89,20 @@ public:
     this->threshold = threshold;
     AMS_CDEBUG(AMS,
                surrogate_path != nullptr,
-               "Registered Model '%s' has threshold %g",
-               SPath.c_str(),
+               "Registered Model '{}' has threshold {}",
+               SPath,
                threshold);
   }
 
 
   void dump()
   {
-    if (!SPath.empty()) AMS_DBG(AMS, "Surrogate Model Path: %s", SPath.c_str());
+    if (!SPath.empty()) AMS_DBG(AMS, "Surrogate Model Path: {}", SPath);
     AMS_DBG(AMS,
-            "Threshold %f Model Path: %s StoreData: %s",
+            "Threshold {} Model Path: {} StoreData: {}",
             threshold,
-            SPath.c_str(),
-            storeData ? "true" : "false");
+            SPath,
+            storeData);
   }
 };
 
@@ -129,13 +129,13 @@ private:
     for (auto& KV : ams_candidate_models) {
       AMS_DBG(AMS, "\n")
       AMS_DBG(AMS,
-              "\t\t\t Model: %s With AMSAbstractID: %d",
-              KV.first.c_str(),
+              "\t\t\t Model: {} With AMSAbstractID: {}",
+              KV.first,
               KV.second);
       if (KV.second >= ams_candidate_models.size()) {
         AMS_FATAL(AMS,
                   "Candidate model mapped to AMSAbstractID that does not exist "
-                  "(%d)",
+                  "({})",
                   KV.second);
       }
       auto& abstract_model = registered_models[KV.second].second;
@@ -173,8 +173,8 @@ private:
       if (ams_candidate_models.find(ml_domain_mapping[key]) !=
           ams_candidate_models.end()) {
         AMS_FATAL(AMS,
-                  "Domain Model %s has multiple ml model mappings",
-                  ml_domain_mapping[key].c_str())
+                  "Domain Model {} has multiple ml model mappings",
+                  ml_domain_mapping[key])
       }
 
       registered_models.push_back(
@@ -197,10 +197,10 @@ private:
     auto& DB = ams::db::DBManager::getInstance();
     DB.instantiate_fs_db(dbType, db_path);
     AMS_DBG(AMS,
-            "Configured AMS File system database to point to %s using file "
-            "type %s",
-            db_path.c_str(),
-            dbStrType.c_str());
+            "Configured AMS File system database to point to {} using file "
+            "type {}",
+            db_path,
+            dbStrType);
   }
 
   template <typename T>
@@ -299,7 +299,7 @@ public:
     memManager.init();
 
     if (const char* object_descr = std::getenv("AMS_OBJECTS")) {
-      AMS_DBG(AMS, "Opening env file %s", object_descr);
+      AMS_DBG(AMS, "Opening env file {}", object_descr);
       std::ifstream json_file(object_descr);
       json data = json::parse(json_file);
       /* We first parse domain models. Domain models can be potentially 
@@ -324,11 +324,11 @@ public:
     auto model = ams_candidate_models.find(domain_name);
     if (model != ams_candidate_models.end()) {
       AMS_FATAL(AMS,
-                "Trying to register model on domain: %s but model already "
+                "Trying to register model on domain: {} but model already "
                 "exists "
-                "%s",
+                "{}",
                 domain_name,
-                registered_models[model->second].second.SPath.c_str());
+                registered_models[model->second].second.SPath);
     }
     registered_models.push_back(std::make_pair(
         std::string(domain_name),
@@ -349,7 +349,7 @@ public:
   std::pair<std::string, AMSAbstractModel>& get_model(int index)
   {
     if (index >= registered_models.size()) {
-      AMS_FATAL(AMS, "Model id: %d does not exist", index);
+      AMS_FATAL(AMS, "Model id: {} does not exist", index);
     }
 
     return registered_models[index];
@@ -360,7 +360,6 @@ public:
     for (auto E : executors) {
       delete reinterpret_cast<ams::AMSWorkflow*>(E);
     }
-    ams::util::close();
   }
 };
 
@@ -434,7 +433,7 @@ void AMSExecute(AMSExecutor executor,
 
   ams::AMSWorkflow* workflow = reinterpret_cast<ams::AMSWorkflow*>(currExec);
   AMS_DBG(AMS,
-          "Calling AMS with in:%ld, inout:%ld, out:%ld",
+          "Calling AMS with in:{}, inout:{}, out:{}",
           ins.size(),
           inouts.size(),
           outs.size());
