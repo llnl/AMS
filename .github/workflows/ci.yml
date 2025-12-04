@@ -79,7 +79,7 @@ jobs:
       - name: Build WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
-          . /venv/bin/activate 
+          . /venv/bin/activate
           rm -rf build/
           mkdir build
           cd build
@@ -102,8 +102,7 @@ jobs:
       - name: Install AMS WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         run: |
           cd build
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          . /venv/bin/activate
           make -j$(nproc) install
 
   install-link-cpu-tests:
@@ -125,7 +124,7 @@ jobs:
           source /spack/share/spack/setup-env.sh
           spack env activate -p /ams-spack-env
           rm -rf build/
-          mkdir build
+          mkdir -p build
           cd build
           export AMS_INSTALL_PATH=$(pwd)/install
           echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
@@ -183,22 +182,18 @@ jobs:
       - name: Build SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          . /venv/bin/activate
           rm -rf build/
-          mkdir build
+          mkdir -p build
           cd build
           export AMS_INSTALL_PATH=$(pwd)/install
           echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
-          export AMS_TORCH_PATH=$(spack location -i py-torch)/lib64/python3.9/site-packages/torch/share/cmake/Torch
-          export AMS_HDF5_PATH=$(spack location -i hdf5)
           echo "Current directory is: $(pwd)"
           cmake \
             -DBUILD_SHARED_LIBS=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_PREFIX=$AMS_INSTALL_PATH \
             -DWITH_CALIPER=On \
-            -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
             -DCMAKE_BUILD_TYPE=Release \
             -DWITH_CUDA=On \
             -DTORCH_CUDA_ARCH_LIST="9.0" \
@@ -207,34 +202,31 @@ jobs:
             -DTorch_DIR=$AMS_TORCH_PATH \
             -DWITH_AMS_DEBUG=On \
             -DWITH_WORKFLOW=Off \
-            -DCMAKE_PREFIX_PATH=${SPACK_VIEW} \
             $GITHUB_WORKSPACE
             make -j$(nproc)
             make -j$(nproc) install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
             ls ${AMS_INSTALL_PATH}
-      - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
-        shell: bash -l {0}
-        run: |
-          module load gcc/11.2.1
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
-          mkdir build_idealgas/
-          cd build_idealgas/
-          export AMS_MFEM_PATH=$(spack location -i mfem)
-          cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
-          make -j$(nproc) VERBOSE=1
+      # - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
+      #   shell: bash -l {0}
+      #   run: |
+      #     module load gcc/11.2.1
+      #     source /spack/share/spack/setup-env.sh
+      #     spack env activate -p /ams-spack-env
+      #     mkdir build_idealgas/
+      #     cd build_idealgas/
+      #     export AMS_MFEM_PATH=$(spack location -i mfem)
+      #     cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
+      #     make -j$(nproc) VERBOSE=1
       - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
-          mkdir build_bnm_opt/
+          . /venv/bin/activate
+          mkdir -p build_bnm_opt/
           cd build_bnm_opt/
           cmake \
-            -DCMAKE_PREFIX_PATH=${SPACK_VIEW} \
             -DTORCH_CUDA_ARCH_LIST="9.0" \
-            -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS \
+            -DAMS_DIR=${AMS_INSTALL_PATH}/lib/cmake/AMS \
             $GITHUB_WORKSPACE/examples/bnm_opt/
           make -j$(nproc) VERBOSE=1
 
