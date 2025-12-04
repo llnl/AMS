@@ -243,5 +243,68 @@ private:
   HashT UUID;
 };
 
+
+/// \brief Callable model interface on top of BaseModel.
+///
+/// InferenceModel does NOT add state; it adds a clean forward() API
+/// via operator(), returning an IValue exactly like PyTorch.
+///
+/// It inherits move semantics from BaseModel and intentionally remains
+/// non-copyable.
+class InferenceModel : public BaseModel
+{
+public:
+  using BaseModel::BaseModel;
+
+  /// \brief Load model from descriptor into an InferenceModel.
+  ///
+  /// This wraps BaseModel::load() and then transfers ownership.
+  static AMSExpected<std::unique_ptr<InferenceModel>> load(
+      const AbstractModel& Descriptor);
+
+  InferenceModel(const InferenceModel&) = delete;
+  InferenceModel& operator=(const InferenceModel&) = delete;
+
+  InferenceModel(InferenceModel&&) = default;
+  InferenceModel& operator=(InferenceModel&&) = default;
+
+  /// \brief Generic call: accepts a vector<IValue>.
+  ///
+  /// This is the most TorchScript-native interface.
+  AMSExpected<torch::jit::IValue> operator()(
+      std::vector<torch::jit::IValue> Inputs);
+
+  /// \brief Convenience: single-tensor forward call.
+  AMSExpected<torch::jit::IValue> operator()(const torch::Tensor& X)
+  {
+    return (*this)(std::vector<torch::jit::IValue>{X});
+  }
+
+  /// \brief Variadic convenience interface.
+  ///
+  /// Allows calls like:
+  ///     model(t1, t2, t3)
+  ///
+  /// Each argument must be convertible to an IValue.
+  template <typename... Ts>
+  AMSExpected<torch::jit::IValue> operator()(Ts&&... Args)
+  {
+    std::vector<torch::jit::IValue> V;
+    V.reserve(sizeof...(Args));
+    (V.emplace_back(std::forward<Ts>(Args)), ...);
+    return (*this)(std::move(V));
+  }
+
+  /// \brief Returns whether the model is in training mode (should always be false for InferenceModel).
+  bool isTraining() const { return getJITModel().is_training(); }
+
+
+private:
+  /// \brief Construct from an existing BaseModel via move.
+  ///
+  /// Private because construction should go through load().
+  explicit InferenceModel(BaseModel&& BM);
+};
+
 }  // namespace ml
 }  // namespace ams

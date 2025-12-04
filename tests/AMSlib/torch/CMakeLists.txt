@@ -28,3 +28,6 @@ ADD_TORCH_UNIT_TEST(Surrogate ams_surrogate_tests)
 
 BUILD_UNIT_TEST(ams_test_base_model test_model.cpp)
 ADD_TORCH_UNIT_TEST(BaseModel ams_test_base_model)
+
+BUILD_UNIT_TEST(ams_test_inference_model test_inference_model.cpp)
+ADD_TORCH_UNIT_TEST(InferenceModel ams_test_inference_model)
