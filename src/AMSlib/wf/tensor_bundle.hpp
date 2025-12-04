@@ -52,6 +52,7 @@ struct TensorBundle {
   }
 
   /// Check if a tensor with the given name exists in the bundle.
+  /// Note: This performs a linear search (O(n) complexity).
   bool contains(const std::string& name) const noexcept
   {
     return std::any_of(items.begin(), items.end(), [&name](const Item& item) {
@@ -60,6 +61,7 @@ struct TensorBundle {
   }
 
   /// Find a tensor by name. Returns nullptr if not found.
+  /// Note: This performs a linear search (O(n) complexity).
   Item* find(const std::string& name) noexcept
   {
     auto it =
@@ -70,6 +72,7 @@ struct TensorBundle {
   }
 
   /// Find a tensor by name (const version). Returns nullptr if not found.
+  /// Note: This performs a linear search (O(n) complexity).
   const Item* find(const std::string& name) const noexcept
   {
     auto it =
