@@ -93,6 +93,7 @@ jobs:
             -DWITH_MPI=${{ matrix.with_mpi }} \
             -DWITH_TESTS=On \
             -DTorch_DIR=$AMS_TORCH_PATH \
+            -DAMS_HDF5_DIR=/usr/local/cmake/ \
             -DWITH_AMS_DEBUG=On \
             -DWITH_WORKFLOW=Off \
             -DWITH_CUDA=On \
@@ -199,6 +200,7 @@ jobs:
             -DTORCH_CUDA_ARCH_LIST="9.0" \
             -DWITH_MPI=On \
             -DWITH_TESTS=On \
+            -DAMS_HDF5_DIR=/usr/local/cmake/ \
             -DTorch_DIR=$AMS_TORCH_PATH \
             -DWITH_AMS_DEBUG=On \
             -DWITH_WORKFLOW=Off \
