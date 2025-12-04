@@ -2,6 +2,8 @@
 
 #include <ATen/ATen.h>
 
+#include <algorithm>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -39,9 +41,45 @@ struct TensorBundle {
   TensorBundle& operator=(const TensorBundle&) = default;
 
   /// Add a named tensor to the bundle.
+  /// Throws std::invalid_argument if a tensor with the same name already exists.
   void add(std::string name, at::Tensor t)
   {
+    if (contains(name)) {
+      throw std::invalid_argument(
+          "TensorBundle already contains a tensor named '" + name + "'");
+    }
     items.emplace_back(std::move(name), std::move(t));
+  }
+
+  /// Check if a tensor with the given name exists in the bundle.
+  /// Note: This performs a linear search (O(n) complexity).
+  bool contains(const std::string& name) const noexcept
+  {
+    return std::any_of(items.begin(), items.end(), [&name](const Item& item) {
+      return item.name == name;
+    });
+  }
+
+  /// Find a tensor by name. Returns nullptr if not found.
+  /// Note: This performs a linear search (O(n) complexity).
+  Item* find(const std::string& name) noexcept
+  {
+    auto it =
+        std::find_if(items.begin(), items.end(), [&name](const Item& item) {
+          return item.name == name;
+        });
+    return it != items.end() ? &(*it) : nullptr;
+  }
+
+  /// Find a tensor by name (const version). Returns nullptr if not found.
+  /// Note: This performs a linear search (O(n) complexity).
+  const Item* find(const std::string& name) const noexcept
+  {
+    auto it =
+        std::find_if(items.begin(), items.end(), [&name](const Item& item) {
+          return item.name == name;
+        });
+    return it != items.end() ? &(*it) : nullptr;
   }
 
   /// Number of tensors in the bundle.

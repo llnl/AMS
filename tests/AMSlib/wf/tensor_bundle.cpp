@@ -93,31 +93,71 @@ CATCH_TEST_CASE("TensorBundle clear()", "[tensorbundle]")
   CATCH_REQUIRE(tb.empty());
 }
 
-CATCH_TEST_CASE("TensorBundle at() bounds checking", "[tensorbundle]")
+CATCH_TEST_CASE("TensorBundle duplicate names are rejected", "[tensorbundle]")
 {
   ams::TensorBundle tb;
+
   tb.add("x", at::ones({2}));
-  tb.add("y", at::zeros({3}));
+  CATCH_REQUIRE(tb.size() == 1);
 
-  // Valid access should work
-  CATCH_REQUIRE(tb.at(0).name == "x");
-  CATCH_REQUIRE(tb.at(1).name == "y");
+  // Adding a tensor with the same name should throw
+  CATCH_REQUIRE_THROWS_AS(tb.add("x", at::zeros({3})), std::invalid_argument);
 
-  // Out of bounds access should throw
-  CATCH_REQUIRE_THROWS_AS(tb.at(2), std::out_of_range);
-  CATCH_REQUIRE_THROWS_AS(tb.at(100), std::out_of_range);
+  // Bundle should still have only the first tensor
+  CATCH_REQUIRE(tb.size() == 1);
+  CATCH_REQUIRE(tb[0].name == "x");
 }
 
-CATCH_TEST_CASE("TensorBundle const at() bounds checking", "[tensorbundle]")
+CATCH_TEST_CASE("TensorBundle contains() method", "[tensorbundle]")
 {
   ams::TensorBundle tb;
-  tb.add("a", at::full({1}, 42));
+
+  tb.add("alpha", at::ones({1}));
+  tb.add("beta", at::zeros({1}));
+
+  CATCH_REQUIRE(tb.contains("alpha"));
+  CATCH_REQUIRE(tb.contains("beta"));
+  CATCH_REQUIRE_FALSE(tb.contains("gamma"));
+  CATCH_REQUIRE_FALSE(tb.contains(""));
+}
+
+CATCH_TEST_CASE("TensorBundle find() method", "[tensorbundle]")
+{
+  ams::TensorBundle tb;
+
+  at::Tensor t1 = at::full({3}, 42);
+  at::Tensor t2 = at::full({2}, 13);
+
+  tb.add("foo", t1);
+  tb.add("bar", t2);
+
+  // Find existing items
+  auto* item1 = tb.find("foo");
+  CATCH_REQUIRE(item1 != nullptr);
+  CATCH_REQUIRE(item1->name == "foo");
+  CATCH_REQUIRE(item1->tensor.equal(t1));
+
+  auto* item2 = tb.find("bar");
+  CATCH_REQUIRE(item2 != nullptr);
+  CATCH_REQUIRE(item2->name == "bar");
+  CATCH_REQUIRE(item2->tensor.equal(t2));
+
+  // Find non-existing item
+  auto* item3 = tb.find("baz");
+  CATCH_REQUIRE(item3 == nullptr);
+}
+
+CATCH_TEST_CASE("TensorBundle find() const method", "[tensorbundle]")
+{
+  ams::TensorBundle tb;
+  tb.add("test", at::ones({5}));
 
   const ams::TensorBundle& const_tb = tb;
 
-  // Valid access should work
-  CATCH_REQUIRE(const_tb.at(0).name == "a");
+  const auto* item = const_tb.find("test");
+  CATCH_REQUIRE(item != nullptr);
+  CATCH_REQUIRE(item->name == "test");
 
-  // Out of bounds access should throw
-  CATCH_REQUIRE_THROWS_AS(const_tb.at(1), std::out_of_range);
+  const auto* missing = const_tb.find("missing");
+  CATCH_REQUIRE(missing == nullptr);
 }
