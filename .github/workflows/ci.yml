@@ -229,6 +229,7 @@ jobs:
           cmake \
             -DTORCH_CUDA_ARCH_LIST="9.0" \
             -DAMS_DIR=${AMS_INSTALL_PATH}/lib/cmake/AMS \
+            -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ \
             $GITHUB_WORKSPACE/examples/bnm_opt/
           make -j$(nproc) VERBOSE=1
 
