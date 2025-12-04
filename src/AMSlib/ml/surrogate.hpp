@@ -62,13 +62,13 @@ public:
       auto torch_model = model->second;
 
       AMS_DBG(Surrogate,
-              "Returning existing model represented under (%s)",
-              model_path.empty() ? "" : model_path.c_str());
+              "Returning existing model represented under: '{}'",
+              model_path);
       return torch_model;
     }
 
     // Model does not exist. We need to create one
-    AMS_DBG(Surrogate, "Generating new model under (%s)", model_path.c_str());
+    AMS_DBG(Surrogate, "Generating new model under '{}'", model_path);
     std::shared_ptr<SurrogateModel> torch_model =
         std::shared_ptr<SurrogateModel>(new SurrogateModel(model_path));
     instances.insert(std::make_pair(std::string(model_path), torch_model));
@@ -77,7 +77,7 @@ public:
 
   ~SurrogateModel()
   {
-    AMS_DBG(Surrogate, "Destroying surrogate model at %s", _model_path.c_str());
+    AMS_DBG(Surrogate, "Destroying surrogate model at '{}'", _model_path);
   }
 
   std::tuple<torch::Tensor, torch::Tensor> _evaluate(torch::Tensor& inputs,

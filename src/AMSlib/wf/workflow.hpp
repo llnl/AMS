@@ -86,7 +86,7 @@ class AMSWorkflow
     }
 
     AMS_DBG(Workflow,
-            "Storing data (#elements = %ld) to database",
+            "Storing data (#elements = {}) to database",
             StoreInputTensors[0].sizes()[0]);
     DB->store(StoreInputTensors, StoreOutputTensors);
     CALIPER(CALI_MARK_END("DBSTORE");)
@@ -207,7 +207,7 @@ public:
 
   ~AMSWorkflow()
   {
-    AMS_DBG(Workflow, "Destroying Workflow Handler, DB: %d", DB.use_count());
+    AMS_DBG(Workflow, "Destroying Workflow Handler, DB: {}", DB.use_count());
     if (DB.use_count() == 2) {
       auto& dbm = ams::db::DBManager::getInstance();
       dbm.dropDB(domainName, rId);
@@ -267,7 +267,7 @@ public:
   {
     CALIPER(CALI_MARK_BEGIN("AMSEvaluate");)
     AMS_DBG(Workflow,
-            "Entering Workflow with TorchIn:%ld, TochInOut:%ld, TorchOut:%ld",
+            "Entering Workflow with TorchIn:{}, TorchInOut:{}, TorchOut:{}",
             Ins.size(),
             InOuts.size(),
             Outs.size());
@@ -276,25 +276,25 @@ public:
     for (auto& TI : Ins)
       msg += shapeToString(TI) + " ";
     msg += "]";
-    AMS_DBG(Workflow, "%s", msg.c_str());
+    AMS_DBG(Workflow, "{}", msg);
 
     msg = "ApplicationInOut: [ ";
     for (auto& TIO : InOuts)
       msg += shapeToString(TIO) + " ";
     msg += "]";
-    AMS_DBG(Workflow, "%s", msg.c_str());
+    AMS_DBG(Workflow, "{}", msg);
 
     msg = "ApplicationOutput: [ ";
     for (auto& TO : Outs)
       msg += shapeToString(TO) + " ";
     msg += "]";
-    AMS_DBG(Workflow, "%s", msg.c_str());
+    AMS_DBG(Workflow, "{}", msg);
 
 
     SmallVector<torch::Tensor> InputTensors(Ins.begin(), Ins.end());
     SmallVector<torch::Tensor> OutputTensors(Outs.begin(), Outs.end());
     AMS_DBG(Workflow,
-            "Entering Workflow with TorchIn:%ld, TorchOut:%ld",
+            "Entering Workflow with TorchIn:{}, TorchOut:{}",
             InputTensors.size(),
             OutputTensors.size());
     for (auto Tensor : InOuts) {
@@ -327,10 +327,7 @@ public:
     CALIPER(CALI_MARK_BEGIN("UPDATEMODEL");)
     if (updateModel()) {
       auto model = DB->getLatestModel();
-      AMS_CINFO(Workflow,
-                rId == 0,
-                "Updating surrogate model with %s",
-                model.c_str())
+      AMS_CINFO(Workflow, rId == 0, "Updating surrogate model with {}", model)
     }
     CALIPER(CALI_MARK_END("UPDATEMODEL");)
 
@@ -410,8 +407,8 @@ public:
 
     AMS_CINFO(Workflow,
               rId == 0,
-              "Computed %ld elems"
-              "using physics out of the %ld items (%.2f)",
+              "Computed {} elems"
+              "using physics out of the {} items ({})",
               sizePhysics,
               sizeInput,
               ratioComputedPhysics);

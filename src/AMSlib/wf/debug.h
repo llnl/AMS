@@ -9,57 +9,54 @@
 
 #include <atomic>
 #include <mutex>
-#include <wf/logger.hpp>
+
+#include "wf/logger.hpp"
 
 void memUsage(double& vm_usage, double& resident_set);
 
 #define GETNAME2(name) #name
 #define GETNAME(name) GETNAME2(name)
 
-#define AMSPRINT(id, condition, vl, ...)           \
+#define AMSPRINT(id, condition, lvl, ...)          \
   do {                                             \
-    if (condition && ams::util::shouldPrint(vl)) { \
-      fprintf(ams::util::out(vl),                  \
-              "[AMS:%s:%s] ",                      \
-              ams::util::getVerbosityKey(vl),      \
-              GETNAME(id));                        \
-      fprintf(ams::util::out(vl), __VA_ARGS__);    \
-      fprintf(ams::util::out(vl), "\n");           \
+    if (condition) {                               \
+      auto& logger = ams::Logger::get();           \
+      if (logger.isEnabled(lvl)) {                 \
+        logger.log(lvl, GETNAME(id), __VA_ARGS__); \
+      }                                            \
     }                                              \
   } while (0);
 
-#define AMS_CFATAL(id, condition, ...)              \
-  do {                                              \
-    if (condition) {                                \
-      AMSPRINT(id,                                  \
-               condition,                           \
-               ams::util::LogVerbosityLevel::Error, \
-               __VA_ARGS__)                         \
-      ams::util::flush_files();                     \
-      ams::util::close();                           \
-      abort();                                      \
-    }                                               \
+#define AMS_CFATAL(id, condition, ...)                              \
+  do {                                                              \
+    if (condition) {                                                \
+      auto& logger = ams::Logger::get();                            \
+      if (logger.isEnabled(ams::LogLevel::Error)) {                 \
+        logger.log(ams::LogLevel::Error, GETNAME(id), __VA_ARGS__); \
+      }                                                             \
+      abort();                                                      \
+    }                                                               \
   } while (0);
 
 #define AMS_FATAL(id, ...) AMS_CFATAL(id, true, __VA_ARGS__)
 
 #define THROW(exception, msg) \
-  AMS_FATAL(Throw, "%s %s %s", __FILE__, std::to_string(__LINE__).c_str(), msg)
+  AMS_FATAL(Throw, "{} {} {}", __FILE__, std::to_string(__LINE__).c_str(), msg)
 
 #ifdef LIBAMS_VERBOSE
 
 #define AMS_CWARNING(id, condition, ...) \
-  AMSPRINT(id, condition, ams::util::LogVerbosityLevel::Warning, __VA_ARGS__)
+  AMSPRINT(id, condition, ams::LogLevel::Warning, __VA_ARGS__)
 
 #define AMS_WARNING(id, ...) AMS_CWARNING(id, true, __VA_ARGS__)
 
 #define AMS_CINFO(id, condition, ...) \
-  AMSPRINT(id, condition, ams::util::LogVerbosityLevel::Info, __VA_ARGS__)
+  AMSPRINT(id, condition, ams::LogLevel::Info, __VA_ARGS__)
 
 #define AMS_INFO(id, ...) AMS_CINFO(id, true, __VA_ARGS__)
 
 #define AMS_CDEBUG(id, condition, ...) \
-  AMSPRINT(id, condition, ams::util::LogVerbosityLevel::Debug, __VA_ARGS__)
+  AMSPRINT(id, condition, ams::LogLevel::Debug, __VA_ARGS__)
 
 #define AMS_DBG(id, ...) AMS_CDEBUG(id, true, __VA_ARGS__)
 
@@ -70,7 +67,7 @@ void memUsage(double& vm_usage, double& resident_set);
     size_t watermark, current_size, actual_size;                       \
     auto& rm = ams::ResourceManager::getInstance();                    \
     memUsage(vm, rs);                                                  \
-    AMS_DBG(MEM, "Memory usage at %s is VM:%g RS:%g", phase, vm, rs); \
+    AMS_DBG(MEM, "Memory usage at {} is VM:{} RS:{}", phase, vm, rs); \
                                                                        \
     for (int i = 0; i < AMSResourceType::AMS_RSEND; i++) {             \
       if (rm.isActive((AMSResourceType)i)) {                           \
@@ -79,8 +76,8 @@ void memUsage(double& vm_usage, double& resident_set);
                              current_size,                             \
                              actual_size);                             \
         AMS_DBG(MEM,                                                        \
-              "Allocator: %s HWM:%lu CS:%lu AS:%lu) ",                 \
-              rm.getAllocatorName((AMSResourceType)i).c_str(),         \
+              "Allocator:{} HWM:{} CS:{} AS:{}) ",                 \
+              rm.getAllocatorName((AMSResourceType)i),         \
               watermark,                                               \
               current_size,                                            \
               actual_size);                                            \
@@ -114,7 +111,7 @@ void memUsage(double& vm_usage, double& resident_set);
   {                                       \
     hipError_t err = CALL;                \
     if (err != hipSuccess) {              \
-      AMS_FATAL("ERROR @ %s:%d ->  %s\n", \
+      AMS_FATAL("ERROR @ {}:{} ->  {}\n", \
                 __FILE__,                 \
                 __LINE__,                 \
                 hipGetErrorString(err));  \
@@ -126,17 +123,16 @@ void memUsage(double& vm_usage, double& resident_set);
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#define cudaErrCheck(CALL)                \
-  {                                       \
-    cudaError_t err = CALL;               \
-    if (err != cudaSuccess) {             \
-      printf("ERROR @ %s:%d ->  %s:%s\n", \
-             __FILE__,                    \
-             __LINE__,                    \
-             cudaGetErrorName(err),       \
-             cudaGetErrorString(err));    \
-      abort();                            \
-    }                                     \
+#define cudaErrCheck(CALL)                   \
+  {                                          \
+    cudaError_t err = CALL;                  \
+    if (err != cudaSuccess) {                \
+      AMS_FATAL("ERROR @ {}:{} ->  {}:{}\n", \
+                __FILE__,                    \
+                __LINE__,                    \
+                cudaGetErrorName(err),       \
+                cudaGetErrorString(err));    \
+    }                                        \
   }
 #endif
 

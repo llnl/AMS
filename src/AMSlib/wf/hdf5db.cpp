@@ -252,11 +252,11 @@ void hdf5DB::writeDataToDataset(ams::MutableArrayRef<hsize_t> currentShape,
 void hdf5DB::_store(const at::Tensor& inputs, const at::Tensor& outputs)
 {
   AMS_DBG(DB,
-          "DB of type %s stores input/output tensors of  shapes %s, "
-          "%s",
-          type().c_str(),
-          tensorSizeToString(inputs.sizes()).c_str(),
-          tensorSizeToString(outputs.sizes()).c_str());
+          "DB of type {} stores input/output tensors of  shapes {}, "
+          "{}",
+          type(),
+          tensorSizeToString(inputs.sizes()),
+          tensorSizeToString(outputs.sizes()));
 
   if (HDIset == -1 || HDOset == -1) {
     createDataSets(inputs.sizes(), outputs.sizes());
@@ -265,10 +265,10 @@ void hdf5DB::_store(const at::Tensor& inputs, const at::Tensor& outputs)
   writeDataToDataset(currentInputShape, HDIset, inputs);
   writeDataToDataset(currentOutputShape, HDOset, outputs);
   AMS_DBG(DB,
-          "DB (file:%s) next elements to be stored at Input:%s Output: %s",
-          fn.c_str(),
-          SmallVectorToString(currentOutputShape).c_str(),
-          SmallVectorToString(currentInputShape).c_str());
+          "DB (file:{}) next elements to be stored at Input:{} Output: {}",
+          fn,
+          SmallVectorToString(currentOutputShape),
+          SmallVectorToString(currentInputShape));
 }
 
 
@@ -308,7 +308,7 @@ hdf5DB::hdf5DB(std::string path, std::string domain_name, uint64_t rId)
 
 hdf5DB::~hdf5DB()
 {
-  AMS_DBG(DB, "Closing File: %s %s", type().c_str(), this->fn.c_str())
+  AMS_DBG(DB, "Closing File: {} {}", type(), this->fn)
   // HDF5 Automatically closes all opened fds at exit of application.
   herr_t err = H5Fclose(HFile);
   // NOTE: WE need to investigate this further. I recall that older HDF5 version may not need to close
