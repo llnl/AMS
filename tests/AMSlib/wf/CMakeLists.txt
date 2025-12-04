@@ -47,3 +47,6 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::OPERATIONS operations)
 
 BUILD_UNIT_TEST(evaluate_in_and_outs evaluate_in_and_outs.cpp)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::EVALUATE_IN_OUTS evaluate_in_and_outs)
+
+BUILD_UNIT_TEST(test_tensor_bundle test_tensor_bundle.cpp)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::TENSOR_BUNDLE test_tensor_bundle)
