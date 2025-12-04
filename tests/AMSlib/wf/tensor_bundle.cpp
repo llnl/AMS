@@ -1,8 +1,8 @@
+#include "wf/tensor_bundle.hpp"
+
 #include <ATen/ATen.h>
 
 #include <catch2/catch_test_macros.hpp>
-
-#include "wf/tensor_bundle.hpp"
 
 CATCH_TEST_CASE("TensorBundle basic construction", "[tensorbundle]")
 {

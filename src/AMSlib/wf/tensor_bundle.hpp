@@ -72,7 +72,8 @@ struct TensorBundle {
   void clear() noexcept { items.clear(); }
 
   /// Find an item by name. Returns pointer to Item if found, nullptr otherwise.
-  Item* find(const std::string& name) noexcept {
+  Item* find(const std::string& name) noexcept
+  {
     for (auto& item : items) {
       if (item.name == name) {
         return &item;
@@ -82,7 +83,8 @@ struct TensorBundle {
   }
 
   /// Const overload of find.
-  const Item* find(const std::string& name) const noexcept {
+  const Item* find(const std::string& name) const noexcept
+  {
     for (const auto& item : items) {
       if (item.name == name) {
         return &item;
