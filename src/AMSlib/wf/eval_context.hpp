@@ -10,9 +10,9 @@
 
 namespace ams
 {
-namepsace ml
+namespace ml
 {
-  class InferenceModel;  // forward declaration
+class InferenceModel;  // forward declaration
 }
 class LayoutTransform;  // forward declaration
 

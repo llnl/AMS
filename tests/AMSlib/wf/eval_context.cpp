@@ -46,7 +46,7 @@ CATCH_TEST_CASE("EvalContext parameterized construction", "[evalcontext]")
   outs.add("c", at::full({1}, 42));
 
   // Dummy pointers
-  ams::InferenceModel* modelPtr = nullptr;
+  ams::ml::InferenceModel* modelPtr = nullptr;
   ams::LayoutTransform* layoutPtr = nullptr;
 
   // Construct context with threshold
