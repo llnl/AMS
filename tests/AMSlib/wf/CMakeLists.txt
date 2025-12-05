@@ -50,3 +50,6 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::EVALUATE_IN_OUTS evaluate_in_and_outs)
 
 BUILD_UNIT_TEST(tensor_bundle tensor_bundle.cpp)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::TENSOR_BUNDLE tensor_bundle)
+
+BUILD_UNIT_TEST(eval_context eval_context.cpp)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::EVAL_CONTEXT eval_context)
