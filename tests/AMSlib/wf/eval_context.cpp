@@ -90,7 +90,7 @@ CATCH_TEST_CASE("EvalContext optional uncertainties usage", "[evalcontext]")
   CATCH_REQUIRE_FALSE(ctx.Uncertainties.has_value());
 
   // Assign uncertainties tensor
-  ctx.Uncertainties = at::full({4}, 0.123);
+  ctx.Uncertainties = at::full({4}, 0.123f);
 
   CATCH_REQUIRE(ctx.Uncertainties.has_value());
   CATCH_REQUIRE(ctx.Uncertainties->sizes() == at::IntArrayRef({4}));
