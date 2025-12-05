@@ -172,7 +172,7 @@ CATCH_TEST_CASE("Evaluate AMS explicit Interface 1D in/out")
   auto resource =
       GENERATE(Catch::Generators::values({AMSResourceType::AMS_HOST}));
 
-  constexpr int numElements = 1024;
+  constexpr int numElements = 4 * 1024;
   constexpr int numIterations = 1;
 
   CATCH_DYNAMIC_SECTION("model=" << model_desc << " | dtype=" << phDTypes
@@ -267,7 +267,7 @@ CATCH_TEST_CASE("Evaluate AMS explicit Interface 2D in/inout/in")
   auto num_inouts = GENERATE(Catch::Generators::values({6}));
 
 
-  constexpr int numElements = 1024;
+  constexpr int numElements = 4 * 1024;
   constexpr int numIterations = 1;
 
   CATCH_DYNAMIC_SECTION("model=" << model_desc << " | dtype=" << phDTypes
@@ -362,7 +362,7 @@ CATCH_TEST_CASE("Evaluate AMS explicit Interface Broadcast in/out")
   auto resource =
       GENERATE(Catch::Generators::values({AMSResourceType::AMS_HOST}));
 
-  constexpr int numElements = 1024;
+  constexpr int numElements = 4 * 1024;
   constexpr int numIterations = 1;
 
   if (model_desc.ModelPath.find("linear") != std::string::npos) {
