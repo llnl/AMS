@@ -10,8 +10,10 @@
 
 namespace ams
 {
-
-class InferenceModel;   // forward declaration
+namepsace ml
+{
+  class InferenceModel;  // forward declaration
+}
 class LayoutTransform;  // forward declaration
 
 /// EvalContext is the shared state for all Actions executed during
@@ -32,9 +34,10 @@ struct EvalContext {
   // ------------------------------------------------------------------
   // Model and control configuration
   // ------------------------------------------------------------------
-  const InferenceModel* Model = nullptr;  ///< Surrogate model, may be null
-  LayoutTransform* Layout = nullptr;      ///< Layout transform handler
-  std::optional<float> Threshold;         ///< Uncertainty threshold (if used)
+  const ams::ml::InferenceModel* Model =
+      nullptr;                        ///< Surrogate model, may be null
+  LayoutTransform* Layout = nullptr;  ///< Layout transform handler
+  std::optional<float> Threshold;     ///< Uncertainty threshold (if used)
 
   // ------------------------------------------------------------------
   // Intermediate tensors
@@ -57,7 +60,7 @@ struct EvalContext {
   EvalContext(TensorBundle inputs,
               TensorBundle inouts,
               TensorBundle outputs,
-              const InferenceModel* model,
+              const ams::ml::InferenceModel* model,
               LayoutTransform* layout,
               std::optional<float> threshold)
       : Inputs(std::move(inputs)),
