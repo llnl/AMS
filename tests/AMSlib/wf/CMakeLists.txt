@@ -53,3 +53,5 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::TENSOR_BUNDLE tensor_bundle)
 
 BUILD_UNIT_TEST(layout_transform layout_transform.cpp)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::LAYOUT_TRANSFORM layout_transform)
+BUILD_UNIT_TEST(eval_context eval_context.cpp)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::EVAL_CONTEXT eval_context)
