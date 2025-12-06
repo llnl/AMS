@@ -42,7 +42,8 @@ public:
                       TensorBundle& Inouts,
                       std::optional<at::Tensor>& Uncertainties) = 0;
 
-  /// Optional descriptive name used for debugging, logging, introspection.
+  /// Descriptive name used for debugging, logging, and introspection.
+  /// Must be implemented by all subclasses.
   virtual const char* name() const noexcept = 0;
 };
 
