@@ -1,0 +1,41 @@
+# Simple workflow for deploying static content to GitHub Pages
+name: Documentation
+
+on:
+  pull_request:
+    branches: ["develop"]
+  workflow_dispatch:
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y doxygen graphviz
+    - name: Install Python dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        pip install -r docs/requirements.txt
+    - name: Build documentation
+      run: |
+        cd docs
+        make html
+      # env:
+      #   SPHINXOPTS: "-W --keep-going"
+    - name: Check for broken links
+      run: |
+        cd docs
+        make linkcheck
+      continue-on-error: true
