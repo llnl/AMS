@@ -37,18 +37,6 @@ Key Features
 * **Surrogate Model Support**: PyTorch.
 * **Performance Monitoring**: Built-in Caliper support.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Getting Started
-
-   installation
-
-.. toctree::
-   :maxdepth: 2
-   :caption: API Reference
-
-   api/library_root
-
 Quick Links
 -----------
 

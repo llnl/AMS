@@ -11,9 +11,11 @@ AMS has several dependencies that need to be installed before building:
 Core Dependencies
 ~~~~~~~~~~~~~~~~~
 
-* CMake >= 3.25
-* C++17 compatible compiler (GCC >= 8.5)
-* Python >= 3.10 (for Python bindings)
+* **CMake** >= 3.25
+* **C++17** compatible compiler (GCC >= 8.5)
+* **Python** >= 3.10 (for Python bindings)
+* **PyTorch** >= 2.0 (for ML model support)
+* **HDF5** (for data storage)
 
 Optional Dependencies
 ~~~~~~~~~~~~~~~~~~~~~
@@ -21,26 +23,16 @@ Optional Dependencies
 * **CUDA** >= 11.0 (for NVIDIA GPU support)
 * **HIP** >= 6.4 (for AMD GPU support)
 * **MPI** (for distributed computing)
-* **PyTorch** >= 2.0 (for ML model support)
-* **HDF5** (for data storage)
 * **RabbitMQ/AMQP-CPP** (for message queue support)
 * **Caliper** (for performance profiling)
 
 Installation Methods
 --------------------
 
-Using Spack (Recommended)
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Using Spack
+~~~~~~~~~~~
 
-The preferred method to install AMS is through Spack:
-
-.. code-block:: bash
-
-   # Install via Spack
-   spack install ams
-
-   # For developers
-   spack dev-build ams@develop
+TBD
 
 Manual Build with CMake
 ~~~~~~~~~~~~~~~~~~~~~~~
