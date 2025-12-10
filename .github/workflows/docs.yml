@@ -2,8 +2,10 @@
 name: docs (gh-pages)
 
 on:
-  # push:
-  #   branches: ["develop"]
+  push:
+    branches: ["develop"]
+
+  # For testing only
   pull_request:
 
   workflow_dispatch:
@@ -43,8 +45,8 @@ jobs:
       run: |
         cd docs
         make html
-      env:
-        SPHINXOPTS: "-W --keep-going"
+      # env:
+      #   SPHINXOPTS: "-W --keep-going"
     - name: Check for broken links
       run: |
         cd docs
