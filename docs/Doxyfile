@@ -1,0 +1,46 @@
+# Doxyfile for AMS C++ Documentation
+
+PROJECT_NAME           = "AMS"
+PROJECT_BRIEF          = "Autonomous MultiScale Library"
+PROJECT_NUMBER         = 0.1.0
+
+OUTPUT_DIRECTORY       = build
+CREATE_SUBDIRS         = NO
+
+INPUT                  = ../src
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp *.h *.cpp
+
+EXCLUDE_PATTERNS       = */tests/* */examples/*
+
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+
+CLASS_DIAGRAMS         = YES
+HAVE_DOT               = YES
+DOT_NUM_THREADS        = 4
+UML_LOOK               = YES
+TEMPLATE_RELATIONS     = YES
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES
+
+BUILTIN_STL_SUPPORT    = YES
