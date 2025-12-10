@@ -16,9 +16,9 @@ Overview
 --------
 
 AMS provides the end-to-end infrastructure to automate all steps in the process 
-from training, testing, and deploying machine learning surrogate models in 
+from testing and deploying ML surrogate models in
 scientific applications. With simple code modifications, developers can integrate 
-AMS into their scientific workflows to make multiphysics simulations:
+AMS into their scientific workflows to make multiphysics codes:
 
 * **Faster** - by replacing expensive evaluations with reliable surrogate models 
   backed by verified fallbacks.
@@ -30,7 +30,7 @@ AMS into their scientific workflows to make multiphysics simulations:
 Key Features
 ------------
 
-* **Automated ML Workflow**: Training, testing, and deployment automation.
+* **Automated Workflow**: Automation of ML surrogate models deployment and testing.
 * **HPC Integration**: Designed for supercomputing environments.
 * **Multiple Backend Support**: CPU, or GPU (CUDA and HIP).
 * **Database Integration**: Support for HDF5 and RabbitMQ.

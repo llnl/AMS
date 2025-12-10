@@ -59,6 +59,7 @@ jobs:
       if: success()
       with:
         path: "docs/build/html"
+        retention-days: 3 # Custom retention for this artifact
     - name: Deploy to GitHub Pages
       id: deployment
       uses: actions/deploy-pages@v4
