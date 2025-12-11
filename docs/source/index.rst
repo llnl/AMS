@@ -1,6 +1,13 @@
 Autonomous MultiScale Library
 =============================
 
+.. toctree::
+   :hidden:
+
+   installation
+   api/library_root
+
+
 .. image:: https://img.shields.io/badge/license-Apache%202.0%20with%20LLVM%20exceptions-blue.svg
    :target: https://github.com/LLNL/AMS/blob/develop/LICENSE
    :alt: License
