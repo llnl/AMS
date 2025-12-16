@@ -134,8 +134,6 @@ CATCH_TEST_CASE("PointwiseConcatTransform unpack() with uncertainty",
   CATCH_REQUIRE(at::allclose(*uncrt_out, uncrt));
 }
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_string.hpp>
 using Catch::Matchers::ContainsSubstring;
 
 // -----------------------------------------------------------------------------
