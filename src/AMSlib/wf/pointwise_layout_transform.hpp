@@ -163,7 +163,6 @@ private:
     }
     return {};
   }
-  IndexMap last_pack_map_;
 };
 
 }  // namespace ams
