@@ -5,6 +5,8 @@
 
 #include <optional>
 
+#include "AMSError.hpp"
+#include "wf/index_map.hpp"
 #include "wf/tensor_bundle.hpp"
 
 namespace ams
@@ -24,26 +26,15 @@ class LayoutTransform
 public:
   virtual ~LayoutTransform() = default;
 
-  /// Pack the application-level Inputs and Inouts into a single tensor suitable
-  /// for feeding into the ML model.
-  virtual at::Tensor pack(const TensorBundle& Inputs,
-                          const TensorBundle& Inouts) = 0;
+  virtual AMSExpected<IndexMap> pack(const TensorBundle& Inputs,
+                                     const TensorBundle& InOuts,
+                                     at::Tensor& ModelInput) = 0;
 
-  /// Unpack the model's output (an IValue that may be a tensor or a tuple of
-  /// tensors) into:
-  ///   - Outputs
-  ///   - Inouts
-  ///   - Uncertainties (optional)
-  ///
-  /// Concrete layouts determine how the returned IValue maps back to domain
-  /// tensors. Only LayoutTransform knows the correct indexing and shapes.
-  virtual void unpack(const torch::jit::IValue& ModelOutput,
-                      TensorBundle& Outputs,
-                      TensorBundle& Inouts,
-                      std::optional<at::Tensor>& Uncertainties) = 0;
+  virtual AMSStatus unpack(const torch::jit::IValue& ModelOutput,
+                           TensorBundle& Outs,
+                           TensorBundle& InOuts,
+                           std::optional<at::Tensor>& Uncertainties) = 0;
 
-  /// Descriptive name used for debugging, logging, and introspection.
-  /// Must be implemented by all subclasses.
   virtual const char* name() const noexcept = 0;
 };
 
