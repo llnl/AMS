@@ -7,7 +7,9 @@ using namespace torch::indexing;
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
+using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
 
 // -----------------------------------------------------------------------------
@@ -133,8 +135,6 @@ CATCH_TEST_CASE("PointwiseConcatTransform unpack() with uncertainty",
   CATCH_REQUIRE(uncrt_out.has_value());
   CATCH_REQUIRE(at::allclose(*uncrt_out, uncrt));
 }
-
-using Catch::Matchers::ContainsSubstring;
 
 // -----------------------------------------------------------------------------
 // TEST 4: pack() errors on 0-dim tensors (dim < 1)

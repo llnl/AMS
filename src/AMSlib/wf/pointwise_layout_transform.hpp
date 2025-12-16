@@ -116,7 +116,6 @@ public:
                             "Expected the output size to match the Application "
                             "output dimensions");
 
-    std::vector<at::Tensor> Slices{static_cast<size_t>(ModelOut.size(1))};
     int k = 0;
     for (; k < Outs.size(); ++k) {
       Outs[k].tensor =
