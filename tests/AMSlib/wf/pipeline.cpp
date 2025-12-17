@@ -4,18 +4,7 @@
 #include <memory>
 #include <string>
 
-// Prefer the real EvalContext if available.
-// If your project uses a different header name, adjust accordingly.
-#if __has_include("wf/eval_context.hpp")
 #include "wf/eval_context.hpp"
-#else
-namespace ams
-{
-struct EvalContext {
-  int counter = 0;
-};
-}  // namespace ams
-#endif
 
 namespace ams
 {
