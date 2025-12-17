@@ -14,4 +14,3 @@ Makefile.user
 **.DS_Store
 
 __pycache__
-_codeql_detected_source_root
