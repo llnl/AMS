@@ -54,7 +54,7 @@ CATCH_TEST_CASE("Pipeline runs actions in order and short-circuits on error",
   EvalContext Ctx{};
   Pipeline P;
 
-  // Two increments -> counter becomes 2, then FailAction stops the pipeline.
+  // Two increments -> Threshold becomes 2, then FailAction stops the pipeline.
   P.add(std::make_unique<IncAction>())
       .add(std::make_unique<IncAction>())
       .add(std::make_unique<FailAction>())
