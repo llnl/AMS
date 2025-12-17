@@ -16,6 +16,7 @@ enum class AMSErrorType {
   FileDoesNotExist,  ///< Path to file or directory does not exist
   TorchInternal,     ///< An internal error that happens to the torch library
   InvalidModel,  ///< A torchscripted model that has not been serialized through AMS
+  InvalidShapes,  ///< Some Data shape is not the proper|expected shape
 };
 
 /// \brief Strongly-typed error object used across AMS.
