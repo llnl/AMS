@@ -29,9 +29,9 @@ public:
   }
 
   /// Execute all actions in order; stops on first error.
-  AMSStatus run(EvalContext& Ctx)
+  AMSStatus run(EvalContext& Ctx) const
   {
-    for (auto& Act : Actions) {
+    for (const auto& Act : Actions) {
       if (auto St = Act->run(Ctx); !St) {
         return St;
       }
