@@ -43,8 +43,6 @@ class DummyLayout final : public LayoutTransform
 public:
   const char* name() const noexcept override { return "DummyLayout"; }
 
-  // Only needed if you included the real LayoutTransform interface.
-#if __has_include("wf/layout_transform.hpp")
   AMSExpected<IndexMap> pack(const TensorBundle&,
                              const TensorBundle&,
                              at::Tensor&) override
@@ -58,7 +56,6 @@ public:
   {
     return {};
   }
-#endif
 };
 
 class DirectLikePolicy final : public Policy
