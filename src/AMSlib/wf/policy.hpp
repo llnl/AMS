@@ -21,7 +21,7 @@ class Policy
 public:
   virtual ~Policy() = default;
 
-  /// Construct a pipeline for the given model and layout The, potentially
+  /// Construct a pipeline for the given model and layout. The, potentially
   /// nullable, Model is a non-owning pointer.
   ///
   /// The returned Pipeline is ready to run.
