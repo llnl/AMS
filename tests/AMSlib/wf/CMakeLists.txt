@@ -56,3 +56,9 @@ ADD_WORKFLOW_UNIT_TEST(WORKFLOW::EVAL_CONTEXT eval_context)
 
 BUILD_UNIT_TEST(pointwise pointwise_layout_transform.cpp)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::POINTWISE pointwise)
+
+BUILD_UNIT_TEST(action action.cpp)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::ACTION action)
+
+BUILD_UNIT_TEST(pipeline pipeline.cpp)
+ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PIPELINE pipeline)
