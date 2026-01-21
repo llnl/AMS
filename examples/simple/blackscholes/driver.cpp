@@ -7,7 +7,6 @@
 // Reference Source: Options, Futures, and Other Derivatives, 3rd Edition, Prentice
 // Hall, John C. Hull,
 
-#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 

@@ -82,8 +82,6 @@ fptype BlkSchlsEqEuroNoDiv(fptype sptprice,
 {
   fptype OptionPrice;
 
-  // local private working variables for the calculation
-  fptype xStockPrice;
   fptype xStrikePrice;
   fptype xRiskFreeRate;
   fptype xVolatility;
@@ -106,15 +104,12 @@ fptype BlkSchlsEqEuroNoDiv(fptype sptprice,
   fptype NegNofXd2;
   fptype temp;
 
-  xStockPrice = sptprice;
   xStrikePrice = strike;
   xRiskFreeRate = rate;
   xVolatility = volatility;
 
   xTime = time;
   xSqrtTime = sqrt(xTime);
-
-  temp = sptprice / strike;
 
   logValues = log(sptprice / strike);
 
