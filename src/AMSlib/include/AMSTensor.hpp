@@ -66,8 +66,7 @@ public:
    * @param[in] location The memory location (e.g., CPU, GPU).
    * @return A new AMSTensor with allocated memory.
    */
-  template <typename FPType,
-            typename = std::enable_if_t<std::is_floating_point<FPType>::value>>
+  template <typename ScalarType>
   static AMSTensor create(ams::ArrayRef<IntDimType> shapes,
                           ams::ArrayRef<IntDimType> strides,
                           AMSResourceType location);
@@ -81,9 +80,8 @@ public:
    * @param[in] location The memory location (e.g., CPU, GPU).
    * @return A new AMSTensor that acts as a view of the existing data.
    */
-  template <typename FPType,
-            typename = std::enable_if_t<std::is_floating_point<FPType>::value>>
-  static AMSTensor view(FPType* data,
+  template <typename ScalarType>
+  static AMSTensor view(ScalarType* data,
                         ams::ArrayRef<IntDimType> shapes,
                         ams::ArrayRef<IntDimType> strides,
                         AMSResourceType location);
@@ -147,6 +145,14 @@ extern template AMSTensor AMSTensor::create<float>(
     ams::ArrayRef<AMSTensor::IntDimType> strides,
     AMSResourceType location);
 extern template AMSTensor AMSTensor::create<double>(
+    ams::ArrayRef<AMSTensor::IntDimType> shapes,
+    ams::ArrayRef<AMSTensor::IntDimType> strides,
+    AMSResourceType location);
+extern template AMSTensor AMSTensor::create<int32_t>(
+    ams::ArrayRef<AMSTensor::IntDimType> shapes,
+    ams::ArrayRef<AMSTensor::IntDimType> strides,
+    AMSResourceType location);
+extern template AMSTensor AMSTensor::create<int64_t>(
     ams::ArrayRef<AMSTensor::IntDimType> shapes,
     ams::ArrayRef<AMSTensor::IntDimType> strides,
     AMSResourceType location);
