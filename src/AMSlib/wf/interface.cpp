@@ -102,7 +102,8 @@ static ams::SmallVector<ams::AMSTensor> torchToAMSTensors(
       ams_tensors.push_back(
           AMSTensor::view(tensor.data_ptr<int64_t>(), shapes, strides, rType));
     } else {
-      throw std::runtime_error("torchToAMSTensors: unsupported tensor scalar type");
+      throw std::runtime_error(
+          "torchToAMSTensors: unsupported tensor scalar type");
     }
   }
   return ams_tensors;

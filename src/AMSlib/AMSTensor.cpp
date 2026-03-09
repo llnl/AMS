@@ -33,7 +33,8 @@ bool AMSTensor::isContiguous(AMSTensor::IntDimType expected_stride) const
   return true;
 }
 
-namespace {
+namespace
+{
 template <typename T>
 constexpr AMSDType scalar_to_ams_dtype()
 {
@@ -50,7 +51,7 @@ constexpr AMSDType scalar_to_ams_dtype()
     static_assert(!sizeof(T), "Unsupported AMS scalar type");
   }
 }
-}
+}  // namespace
 
 AMSTensor::AMSTensor(uint8_t* data,
                      ams::ArrayRef<AMSTensor::IntDimType> shapes,
