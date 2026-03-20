@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 
+#include "AMSGraph.hpp"
 #include "AMSTensor.hpp"
 #include "AMSTypes.hpp"
 
