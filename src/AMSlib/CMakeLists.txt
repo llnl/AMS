@@ -4,7 +4,7 @@
 
 # ------------------------------------------------------------------------------
 # handle sources and headers
-set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/surrogate.cpp wf/basedb.cpp AMSTensor.cpp wf/interface.cpp wf/resource_manager.cpp ml/Model.cpp ml/AbstractModel.cpp AMS.cpp)
+set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/surrogate.cpp wf/basedb.cpp AMSTensor.cpp AMSGraph.cpp wf/interface.cpp wf/resource_manager.cpp ml/Model.cpp ml/AbstractModel.cpp AMS.cpp)
 
   list(APPEND AMS_LIB_SRC wf/hdf5db.cpp)
 
@@ -75,6 +75,7 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMSTypes.hpp" "${PROJECT_BI
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/SmallVector.hpp" "${PROJECT_BINARY_DIR}/include/SmallVector.hpp" COPYONLY)
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/ArrayRef.hpp" "${PROJECT_BINARY_DIR}/include/ArrayRef.hpp" COPYONLY)
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMSTensor.hpp" "${PROJECT_BINARY_DIR}/include/AMSTensor.hpp" COPYONLY)
+configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMSGraph.hpp" "${PROJECT_BINARY_DIR}/include/AMSGraph.hpp" COPYONLY)
 
 # setup the exec
 #SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,$ORIGIN")
@@ -102,6 +103,7 @@ install(EXPORT AMSTargets
 # Install the public headers
 install(FILES
     ${PROJECT_BINARY_DIR}/include/AMS.h
+    ${PROJECT_BINARY_DIR}/include/AMSGraph.hpp
     ${PROJECT_BINARY_DIR}/include/AMSTensor.hpp
     ${PROJECT_BINARY_DIR}/include/AMSTypes.hpp
     ${PROJECT_BINARY_DIR}/include/ArrayRef.hpp
