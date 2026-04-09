@@ -22,7 +22,8 @@ CATCH_TEST_CASE("AMSTensor: int32_t tensor creation and basic properties",
 {
   AMSInit();
 
-  const auto device = GENERATE(AMSResourceType::AMS_HOST, AMSResourceType::AMS_DEVICE);
+  const auto device =
+      GENERATE(AMSResourceType::AMS_HOST, AMSResourceType::AMS_DEVICE);
 
   // Skip GPU tests if CUDA is not available
   if (device == AMSResourceType::AMS_DEVICE) {
@@ -80,7 +81,8 @@ CATCH_TEST_CASE("AMSTensor: int64_t tensor creation and basic properties",
 {
   AMSInit();
 
-  const auto device = GENERATE(AMSResourceType::AMS_HOST, AMSResourceType::AMS_DEVICE);
+  const auto device =
+      GENERATE(AMSResourceType::AMS_HOST, AMSResourceType::AMS_DEVICE);
 
   if (device == AMSResourceType::AMS_DEVICE) {
 #if !defined(__AMS_ENABLE_CUDA__) && !defined(__AMS_ENABLE_HIP__)
@@ -115,7 +117,8 @@ CATCH_TEST_CASE("AMSTensor: int64_t tensor creation and basic properties",
   }
 }
 
-CATCH_TEST_CASE("AMSTensor: int32_t tensor view operations", "[ams][tensor][int32][view]")
+CATCH_TEST_CASE("AMSTensor: int32_t tensor view operations",
+                "[ams][tensor][int32][view]")
 {
   AMSInit();
 
@@ -127,7 +130,8 @@ CATCH_TEST_CASE("AMSTensor: int32_t tensor view operations", "[ams][tensor][int3
     std::vector<AMSTensor::IntDimType> shape = {10};
     std::vector<AMSTensor::IntDimType> strides = {1};
 
-    auto tensor_view = AMSTensor::view<int32_t>(data.data(), shape, strides, device);
+    auto tensor_view =
+        AMSTensor::view<int32_t>(data.data(), shape, strides, device);
 
     CATCH_REQUIRE(tensor_view.dType() == AMSDType::AMS_INT32);
     CATCH_REQUIRE(tensor_view.elements() == 10);
@@ -146,7 +150,8 @@ CATCH_TEST_CASE("AMSTensor: int32_t tensor view operations", "[ams][tensor][int3
     std::vector<AMSTensor::IntDimType> shape = {4, 5};
     std::vector<AMSTensor::IntDimType> strides = {5, 1};
 
-    auto tensor_view = AMSTensor::view<int32_t>(data.data(), shape, strides, device);
+    auto tensor_view =
+        AMSTensor::view<int32_t>(data.data(), shape, strides, device);
 
     CATCH_REQUIRE(tensor_view.dType() == AMSDType::AMS_INT32);
     CATCH_REQUIRE(tensor_view.elements() == 20);
@@ -159,7 +164,8 @@ CATCH_TEST_CASE("AMSTensor: int32_t tensor view operations", "[ams][tensor][int3
   }
 }
 
-CATCH_TEST_CASE("AMSTensor: int64_t tensor view operations", "[ams][tensor][int64][view]")
+CATCH_TEST_CASE("AMSTensor: int64_t tensor view operations",
+                "[ams][tensor][int64][view]")
 {
   AMSInit();
 
@@ -171,7 +177,8 @@ CATCH_TEST_CASE("AMSTensor: int64_t tensor view operations", "[ams][tensor][int6
     std::vector<AMSTensor::IntDimType> shape = {5};
     std::vector<AMSTensor::IntDimType> strides = {1};
 
-    auto tensor_view = AMSTensor::view<int64_t>(data.data(), shape, strides, device);
+    auto tensor_view =
+        AMSTensor::view<int64_t>(data.data(), shape, strides, device);
 
     CATCH_REQUIRE(tensor_view.dType() == AMSDType::AMS_INT64);
     CATCH_REQUIRE(tensor_view.elements() == 5);
@@ -182,7 +189,8 @@ CATCH_TEST_CASE("AMSTensor: int64_t tensor view operations", "[ams][tensor][int6
   }
 }
 
-CATCH_TEST_CASE("AMSTensor: int tensor transpose operations", "[ams][tensor][transpose]")
+CATCH_TEST_CASE("AMSTensor: int tensor transpose operations",
+                "[ams][tensor][transpose]")
 {
   AMSInit();
 
@@ -256,7 +264,8 @@ CATCH_TEST_CASE("AMSTensor: int tensor move semantics", "[ams][tensor][move]")
   }
 }
 
-CATCH_TEST_CASE("AMSTensor: dtype_to_size utility for int types", "[ams][utils]")
+CATCH_TEST_CASE("AMSTensor: dtype_to_size utility for int types",
+                "[ams][utils]")
 {
   CATCH_SECTION("Verify int32_t size")
   {
@@ -279,13 +288,14 @@ CATCH_TEST_CASE("AMSTensor: dtype_to_size utility for int types", "[ams][utils]"
     size_t size_float = dtype_to_size(AMSDType::AMS_SINGLE);
     size_t size_double = dtype_to_size(AMSDType::AMS_DOUBLE);
 
-    CATCH_REQUIRE(size_int32 == size_float);  // Both 4 bytes
+    CATCH_REQUIRE(size_int32 == size_float);   // Both 4 bytes
     CATCH_REQUIRE(size_int64 == size_double);  // Both 8 bytes
     CATCH_REQUIRE(size_int64 == 2 * size_int32);
   }
 }
 
-CATCH_TEST_CASE("AMSTensor: SmallVector of int tensors", "[ams][tensor][smallvector]")
+CATCH_TEST_CASE("AMSTensor: SmallVector of int tensors",
+                "[ams][tensor][smallvector]")
 {
   AMSInit();
 
