@@ -228,8 +228,8 @@ CATCH_TEST_CASE("AMS API: 2D int32_t tensor execution", "[ams][api][int32][2d]")
       }
     };
 
-    AMSCAbstrModel model = AMSRegisterAbstractModel(
-        "int32_2d_test", 1.0, "", false);
+    AMSCAbstrModel model =
+        AMSRegisterAbstractModel("int32_2d_test", 1.0, "", false);
     AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
 
     AMSExecute(executor, computation, inputs, inouts, outputs);
@@ -304,8 +304,8 @@ CATCH_TEST_CASE("AMS API: Mixed type tensors", "[ams][api][mixed]")
       }
     };
 
-    AMSCAbstrModel model = AMSRegisterAbstractModel(
-        "mixed_test", 1.0, "", false);
+    AMSCAbstrModel model =
+        AMSRegisterAbstractModel("mixed_test", 1.0, "", false);
     AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
 
     AMSExecute(executor, computation, inputs, inouts, outputs);
