@@ -17,9 +17,7 @@ using namespace ams;
 
 // Global test fixture to initialize AMS once for all tests
 struct AMSGlobalFixture {
-  AMSGlobalFixture() {
-    AMSInit();
-  }
+  AMSGlobalFixture() { AMSInit(); }
 };
 
 // This creates a single global instance that will initialize AMS before any tests run
