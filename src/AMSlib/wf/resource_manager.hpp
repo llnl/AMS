@@ -155,9 +155,9 @@ public:
     std::string pinned_alloc("PINNED");
     if (!RMAllocators[AMSResourceType::AMS_HOST])
       setAllocator(host_alloc, AMSResourceType::AMS_HOST);
-#if defined(__AMS_ENABLE_CUDA__)
+#if defined(__AMS_ENABLE_CUDA__) || defined(__AMS_ENABLE_HIP__)
     if (!RMAllocators[AMSResourceType::AMS_DEVICE])
-      setAllocator(host_alloc, AMSResourceType::AMS_DEVICE);
+      setAllocator(device_alloc, AMSResourceType::AMS_DEVICE);
 
     if (!RMAllocators[AMSResourceType::AMS_PINNED])
       setAllocator(pinned_alloc, AMSResourceType::AMS_PINNED);
