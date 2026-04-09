@@ -67,8 +67,8 @@ AMSTensor::AMSTensor(uint8_t* data,
       _location(location),
       _owned(!view)
 {
-  _bytes = _elements * _element_size;
   _elements = computeNumElements(shapes);
+  _bytes = _elements * _element_size;
   if (!_data) {
     throw std::runtime_error("Generating tensor with Null Pointer AMSTensor.");
   }
