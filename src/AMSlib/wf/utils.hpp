@@ -67,6 +67,10 @@ static inline size_t dtype_to_size(ams::AMSDType dType)
       return sizeof(double);
     case ams::AMSDType::AMS_SINGLE:
       return sizeof(float);
+    case ams::AMSDType::AMS_INT64:
+      return sizeof(int64_t);
+    case ams::AMSDType::AMS_INT32:
+      return sizeof(int32_t);
     default:
       throw std::runtime_error("Requesting the size of unknown object");
   }

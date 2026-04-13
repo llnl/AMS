@@ -2,7 +2,13 @@
 
 namespace ams
 {
-typedef enum { AMS_SINGLE = 0, AMS_DOUBLE, AMS_UNKNOWN_TYPE } AMSDType;
+typedef enum {
+  AMS_SINGLE = 0,
+  AMS_DOUBLE,
+  AMS_INT32,
+  AMS_INT64,
+  AMS_UNKNOWN_TYPE
+} AMSDType;
 
 typedef enum {
   AMS_UNKNOWN = -1,

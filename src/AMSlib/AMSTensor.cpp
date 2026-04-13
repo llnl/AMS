@@ -33,6 +33,26 @@ bool AMSTensor::isContiguous(AMSTensor::IntDimType expected_stride) const
   return true;
 }
 
+namespace
+{
+template <typename T>
+constexpr AMSDType scalar_to_ams_dtype()
+{
+  using U = std::remove_cv_t<T>;
+  if constexpr (std::is_same_v<U, float>) {
+    return AMS_SINGLE;
+  } else if constexpr (std::is_same_v<U, double>) {
+    return AMS_DOUBLE;
+  } else if constexpr (std::is_same_v<U, int32_t>) {
+    return AMS_INT32;
+  } else if constexpr (std::is_same_v<U, int64_t>) {
+    return AMS_INT64;
+  } else {
+    static_assert(!sizeof(T), "Unsupported AMS scalar type");
+  }
+}
+}  // namespace
+
 AMSTensor::AMSTensor(uint8_t* data,
                      ams::ArrayRef<AMSTensor::IntDimType> shapes,
                      ams::ArrayRef<AMSTensor::IntDimType> strides,
@@ -47,67 +67,43 @@ AMSTensor::AMSTensor(uint8_t* data,
       _location(location),
       _owned(!view)
 {
-  _bytes = _elements * _element_size;
   _elements = computeNumElements(shapes);
+  _bytes = _elements * _element_size;
   if (!_data) {
     throw std::runtime_error("Generating tensor with Null Pointer AMSTensor.");
   }
 }
 
-template <typename FPType, typename>
+template <typename ScalarType>
 AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
                             ams::ArrayRef<AMSTensor::IntDimType> strides,
                             AMSResourceType location)
 {
   auto numElements = computeNumElements(shapes);
   auto& rm = ams::ResourceManager::getInstance();
-  if constexpr ((std::is_same_v<FPType, float>) ||
-                (std::is_same_v<FPType, const float>)) {
-    float* _data = rm.allocate<float>(numElements, location, sizeof(float));
-    return AMSTensor(reinterpret_cast<uint8_t*>(_data),
-                     shapes,
-                     strides,
-                     AMS_SINGLE,
-                     location);
-  } else if constexpr ((std::is_same_v<FPType, double>) ||
-                       (std::is_same_v<FPType, const double>)) {
-    double* _data = rm.allocate<double>(numElements, location, sizeof(double));
-    return AMSTensor(reinterpret_cast<uint8_t*>(_data),
-                     shapes,
-                     strides,
-                     AMS_DOUBLE,
-                     location);
-  } else {
-    // This should never happen due to the type restriction
-    static_assert(std::is_same_v<FPType, float> ||
-                      std::is_same_v<FPType, double>,
-                  "AMSTensor only supports float or double tensor creation");
-  }
+  using U = std::remove_cv_t<ScalarType>;
+  U* data = rm.allocate<U>(numElements, location, sizeof(U));
+  return AMSTensor(reinterpret_cast<uint8_t*>(data),
+                   shapes,
+                   strides,
+                   scalar_to_ams_dtype<U>(),
+                   location);
 }
 
 
-template <typename FPType, typename>
-AMSTensor AMSTensor::view(FPType* data,
+template <typename ScalarType>
+AMSTensor AMSTensor::view(ScalarType* data,
                           ams::ArrayRef<AMSTensor::IntDimType> shapes,
                           ams::ArrayRef<AMSTensor::IntDimType> strides,
                           AMSResourceType location)
 {
-  if constexpr ((std::is_same_v<FPType, float>) ||
-                (std::is_same_v<FPType, const float>)) {
-    return AMSTensor(
-        (uint8_t*)data, shapes, strides, AMS_SINGLE, location, true);
-  } else if constexpr ((std::is_same_v<FPType, double>) ||
-                       (std::is_same_v<FPType, const double>)) {
-    return AMSTensor(
-        (uint8_t*)data, shapes, strides, AMS_DOUBLE, location, true);
-  } else {
-    static_assert(std::is_same_v<FPType, float> ||
-                      std::is_same_v<FPType, const float> ||
-                      std::is_same_v<FPType, const double> ||
-                      std::is_same_v<FPType, double>,
-                  "AMSTensor only supports float or double tensor view");
-  }
-  throw std::runtime_error("Should never get here\n");
+  using U = std::remove_cv_t<ScalarType>;
+  return AMSTensor(reinterpret_cast<uint8_t*>(const_cast<U*>(data)),
+                   shapes,
+                   strides,
+                   scalar_to_ams_dtype<U>(),
+                   location,
+                   true);
 }
 
 AMSTensor AMSTensor::view(AMSTensor& tensor)
@@ -119,6 +115,16 @@ AMSTensor AMSTensor::view(AMSTensor& tensor)
                            tensor._location);
   else if (tensor._dType == AMS_SINGLE)
     return AMSTensor::view((float*)tensor._data,
+                           tensor._shape,
+                           tensor._strides,
+                           tensor._location);
+  else if (tensor._dType == AMS_INT32)
+    return AMSTensor::view((int32_t*)tensor._data,
+                           tensor._shape,
+                           tensor._strides,
+                           tensor._location);
+  else if (tensor._dType == AMS_INT64)
+    return AMSTensor::view((int64_t*)tensor._data,
                            tensor._shape,
                            tensor._strides,
                            tensor._location);
@@ -193,6 +199,10 @@ AMSTensor AMSTensor::transpose(AMSTensor::IntDimType axis1,
     return view((double*)_data, newShape, newStrides, _location);
   else if (dType() == AMSDType::AMS_SINGLE)
     return view((float*)_data, newShape, newStrides, _location);
+  else if (dType() == AMSDType::AMS_INT32)
+    return view((int32_t*)_data, newShape, newStrides, _location);
+  else if (dType() == AMSDType::AMS_INT64)
+    return view((int64_t*)_data, newShape, newStrides, _location);
   // NOTE: Use defensive programming here and just crash. We can fix a better interface later
   // for error handling.
   throw std::runtime_error("Unknow data type in transpose\n");
@@ -204,6 +214,12 @@ template AMSTensor AMSTensor::create<float>(ams::ArrayRef<IntDimType>,
 template AMSTensor AMSTensor::create<double>(ams::ArrayRef<IntDimType>,
                                              ams::ArrayRef<IntDimType>,
                                              AMSResourceType);
+template AMSTensor AMSTensor::create<int32_t>(ams::ArrayRef<IntDimType>,
+                                              ams::ArrayRef<IntDimType>,
+                                              AMSResourceType);
+template AMSTensor AMSTensor::create<int64_t>(ams::ArrayRef<IntDimType>,
+                                              ams::ArrayRef<IntDimType>,
+                                              AMSResourceType);
 
 template AMSTensor AMSTensor::view<float>(float*,
                                           ams::ArrayRef<IntDimType>,
@@ -213,6 +229,14 @@ template AMSTensor AMSTensor::view<double>(double*,
                                            ams::ArrayRef<IntDimType>,
                                            ams::ArrayRef<IntDimType>,
                                            AMSResourceType);
+template AMSTensor AMSTensor::view<int32_t>(int32_t*,
+                                            ams::ArrayRef<IntDimType>,
+                                            ams::ArrayRef<IntDimType>,
+                                            AMSResourceType);
+template AMSTensor AMSTensor::view<int64_t>(int64_t*,
+                                            ams::ArrayRef<IntDimType>,
+                                            ams::ArrayRef<IntDimType>,
+                                            AMSResourceType);
 
 template AMSTensor AMSTensor::view<const float>(const float*,
                                                 ams::ArrayRef<IntDimType>,
@@ -222,3 +246,11 @@ template AMSTensor AMSTensor::view<const double>(const double*,
                                                  ams::ArrayRef<IntDimType>,
                                                  ams::ArrayRef<IntDimType>,
                                                  AMSResourceType);
+template AMSTensor AMSTensor::view<const int32_t>(const int32_t*,
+                                                  ams::ArrayRef<IntDimType>,
+                                                  ams::ArrayRef<IntDimType>,
+                                                  AMSResourceType);
+template AMSTensor AMSTensor::view<const int64_t>(const int64_t*,
+                                                  ams::ArrayRef<IntDimType>,
+                                                  ams::ArrayRef<IntDimType>,
+                                                  AMSResourceType);

@@ -30,19 +30,19 @@
 ###
 
 # Dane
-dane-up-check:
-  variables:
-    CI_MACHINE: "dane"
-  extends: [.machine-check]
+# dane-up-check:
+#   variables:
+#     CI_MACHINE: "dane"
+#   extends: [.machine-check]
 
-dane-build-and-test:
-  variables:
-    CI_MACHINE: "dane"
-    JOB_CMD:
-      value: "scripts/gitlab/ci-build-test.sh"
-      expand: false
-  needs: [dane-up-check]
-  extends: [.build-and-test]
+# dane-build-and-test:
+#   variables:
+#     CI_MACHINE: "dane"
+#     JOB_CMD:
+#       value: "scripts/gitlab/ci-build-test.sh"
+#       expand: false
+#   needs: [dane-up-check]
+#   extends: [.build-and-test]
 
 # TIOGA
 tioga-up-check:

@@ -33,8 +33,8 @@ static AMSDType torchDTypeToAMSType(torch::Dtype dtype)
       {torch::kFloat, AMSDType::AMS_SINGLE},  // Alias for float32
       {torch::kFloat64, AMSDType::AMS_DOUBLE},
       {torch::kDouble, AMSDType::AMS_DOUBLE},  // Alias for float64
-      {torch::kInt32, AMSDType::AMS_UNKNOWN_TYPE},
-      {torch::kInt64, AMSDType::AMS_UNKNOWN_TYPE},
+      {torch::kInt32, AMSDType::AMS_INT32},
+      {torch::kInt64, AMSDType::AMS_INT64},
       {torch::kBool, AMSDType::AMS_UNKNOWN_TYPE},
       {torch::kUInt8, AMSDType::AMS_UNKNOWN_TYPE},
       {torch::kInt8, AMSDType::AMS_UNKNOWN_TYPE},
@@ -66,6 +66,10 @@ static c10::ScalarType amsToTorchDType(const ams::AMSDType dType)
     return torch::kFloat32;
   else if (dType == ams::AMSDType::AMS_DOUBLE)
     return torch::kFloat64;
+  else if (dType == ams::AMSDType::AMS_INT32)
+    return torch::kInt32;
+  else if (dType == ams::AMSDType::AMS_INT64)
+    return torch::kInt64;
 
   throw std::runtime_error("Unknown ams data type");
   return torch::kHalf;
@@ -91,6 +95,15 @@ static ams::SmallVector<ams::AMSTensor> torchToAMSTensors(
     } else if (dType == AMSDType::AMS_DOUBLE) {
       ams_tensors.push_back(
           AMSTensor::view(tensor.data_ptr<double>(), shapes, strides, rType));
+    } else if (dType == AMSDType::AMS_INT32) {
+      ams_tensors.push_back(
+          AMSTensor::view(tensor.data_ptr<int32_t>(), shapes, strides, rType));
+    } else if (dType == AMSDType::AMS_INT64) {
+      ams_tensors.push_back(
+          AMSTensor::view(tensor.data_ptr<int64_t>(), shapes, strides, rType));
+    } else {
+      throw std::runtime_error(
+          "torchToAMSTensors: unsupported tensor scalar type");
     }
   }
   return ams_tensors;

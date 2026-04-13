@@ -45,7 +45,7 @@ void AMSEOS<FPType>::Eval(const int length,
   inputs.push_back(
       std::move(AMSTensor::view(density, {length, 1}, {1, 1}, res_)));
   inputs.push_back(
-      std::move(AMSTensor::view(density, {length, 1}, {1, 1}, res_)));
+      std::move(AMSTensor::view(energy, {length, 1}, {1, 1}, res_)));
 
   SmallVector<AMSTensor> inout;
   SmallVector<AMSTensor> outputs;
