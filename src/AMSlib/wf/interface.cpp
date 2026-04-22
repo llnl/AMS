@@ -358,3 +358,98 @@ void callAMS(ams::AMSWorkflow* executor,
 
   executor->evaluate(Physics, tins, tinouts, touts);
 }
+
+// ============================================================================
+// Graph-based callApplication overloads
+// ============================================================================
+
+void callApplication(ams::HomogeneousGraphDomainFn CallBack,
+                     const ams::AMSHomogeneousGraph& graph,
+                     ams::SmallVector<ams::AMSTensor>& outs)
+{
+  // Directly invoke the user's physics callback with graph-native types
+  CallBack(graph, outs);
+}
+
+void callApplication(ams::HeterogeneousGraphDomainFn CallBack,
+                     const ams::AMSHeterogeneousGraph& graph,
+                     ams::SmallVector<ams::AMSTensor>& outs)
+{
+  // Directly invoke the user's physics callback with graph-native types
+  CallBack(graph, outs);
+}
+
+// ============================================================================
+// Graph surrogate execution stub (seam for future implementation)
+// ============================================================================
+
+static bool tryGraphSurrogate(ams::AMSWorkflow* executor,
+                              const ams::AMSHomogeneousGraph& graph,
+                              ams::SmallVector<ams::AMSTensor>& outs)
+{
+  // TODO: Implement graph surrogate execution when models support graphs
+  // This is the integration point for future graph-based ML inference
+  //
+  // Future implementation should:
+  // 1. Check if executor has a model that accepts graph inputs
+  // 2. Convert AMSHomogeneousGraph to model input format
+  // 3. Run model inference and uncertainty quantification
+  // 4. If UQ passes threshold, populate outs and return true
+  // 5. Otherwise return false to trigger fallback
+  //
+  // For now, always return false (no surrogate available)
+  (void)executor;
+  (void)graph;
+  (void)outs;
+  return false;
+}
+
+static bool tryGraphSurrogate(ams::AMSWorkflow* executor,
+                              const ams::AMSHeterogeneousGraph& graph,
+                              ams::SmallVector<ams::AMSTensor>& outs)
+{
+  // TODO: Implement graph surrogate execution when models support graphs
+  // See homogeneous version for implementation notes
+  (void)executor;
+  (void)graph;
+  (void)outs;
+  return false;
+}
+
+// ============================================================================
+// Graph-based callAMS overloads
+// ============================================================================
+
+void callAMS(ams::AMSWorkflow* executor,
+             ams::HomogeneousGraphDomainFn Physics,
+             const ams::AMSHomogeneousGraph& graph_input,
+             ams::SmallVector<ams::AMSTensor>& outs)
+{
+  // Try graph surrogate execution first
+  bool surrogate_used = tryGraphSurrogate(executor, graph_input, outs);
+
+  // If surrogate succeeded, we're done
+  if (surrogate_used) {
+    return;
+  }
+
+  // Otherwise, fallback to original physics computation
+  callApplication(Physics, graph_input, outs);
+}
+
+void callAMS(ams::AMSWorkflow* executor,
+             ams::HeterogeneousGraphDomainFn Physics,
+             const ams::AMSHeterogeneousGraph& graph_input,
+             ams::SmallVector<ams::AMSTensor>& outs)
+{
+  // Try graph surrogate execution first
+  bool surrogate_used = tryGraphSurrogate(executor, graph_input, outs);
+
+  // If surrogate succeeded, we're done
+  if (surrogate_used) {
+    return;
+  }
+
+  // Otherwise, fallback to original physics computation
+  callApplication(Physics, graph_input, outs);
+}

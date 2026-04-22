@@ -27,6 +27,14 @@ using DomainCFn = void (*)(void*,
                            ams::SmallVector<ams::AMSTensor>&,
                            ams::SmallVector<ams::AMSTensor>&);
 
+using HomogeneousGraphDomainFn =
+    std::function<void(const ams::AMSHomogeneousGraph& /*graph input*/,
+                       ams::SmallVector<ams::AMSTensor>& /*tensor outputs*/)>;
+
+using HeterogeneousGraphDomainFn =
+    std::function<void(const ams::AMSHeterogeneousGraph& /*graph input*/,
+                       ams::SmallVector<ams::AMSTensor>& /*tensor outputs*/)>;
+
 using AMSExecutor = int64_t;
 using AMSCAbstrModel = int;
 
@@ -80,6 +88,16 @@ void AMSCExecute(AMSExecutor executor,
                  const ams::SmallVector<ams::AMSTensor>& ins,
                  ams::SmallVector<ams::AMSTensor>& inouts,
                  ams::SmallVector<ams::AMSTensor>& outs);
+
+void AMSExecute(AMSExecutor executor,
+                HomogeneousGraphDomainFn& OrigComputation,
+                const ams::AMSHomogeneousGraph& graph_input,
+                ams::SmallVector<ams::AMSTensor>& outs);
+
+void AMSExecute(AMSExecutor executor,
+                HeterogeneousGraphDomainFn& OrigComputation,
+                const ams::AMSHeterogeneousGraph& graph_input,
+                ams::SmallVector<ams::AMSTensor>& outs);
 
 void AMSDestroyExecutor(AMSExecutor executor);
 
