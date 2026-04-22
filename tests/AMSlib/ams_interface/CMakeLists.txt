@@ -27,3 +27,6 @@ ADD_AMS_UNIT_TEST(AMS_EXPLICIT ams_explicit_end_to_end)
 BUILD_UNIT_TEST(int_interface int_interface.cpp)
 ADD_AMS_UNIT_TEST(AMS_INT_INTERFACE int_interface)
 
+BUILD_UNIT_TEST(ams_graph_fallback test_graph_fallback.cpp)
+ADD_AMS_UNIT_TEST(AMS_GRAPH_FALLBACK ams_graph_fallback)
+
