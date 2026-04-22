@@ -92,6 +92,26 @@ class AMSWorkflow
     CALIPER(CALI_MARK_END("DBSTORE");)
   }
 
+  void storeGraphData(const ams::AMSHomogeneousGraph& graph,
+                      ArrayRef<ams::AMSTensor> Outs)
+  {
+    // TODO: Implement graph storage when database supports it
+    // For now, this is a no-op placeholder
+    (void)graph;
+    (void)Outs;
+    AMS_DBG(Workflow, "Graph storage not yet implemented (homogeneous)");
+  }
+
+  void storeGraphData(const ams::AMSHeterogeneousGraph& graph,
+                      ArrayRef<ams::AMSTensor> Outs)
+  {
+    // TODO: Implement graph storage when database supports it
+    // For now, this is a no-op placeholder
+    (void)graph;
+    (void)Outs;
+    AMS_DBG(Workflow, "Graph storage not yet implemented (heterogeneous)");
+  }
+
   /** \brief Check if we can perform a surrogate model update.
      *  AMS can update surrogate model only when all MPI ranks have received 
      * the latest model from RabbitMQ.
