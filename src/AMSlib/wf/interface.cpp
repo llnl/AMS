@@ -382,7 +382,8 @@ void callApplication(ams::HeterogeneousGraphDomainFn CallBack,
 // Graph surrogate execution (in ams namespace for friend access)
 // ============================================================================
 
-namespace ams {
+namespace ams
+{
 
 bool tryGraphSurrogate(AMSWorkflow* executor,
                        const AMSHomogeneousGraph& graph,
