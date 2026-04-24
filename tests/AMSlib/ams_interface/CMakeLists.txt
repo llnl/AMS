@@ -30,3 +30,6 @@ ADD_AMS_UNIT_TEST(AMS_INT_INTERFACE int_interface)
 BUILD_UNIT_TEST(ams_graph_fallback test_graph_fallback.cpp)
 ADD_AMS_UNIT_TEST(AMS_GRAPH_FALLBACK ams_graph_fallback)
 
+BUILD_UNIT_TEST(ams_graph_surrogate test_graph_surrogate.cpp)
+ADD_AMS_UNIT_TEST(AMS_GRAPH_SURROGATE ams_graph_surrogate)
+

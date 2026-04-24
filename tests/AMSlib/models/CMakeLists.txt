@@ -3,6 +3,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/generate.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate_linear_model.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate_base_models.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/generate_graph_models.py"
 )
 
 # Where to drop the .pt files
@@ -28,6 +29,8 @@ set(GENERATED_CPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_cpu_duq_max.pt
   ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_cpu_duq_mean.pt
   ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_cpu_random.pt
+  ${CMAKE_CURRENT_BINARY_DIR}/homogeneous_graph.pt
+  ${CMAKE_CURRENT_BINARY_DIR}/heterogeneous_graph.pt
 )
 
 if (WITH_CUDA OR WITH_HIP)
@@ -61,6 +64,8 @@ set(GENERATOR_SCRIPTS
   "${CMAKE_CURRENT_SOURCE_DIR}/generate.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate_linear_model.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate_base_models.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/generate_graph_models.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/ams_model.py"
 )
 
 # 1. Stamp missing -> regenerate

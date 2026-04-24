@@ -35,6 +35,13 @@ namespace ams
 {
 class AMSWorkflow
 {
+  // Friend declarations for graph surrogate execution access to private MLModel
+  friend bool tryGraphSurrogate(AMSWorkflow*,
+                                const AMSHomogeneousGraph&,
+                                SmallVector<AMSTensor>&);
+  friend bool tryGraphSurrogate(AMSWorkflow*,
+                                const AMSHeterogeneousGraph&,
+                                SmallVector<AMSTensor>&);
 
   /** @brief A string identifier describing the domain-model being solved. */
   std::string domainName;
