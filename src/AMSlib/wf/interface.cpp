@@ -292,28 +292,30 @@ static ams::AMSHeterogeneousGraph torchToAMSHeterogeneousGraph(
   return out;
 }
 
-static c10::impl::GenericDict amsNodeStoresToTorchDict(
+static c10::Dict<std::string, c10::Dict<std::string, torch::Tensor>>
+amsNodeStoresToTorchDict(
     const std::unordered_map<std::string, ams::AMSTensorMap>& node_stores)
 {
-  c10::impl::GenericDict out(c10::StringType::get(), c10::AnyType::get());
+  c10::Dict<std::string, c10::Dict<std::string, torch::Tensor>> out;
 
   for (const auto& [store_name, store] : node_stores) {
-    out.insert(store_name, c10::IValue(amsTensorMapToTorchDict(store)));
+    out.insert(store_name, amsTensorMapToTorchDict(store));
   }
 
   return out;
 }
 
-static c10::impl::GenericDict amsEdgeStoresToTorchDict(
+static c10::Dict<std::string, c10::Dict<std::string, torch::Tensor>>
+amsEdgeStoresToTorchDict(
     const std::unordered_map<ams::EdgeType,
                              ams::AMSTensorMap,
                              ams::EdgeTypeHash>& edge_stores)
 {
-  c10::impl::GenericDict out(c10::StringType::get(), c10::AnyType::get());
+  c10::Dict<std::string, c10::Dict<std::string, torch::Tensor>> out;
 
   for (const auto& [edge_type, store] : edge_stores) {
     out.insert(ams::edgeTypeToString(edge_type),
-               c10::IValue(amsTensorMapToTorchDict(store)));
+               amsTensorMapToTorchDict(store));
   }
 
   return out;
@@ -324,12 +326,9 @@ static c10::impl::GenericDict amsToTorchHeterogeneousGraph(
 {
   c10::impl::GenericDict out(c10::StringType::get(), c10::AnyType::get());
 
-  out.insert("node_stores",
-             c10::IValue(amsNodeStoresToTorchDict(g.node_stores)));
-  out.insert("edge_stores",
-             c10::IValue(amsEdgeStoresToTorchDict(g.edge_stores)));
-  out.insert("global_store",
-             c10::IValue(amsTensorMapToTorchDict(g.global_store)));
+  out.insert("node_stores", amsNodeStoresToTorchDict(g.node_stores));
+  out.insert("edge_stores", amsEdgeStoresToTorchDict(g.edge_stores));
+  out.insert("global_store", amsTensorMapToTorchDict(g.global_store));
 
   return out;
 }
@@ -380,41 +379,82 @@ void callApplication(ams::HeterogeneousGraphDomainFn CallBack,
 }
 
 // ============================================================================
-// Graph surrogate execution stub (seam for future implementation)
+// Graph surrogate execution (in ams namespace for friend access)
 // ============================================================================
 
-static bool tryGraphSurrogate(ams::AMSWorkflow* executor,
-                              const ams::AMSHomogeneousGraph& graph,
-                              ams::SmallVector<ams::AMSTensor>& outs)
+namespace ams {
+
+bool tryGraphSurrogate(AMSWorkflow* executor,
+                       const AMSHomogeneousGraph& graph,
+                       SmallVector<AMSTensor>& outs)
 {
-  // TODO: Implement graph surrogate execution when models support graphs
-  // This is the integration point for future graph-based ML inference
-  //
-  // Future implementation should:
-  // 1. Check if executor has a model that accepts graph inputs
-  // 2. Convert AMSHomogeneousGraph to model input format
-  // 3. Run model inference and uncertainty quantification
-  // 4. If UQ passes threshold, populate outs and return true
-  // 5. Otherwise return false to trigger fallback
-  //
-  // For now, always return false (no surrogate available)
-  (void)executor;
-  (void)graph;
-  (void)outs;
-  return false;
+  // Check if model is available
+  if (!executor || !executor->MLModel) {
+    return false;
+  }
+
+  try {
+    // Convert AMS graph → Torch Dict[str, Tensor]
+    auto torch_graph = amsToTorchHomogeneousGraph(graph);
+
+    // Call model forward pass
+    std::vector<torch::jit::IValue> inputs = {torch::jit::IValue(torch_graph)};
+    auto result = executor->MLModel->module.forward(inputs);
+
+    // Extract prediction from tuple [prediction, uncertainty]
+    auto result_tuple = result.toTuple();
+    if (result_tuple->elements().size() < 1) {
+      return false;
+    }
+    torch::Tensor prediction = result_tuple->elements()[0].toTensor();
+
+    // Convert prediction → AMSTensor and populate outs
+    outs.clear();
+    outs.push_back(torchToAMSTensorView(prediction));
+
+    return true;
+  } catch (const std::exception& e) {
+    // Model invocation failed - fallback to physics
+    return false;
+  }
 }
 
-static bool tryGraphSurrogate(ams::AMSWorkflow* executor,
-                              const ams::AMSHeterogeneousGraph& graph,
-                              ams::SmallVector<ams::AMSTensor>& outs)
+bool tryGraphSurrogate(AMSWorkflow* executor,
+                       const AMSHeterogeneousGraph& graph,
+                       SmallVector<AMSTensor>& outs)
 {
-  // TODO: Implement graph surrogate execution when models support graphs
-  // See homogeneous version for implementation notes
-  (void)executor;
-  (void)graph;
-  (void)outs;
-  return false;
+  // Check if model is available
+  if (!executor || !executor->MLModel) {
+    return false;
+  }
+
+  try {
+    // Convert AMS graph → Torch GenericDict
+    auto torch_graph = amsToTorchHeterogeneousGraph(graph);
+
+    // Call model forward pass
+    std::vector<torch::jit::IValue> inputs = {torch::jit::IValue(torch_graph)};
+    auto result = executor->MLModel->module.forward(inputs);
+
+    // Extract prediction from tuple [prediction, uncertainty]
+    auto result_tuple = result.toTuple();
+    if (result_tuple->elements().size() < 1) {
+      return false;
+    }
+    torch::Tensor prediction = result_tuple->elements()[0].toTensor();
+
+    // Convert prediction → AMSTensor and populate outs
+    outs.clear();
+    outs.push_back(torchToAMSTensorView(prediction));
+
+    return true;
+  } catch (const std::exception& e) {
+    // Model invocation failed - fallback to physics
+    return false;
+  }
 }
+
+}  // namespace ams
 
 // ============================================================================
 // Graph-based callAMS overloads
