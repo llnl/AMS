@@ -25,12 +25,30 @@
 #include "ArrayRef.hpp"
 #include "wf/debug.h"
 
+// Forward declarations for graph surrogate friend functions
+namespace ams {
+class AMSWorkflow;
+bool tryGraphSurrogate(AMSWorkflow*,
+                       const AMSHomogeneousGraph&,
+                       SmallVector<AMSTensor>&);
+bool tryGraphSurrogate(AMSWorkflow*,
+                       const AMSHeterogeneousGraph&,
+                       SmallVector<AMSTensor>&);
+}
 
 //! ----------------------------------------------------------------------------
 //! An implementation for a surrogate model
 //! ----------------------------------------------------------------------------
 class SurrogateModel
 {
+  // Friend declarations for graph surrogate execution
+  // Note: These are defined in interface.cpp within the ams namespace
+  friend bool ams::tryGraphSurrogate(ams::AMSWorkflow*,
+                                     const ams::AMSHomogeneousGraph&,
+                                     ams::SmallVector<ams::AMSTensor>&);
+  friend bool ams::tryGraphSurrogate(ams::AMSWorkflow*,
+                                     const ams::AMSHeterogeneousGraph&,
+                                     ams::SmallVector<ams::AMSTensor>&);
 
 private:
   const std::string _model_path;
