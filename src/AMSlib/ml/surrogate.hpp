@@ -26,7 +26,8 @@
 #include "wf/debug.h"
 
 // Forward declarations for graph surrogate friend functions
-namespace ams {
+namespace ams
+{
 class AMSWorkflow;
 bool tryGraphSurrogate(AMSWorkflow*,
                        const AMSHomogeneousGraph&,
@@ -34,7 +35,7 @@ bool tryGraphSurrogate(AMSWorkflow*,
 bool tryGraphSurrogate(AMSWorkflow*,
                        const AMSHeterogeneousGraph&,
                        SmallVector<AMSTensor>&);
-}
+}  // namespace ams
 
 //! ----------------------------------------------------------------------------
 //! An implementation for a surrogate model
