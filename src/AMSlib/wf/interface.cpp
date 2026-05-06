@@ -82,8 +82,9 @@ static ams::AMSTensor torchToAMSTensorView(torch::Tensor& tensor)
   auto dType = torchDTypeToAMSType(tensor.scalar_type());
   auto rType = torchDeviceToAMSDevice(tensor.device().type());
 
-  auto shapes  = ams::ArrayRef(tensor.sizes().begin(),   tensor.sizes().size());
-  auto strides = ams::ArrayRef(tensor.strides().begin(), tensor.strides().size());
+  auto shapes = ams::ArrayRef(tensor.sizes().begin(), tensor.sizes().size());
+  auto strides =
+      ams::ArrayRef(tensor.strides().begin(), tensor.strides().size());
 
   switch (dType) {
     case AMSDType::AMS_SINGLE:
@@ -93,10 +94,16 @@ static ams::AMSTensor torchToAMSTensorView(torch::Tensor& tensor)
       return AMSTensor::view(tensor.data_ptr<double>(), shapes, strides, rType);
 
     case AMSDType::AMS_INT32:
-      return AMSTensor::view(tensor.data_ptr<int32_t>(), shapes, strides, rType);
-    
+      return AMSTensor::view(tensor.data_ptr<int32_t>(),
+                             shapes,
+                             strides,
+                             rType);
+
     case AMSDType::AMS_INT64:
-      return AMSTensor::view(tensor.data_ptr<int64_t>(), shapes, strides, rType);
+      return AMSTensor::view(tensor.data_ptr<int64_t>(),
+                             shapes,
+                             strides,
+                             rType);
 
     default:
       throw std::runtime_error("torchToAMSTensorView: unsupported Torch dtype");
@@ -109,13 +116,14 @@ static torch::Tensor amsToTorchTensorView(const ams::AMSTensor& tensor)
   auto deviceType = amsToTorchDevice(tensor.location());
 
   c10::SmallVector<long> shapes(tensor.shape().begin(), tensor.shape().end());
-  c10::SmallVector<long> strides(tensor.strides().begin(), tensor.strides().end());
+  c10::SmallVector<long> strides(tensor.strides().begin(),
+                                 tensor.strides().end());
 
-  return torch::from_blob(
-      tensor.raw_data(),
-      shapes,
-      strides,
-      torch::TensorOptions().dtype(dType).device(deviceType));
+  return torch::from_blob(tensor.raw_data(),
+                          shapes,
+                          strides,
+                          torch::TensorOptions().dtype(dType).device(
+                              deviceType));
 }
 
 // flat containers
@@ -167,7 +175,8 @@ static c10::Dict<std::string, torch::Tensor> amsTensorMapToTorchDict(
 }
 
 // key helpers
-static c10::Dict<std::string, torch::Tensor> toStringTensorDict(const c10::IValue& value)
+static c10::Dict<std::string, torch::Tensor> toStringTensorDict(
+    const c10::IValue& value)
 {
   c10::Dict<std::string, torch::Tensor> out;
 
@@ -205,8 +214,8 @@ static c10::Dict<std::string, torch::Tensor> amsToTorchHomogeneousGraph(
 }
 
 // heterogeneous graphs
-static std::unordered_map<std::string, ams::AMSTensorMap> torchDictToAMSNodeStores(
-    const c10::impl::GenericDict& dict)
+static std::unordered_map<std::string, ams::AMSTensorMap>
+torchDictToAMSNodeStores(const c10::impl::GenericDict& dict)
 {
   std::unordered_map<std::string, ams::AMSTensorMap> out;
 
@@ -218,8 +227,8 @@ static std::unordered_map<std::string, ams::AMSTensorMap> torchDictToAMSNodeStor
   return out;
 }
 
-static std::unordered_map<ams::EdgeType, ams::AMSTensorMap, ams::EdgeTypeHash> torchDictToAMSEdgeStores(
-    const c10::impl::GenericDict& dict)
+static std::unordered_map<ams::EdgeType, ams::AMSTensorMap, ams::EdgeTypeHash>
+torchDictToAMSEdgeStores(const c10::impl::GenericDict& dict)
 {
   std::unordered_map<ams::EdgeType, ams::AMSTensorMap, ams::EdgeTypeHash> out;
 
@@ -234,7 +243,8 @@ static std::unordered_map<ams::EdgeType, ams::AMSTensorMap, ams::EdgeTypeHash> t
   return out;
 }
 
-static ams::AMSHeterogeneousGraph torchToAMSHeterogeneousGraph(const c10::IValue& value)
+static ams::AMSHeterogeneousGraph torchToAMSHeterogeneousGraph(
+    const c10::IValue& value)
 {
   auto g = value.toGenericDict();
 
@@ -263,17 +273,20 @@ static ams::AMSHeterogeneousGraph torchToAMSHeterogeneousGraph(const c10::IValue
   }
 
   if (!has_nodes) {
-    throw std::runtime_error("torchToAMSHeterogeneousGraph: missing node_stores");
+    throw std::runtime_error(
+        "torchToAMSHeterogeneousGraph: missing node_stores");
   }
   if (!has_edges) {
-    throw std::runtime_error("torchToAMSHeterogeneousGraph: missing edge_stores");
+    throw std::runtime_error(
+        "torchToAMSHeterogeneousGraph: missing edge_stores");
   }
   if (!has_global) {
-    throw std::runtime_error("torchToAMSHeterogeneousGraph: missing global_store");
+    throw std::runtime_error(
+        "torchToAMSHeterogeneousGraph: missing global_store");
   }
 
-  out.node_stores  = torchDictToAMSNodeStores(toStringIValueDict(nodes_ivalue));
-  out.edge_stores  = torchDictToAMSEdgeStores(toStringIValueDict(edges_ivalue));
+  out.node_stores = torchDictToAMSNodeStores(toStringIValueDict(nodes_ivalue));
+  out.edge_stores = torchDictToAMSEdgeStores(toStringIValueDict(edges_ivalue));
   out.global_store = torchDictToAMSTensorMap(toStringTensorDict(global_ivalue));
 
   return out;
@@ -299,7 +312,8 @@ static c10::impl::GenericDict amsEdgeStoresToTorchDict(
   c10::impl::GenericDict out(c10::StringType::get(), c10::AnyType::get());
 
   for (const auto& [edge_type, store] : edge_stores) {
-    out.insert(ams::edgeTypeToString(edge_type), c10::IValue(amsTensorMapToTorchDict(store)));
+    out.insert(ams::edgeTypeToString(edge_type),
+               c10::IValue(amsTensorMapToTorchDict(store)));
   }
 
   return out;
@@ -310,9 +324,12 @@ static c10::impl::GenericDict amsToTorchHeterogeneousGraph(
 {
   c10::impl::GenericDict out(c10::StringType::get(), c10::AnyType::get());
 
-  out.insert("node_stores", c10::IValue(amsNodeStoresToTorchDict(g.node_stores)));
-  out.insert("edge_stores", c10::IValue(amsEdgeStoresToTorchDict(g.edge_stores)));
-  out.insert("global_store", c10::IValue(amsTensorMapToTorchDict(g.global_store)));
+  out.insert("node_stores",
+             c10::IValue(amsNodeStoresToTorchDict(g.node_stores)));
+  out.insert("edge_stores",
+             c10::IValue(amsEdgeStoresToTorchDict(g.edge_stores)));
+  out.insert("global_store",
+             c10::IValue(amsTensorMapToTorchDict(g.global_store)));
 
   return out;
 }

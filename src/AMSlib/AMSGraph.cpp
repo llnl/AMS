@@ -16,7 +16,7 @@ static std::size_t hashCombine(std::size_t seed, std::size_t value) noexcept
 }  // namespace
 
 EdgeType::EdgeType(std::string src_, std::string rel_, std::string dst_)
-  : src(std::move(src_)), rel(std::move(rel_)), dst(std::move(dst_))
+    : src(std::move(src_)), rel(std::move(rel_)), dst(std::move(dst_))
 {
 }
 
@@ -123,7 +123,8 @@ bool AMSHeterogeneousGraph::containsEdgeStore(const EdgeType& edge_type) const
 
 AMSTensorMap& AMSHeterogeneousGraph::getOrCreateNodeStore(std::string name)
 {
-  auto [it, inserted] = node_stores.try_emplace(std::move(name), AMSTensorMap{});
+  auto [it, inserted] =
+      node_stores.try_emplace(std::move(name), AMSTensorMap{});
   (void)inserted;
   return it->second;
 }
