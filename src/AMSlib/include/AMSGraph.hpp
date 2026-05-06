@@ -13,8 +13,7 @@ namespace ams
 using AMSTensorMap = std::unordered_map<std::string, AMSTensor>;
 using AMSHomogeneousGraph = AMSTensorMap;
 
-struct EdgeType
-{
+struct EdgeType {
   std::string src;
   std::string rel;
   std::string dst;
@@ -29,8 +28,7 @@ struct EdgeType
   }
 };
 
-struct EdgeTypeHash
-{
+struct EdgeTypeHash {
   std::size_t operator()(const EdgeType& e) const noexcept;
 };
 
@@ -54,8 +52,7 @@ void insertOrAssignTensor(AMSTensorMap& store,
                           std::string name,
                           AMSTensor&& tensor);
 
-struct AMSHeterogeneousGraph
-{
+struct AMSHeterogeneousGraph {
   using NodeStoreMap = std::unordered_map<std::string, AMSTensorMap>;
   using EdgeStoreMap = std::unordered_map<EdgeType, AMSTensorMap, EdgeTypeHash>;
 
