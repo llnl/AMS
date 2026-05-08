@@ -1,5 +1,5 @@
 function(BUILD_UNIT_TEST exe source)
-  add_executable(${exe} ${source})
+  blt_add_executable(NAME ${exe} SOURCES ${source})
 
   target_include_directories(${exe} PRIVATE ${caliper_INCLUDE_DIR} ${MPI_INCLUDE_PATH})
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)
@@ -8,14 +8,14 @@ function(BUILD_UNIT_TEST exe source)
   target_include_directories(${exe} PRIVATE ${AMS_TEST_ROOT})
   target_compile_features(${exe} PRIVATE cxx_std_17)
 
-  target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
+  target_link_libraries(${exe} PRIVATE ${AMS_HDF5_LINK_TARGETS})
 
-  if (WITH_CALIPER)
+  if (ENABLE_CALIPER)
     message(STATUS "Building witth caliper ${exe}")
     target_link_libraries(${exe} PRIVATE caliper)
   endif()
 
-  if (WITH_RMQ)
+  if (ENABLE_RMQ)
     target_link_libraries(${exe} PRIVATE amqpcpp)
     if (OPENSSL_FOUND)
       target_link_libraries(${exe} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
@@ -25,7 +25,7 @@ function(BUILD_UNIT_TEST exe source)
     target_link_libraries(${exe} PRIVATE ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
   endif()
 
-  if (WITH_MPI)
+  if (ENABLE_MPI)
     target_link_libraries(${exe} PRIVATE MPI::MPI_CXX)
   endif()
 

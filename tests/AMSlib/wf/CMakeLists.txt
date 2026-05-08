@@ -5,7 +5,7 @@ function(ADD_WORKFLOW_UNIT_TEST name exec)
 endfunction()
 
 function(BUILD_UNIT_TEST exe source)
-  add_executable(${exe} ${source})
+  blt_add_executable(NAME ${exe} SOURCES ${source})
 
   target_compile_features(${exe} PRIVATE cxx_std_17)
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)
@@ -14,20 +14,20 @@ function(BUILD_UNIT_TEST exe source)
   target_link_libraries(${exe} PRIVATE stdc++fs AMS torch Catch2::Catch2WithMain)
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES} CATCH_CONFIG_PREFIX_ALL)
 
-  target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
+  target_link_libraries(${exe} PRIVATE ${AMS_HDF5_LINK_TARGETS})
 
 
-  if(WITH_CUDA)
+  if (ENABLE_CUDA)
     target_link_libraries(${exe} PRIVATE CUDA::cudart)
-  elseif(WITH_HIP)
+  elseif (ENABLE_HIP)
     target_link_libraries(${exe} PRIVATE hip::host)
   endif()
 
-  if (WITH_CALIPER)
+  if (ENABLE_CALIPER)
     target_link_libraries(${exe} PRIVATE caliper)
   endif()
 
-  if (WITH_RMQ)
+  if (ENABLE_RMQ)
     target_link_libraries(${exe} PRIVATE amqpcpp)
     if (OPENSSL_FOUND)
       target_link_libraries(${exe} PRIVATE OpenSSL::SSL OpenSSL::Crypto) 
@@ -37,7 +37,7 @@ function(BUILD_UNIT_TEST exe source)
     target_link_libraries(${exe} PRIVATE ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
   endif()
 
-  if (WITH_MPI)
+  if (ENABLE_MPI)
     target_link_libraries(${exe} PRIVATE MPI::MPI_CXX)
   endif()
 endfunction()

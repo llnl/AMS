@@ -5,19 +5,19 @@ endfunction()
 
 
 function(BUILD_UNIT_TEST exe source)
-  add_executable(${exe} ${source})
+  blt_add_executable(NAME ${exe} SOURCES ${source})
   target_compile_features(${exe} PRIVATE cxx_std_17)
-  if (WITH_CUDA)
+  if (ENABLE_CUDA)
     target_link_libraries(${exe} PRIVATE CUDA::cudart)
-  elseif(WITH_HIP)
+  elseif (ENABLE_HIP)
     target_link_libraries(${exe} PRIVATE hip::host)
   endif()
-  
+
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)
   target_include_directories(${exe} PRIVATE ${CMAKE_BINARY_DIR}/include/)
   target_include_directories(${exe} PRIVATE ${AMS_TEST_ROOT})
   target_link_libraries(${exe} PRIVATE stdc++fs AMS torch Catch2::Catch2WithMain)
-  target_link_libraries(${exe} PRIVATE ${AMS_HDF5_TARGET})
+  target_link_libraries(${exe} PRIVATE ${AMS_HDF5_LINK_TARGETS})
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES} CATCH_CONFIG_PREFIX_ALL)
 endfunction()
 
@@ -26,4 +26,3 @@ ADD_AMS_UNIT_TEST(AMS_EXPLICIT ams_explicit_end_to_end)
 
 BUILD_UNIT_TEST(int_interface int_interface.cpp)
 ADD_AMS_UNIT_TEST(AMS_INT_INTERFACE int_interface)
-
