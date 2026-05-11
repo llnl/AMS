@@ -12,6 +12,7 @@ function(BUILD_UNIT_TEST exe source)
   target_include_directories(${exe} PRIVATE ${CMAKE_BINARY_DIR}/include/)
   target_include_directories(${exe} PRIVATE ${AMS_TEST_ROOT})
   target_link_libraries(${exe} PRIVATE stdc++fs AMS torch Catch2::Catch2WithMain)
+  target_link_libraries(${exe} PRIVATE tl::expected)
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES} CATCH_CONFIG_PREFIX_ALL)
 
   target_link_libraries(${exe} PRIVATE ${AMS_HDF5_LINK_TARGETS})
@@ -46,6 +47,7 @@ BUILD_UNIT_TEST(operations operations.cpp)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::OPERATIONS operations)
 
 BUILD_UNIT_TEST(evaluate_in_and_outs evaluate_in_and_outs.cpp)
+target_link_libraries(evaluate_in_and_outs PRIVATE fmt::fmt)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::EVALUATE_IN_OUTS evaluate_in_and_outs)
 
 BUILD_UNIT_TEST(tensor_bundle tensor_bundle.cpp)
@@ -55,6 +57,7 @@ BUILD_UNIT_TEST(eval_context eval_context.cpp)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::EVAL_CONTEXT eval_context)
 
 BUILD_UNIT_TEST(pointwise pointwise_layout_transform.cpp)
+target_link_libraries(pointwise PRIVATE fmt::fmt)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::POINTWISE pointwise)
 
 BUILD_UNIT_TEST(action action.cpp)

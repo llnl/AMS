@@ -38,4 +38,5 @@ function(ADD_DB_UNIT_TEST name exec)
 endfunction()
 
 BUILD_UNIT_TEST(db_hdf5 db_hdf5.cpp)
+target_link_libraries(db_hdf5 PRIVATE fmt::fmt)
 ADD_DB_UNIT_TEST(DB::HDF5 db_hdf5)
