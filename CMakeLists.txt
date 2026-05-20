@@ -15,8 +15,8 @@ endif()
 
 project(AMS VERSION 0.1.1 LANGUAGES CXX C)
 
-# NOTE: This may break some of our integrations with the applications. But flux requires > C++20, RMQ requires C++17 and although AMS does not have
-# any restrictions on the CXX standard the application may impose those. The solution would be to compile RMQ with an older GCC version  (8) and
+# NOTE: This may break some of our integrations with the applications. But flux requires > C++20, RMQ requires C++17 and although AMS does not have 
+# any restrictions on the CXX standard the application may impose those. The solution would be to compile RMQ with an older GCC version  (8) and 
 # have flux to be an external of the system environment
 set(CMAKE_CXX_STANDARD 17)
 
@@ -287,7 +287,7 @@ if (NOT AMS_HDF5_MODE)
   else()
     message(FATAL_ERROR
             "Unable to determine imported HDF5 targets for AMS. Provide either "
-            "an HDF5 package with hdf5-static or hdf5-shared, or a modern HDF5 package with imported targets.")
+	    "an HDF5 package with hdf5-static or hdf5-shared, or a modern HDF5 package with imported targets.")
   endif()
 
   set(AMS_HDF5_MODE "HDF5_STANDARD_TARGET")

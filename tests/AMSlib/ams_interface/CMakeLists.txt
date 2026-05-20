@@ -12,7 +12,7 @@ function(BUILD_UNIT_TEST exe source)
   elseif (ENABLE_HIP)
     target_link_libraries(${exe} PRIVATE hip::host)
   endif()
-
+  
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)
   target_include_directories(${exe} PRIVATE ${CMAKE_BINARY_DIR}/include/)
   target_include_directories(${exe} PRIVATE ${AMS_TEST_ROOT})
