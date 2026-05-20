@@ -15,12 +15,6 @@ endif()
 
 project(AMS VERSION 0.1.1 LANGUAGES CXX C)
 
-get_filename_component(AMS_CXX_COMPILER_NAME "${CMAKE_CXX_COMPILER}" NAME)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND AMS_CXX_COMPILER_NAME STREQUAL "gcc")
-  message(WARNING "CMAKE_CXX_COMPILER points to gcc; forcing libstdc++ on C++ link lines")
-  link_libraries("$<$<LINK_LANGUAGE:CXX>:stdc++>")
-endif()
-
 # NOTE: This may break some of our integrations with the applications. But flux requires > C++20, RMQ requires C++17 and although AMS does not have
 # any restrictions on the CXX standard the application may impose those. The solution would be to compile RMQ with an older GCC version  (8) and
 # have flux to be an external of the system environment
