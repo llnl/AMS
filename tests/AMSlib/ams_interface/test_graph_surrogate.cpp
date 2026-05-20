@@ -42,7 +42,7 @@ static AMSTensor makeTensor(std::vector<Dim> shape)
 static AMSTensor makeMessageNodeFeatures()
 {
   auto tensor = makeTensor<float>({4, 2});
-  float* data = tensor.data<float>();
+  float* data = tensor.template data<float>();
   data[0] = 1.0f;
   data[1] = 10.0f;
   data[2] = 2.0f;
@@ -58,7 +58,7 @@ template <typename T>
 static AMSTensor makeMessageEdgeIndex()
 {
   auto tensor = makeTensor<T>({2, 5});
-  T* data = tensor.data<T>();
+  T* data = tensor.template data<T>();
   data[0] = static_cast<T>(0);
   data[1] = static_cast<T>(1);
   data[2] = static_cast<T>(2);
@@ -75,7 +75,7 @@ static AMSTensor makeMessageEdgeIndex()
 static AMSTensor makeMessageEdgeFeatures()
 {
   auto tensor = makeTensor<float>({5, 1});
-  float* data = tensor.data<float>();
+  float* data = tensor.template data<float>();
   data[0] = 0.5f;
   data[1] = 1.0f;
   data[2] = 1.5f;
