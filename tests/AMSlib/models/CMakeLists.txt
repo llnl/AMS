@@ -31,6 +31,8 @@ set(GENERATED_CPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/linear_scripted_single_cpu_random.pt
   ${CMAKE_CURRENT_BINARY_DIR}/homogeneous_graph.pt
   ${CMAKE_CURRENT_BINARY_DIR}/heterogeneous_graph.pt
+  ${CMAKE_CURRENT_BINARY_DIR}/homogeneous_graph_bad_key.pt
+  ${CMAKE_CURRENT_BINARY_DIR}/homogeneous_graph_bad_shape.pt
 )
 
 if (WITH_CUDA OR WITH_HIP)

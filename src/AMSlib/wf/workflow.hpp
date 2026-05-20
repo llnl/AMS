@@ -38,10 +38,10 @@ class AMSWorkflow
   // Friend declarations for graph surrogate execution access to private MLModel
   friend bool tryGraphSurrogate(AMSWorkflow*,
                                 const AMSHomogeneousGraph&,
-                                SmallVector<AMSTensor>&);
+                                AMSHomogeneousGraphFields&);
   friend bool tryGraphSurrogate(AMSWorkflow*,
                                 const AMSHeterogeneousGraph&,
-                                SmallVector<AMSTensor>&);
+                                AMSHeterogeneousGraphFields&);
 
   /** @brief A string identifier describing the domain-model being solved. */
   std::string domainName;
@@ -100,22 +100,22 @@ class AMSWorkflow
   }
 
   void storeGraphData(const ams::AMSHomogeneousGraph& graph,
-                      ArrayRef<ams::AMSTensor> Outs)
+                      const ams::AMSHomogeneousGraphFields& outputs)
   {
     // TODO: Implement graph storage when database supports it
     // For now, this is a no-op placeholder
     (void)graph;
-    (void)Outs;
+    (void)outputs;
     AMS_DBG(Workflow, "Graph storage not yet implemented (homogeneous)");
   }
 
   void storeGraphData(const ams::AMSHeterogeneousGraph& graph,
-                      ArrayRef<ams::AMSTensor> Outs)
+                      const ams::AMSHeterogeneousGraphFields& outputs)
   {
     // TODO: Implement graph storage when database supports it
     // For now, this is a no-op placeholder
     (void)graph;
-    (void)Outs;
+    (void)outputs;
     AMS_DBG(Workflow, "Graph storage not yet implemented (heterogeneous)");
   }
 

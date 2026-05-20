@@ -69,6 +69,7 @@ AMSTensor::AMSTensor(uint8_t* data,
 {
   _elements = computeNumElements(shapes);
   _bytes = _elements * _element_size;
+  _contiguous = isContiguous(1);
   if (!_data) {
     throw std::runtime_error("Generating tensor with Null Pointer AMSTensor.");
   }
@@ -151,7 +152,9 @@ AMSTensor::AMSTensor(AMSTensor&& other) noexcept
       _strides(std::move(other._strides)),
       _dType(other._dType),
       _location(other._location),
-      _owned(other._owned)
+      _owned(other._owned),
+      _contiguous(other._contiguous),
+      _bytes(other._bytes)
 {
   other._data = nullptr;
   other._owned = false;
@@ -160,7 +163,10 @@ AMSTensor::AMSTensor(AMSTensor&& other) noexcept
 AMSTensor& AMSTensor::operator=(AMSTensor&& other) noexcept
 {
   if (this != &other) {
-    // Free existing resources
+    if (_owned && _data) {
+      auto& rm = ams::ResourceManager::getInstance();
+      rm.deallocate(_data, _location);
+    }
 
     // Steal resources from `other`
     _data = other._data;
@@ -171,6 +177,8 @@ AMSTensor& AMSTensor::operator=(AMSTensor&& other) noexcept
     _dType = other._dType;
     _location = other._location;
     _owned = other._owned;
+    _contiguous = other._contiguous;
+    _bytes = other._bytes;
 
     other._data = nullptr;
     other._owned = false;

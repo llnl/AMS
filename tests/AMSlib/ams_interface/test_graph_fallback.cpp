@@ -1,5 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/generators/catch_generators.hpp>
+
+#include <stdexcept>
+#include <type_traits>
+#include <vector>
 
 #include "AMS.h"
 #include "AMSGraph.hpp"
@@ -7,247 +10,260 @@
 
 using namespace ams;
 
+using Dim = AMSTensor::IntDimType;
+
+static std::vector<Dim> contiguousStrides(const std::vector<Dim>& shape)
+{
+  std::vector<Dim> strides(shape.size(), 1);
+  Dim stride = 1;
+  for (std::size_t i = shape.size(); i-- > 0;) {
+    strides[i] = stride;
+    stride *= shape[i];
+  }
+  return strides;
+}
+
+template <typename T>
+static AMSTensor makeTensor(std::vector<Dim> shape)
+{
+  std::vector<Dim> strides = contiguousStrides(shape);
+  return AMSTensor::create<T>(shape, strides, AMSResourceType::AMS_HOST);
+}
+
+static AMSTensor makeNodeFeatures(Dim nodes = 3, Dim features = 2)
+{
+  auto tensor = makeTensor<float>({nodes, features});
+  float* data = tensor.data<float>();
+  for (Dim i = 0; i < tensor.elements(); ++i) {
+    data[i] = static_cast<float>(i + 1);
+  }
+  return tensor;
+}
+
+static AMSTensor makeEdgeIndex64(Dim edges = 2)
+{
+  auto tensor = makeTensor<int64_t>({2, edges});
+  int64_t* data = tensor.data<int64_t>();
+  for (Dim e = 0; e < edges; ++e) {
+    data[e] = e % 3;
+    data[edges + e] = (e + 1) % 3;
+  }
+  return tensor;
+}
+
+static AMSTensor makeEdgeIndex32(Dim edges = 2)
+{
+  auto tensor = makeTensor<int32_t>({2, edges});
+  int32_t* data = tensor.data<int32_t>();
+  for (Dim e = 0; e < edges; ++e) {
+    data[e] = static_cast<int32_t>(e % 3);
+    data[edges + e] = static_cast<int32_t>((e + 1) % 3);
+  }
+  return tensor;
+}
+
+static AMSTensor makeEdgeFeatures(Dim edges = 2, Dim features = 1)
+{
+  auto tensor = makeTensor<float>({edges, features});
+  float* data = tensor.data<float>();
+  for (Dim i = 0; i < tensor.elements(); ++i) {
+    data[i] = 0.5f + static_cast<float>(i);
+  }
+  return tensor;
+}
+
+static AMSTensor makeGlobalFeatures()
+{
+  auto tensor = makeTensor<float>({1, 2});
+  tensor.data<float>()[0] = 0.25f;
+  tensor.data<float>()[1] = 0.5f;
+  return tensor;
+}
+
+static AMSHomogeneousGraph makeValidGraph()
+{
+  return AMSHomogeneousGraph(makeNodeFeatures(),
+                             makeEdgeIndex64(),
+                             makeEdgeFeatures(),
+                             makeGlobalFeatures());
+}
+
+CATCH_TEST_CASE("AMSTensorFieldMap explicit field API", "[wf][graph]")
+{
+  AMSInit();
+
+  CATCH_STATIC_REQUIRE(!std::is_default_constructible_v<AMSTensor>);
+
+  AMSTensorFieldMap fields;
+
+  fields.set("prediction", makeTensor<float>({2, 1}));
+  CATCH_REQUIRE(fields.contains("prediction"));
+  CATCH_REQUIRE(fields.find("missing") == nullptr);
+  CATCH_REQUIRE(fields.at("prediction").shape()[0] == 2);
+
+  auto replacement = makeTensor<float>({3, 1});
+  float* data = replacement.data<float>();
+  data[0] = 7.0f;
+  data[1] = 8.0f;
+  data[2] = 9.0f;
+  fields.set("prediction", std::move(replacement));
+
+  const auto& prediction = fields.at("prediction");
+  CATCH_REQUIRE(prediction.shape()[0] == 3);
+  CATCH_REQUIRE(prediction.data<float>()[0] == 7.0f);
+  CATCH_REQUIRE(prediction.data<float>()[2] == 9.0f);
+
+  fields.insert("flux", makeTensor<float>({2, 1}));
+  CATCH_REQUIRE_THROWS_AS(fields.insert("flux", makeTensor<float>({2, 1})),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(fields.at("absent"), std::out_of_range);
+}
+
+CATCH_TEST_CASE("AMSHomogeneousGraph validates construction",
+                "[wf][graph][validation]")
+{
+  AMSInit();
+
+  CATCH_REQUIRE_NOTHROW(makeValidGraph());
+  CATCH_REQUIRE_NOTHROW(AMSHomogeneousGraph(
+      makeNodeFeatures(), makeEdgeIndex32(), makeEdgeFeatures()));
+
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(
+                              makeTensor<int64_t>({3, 2}),
+                              makeEdgeIndex64(),
+                              makeEdgeFeatures()),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeTensor<float>({3}),
+                                             makeEdgeIndex64(),
+                                             makeEdgeFeatures()),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                             makeTensor<float>({2, 2}),
+                                             makeEdgeFeatures()),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                             makeTensor<int64_t>({2}),
+                                             makeEdgeFeatures()),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                             makeTensor<int64_t>({3, 2}),
+                                             makeEdgeFeatures()),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                             makeEdgeIndex64(),
+                                             makeTensor<float>({2})),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                             makeEdgeIndex64(),
+                                             makeEdgeFeatures(3)),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                             makeEdgeIndex64(),
+                                             makeTensor<int64_t>({2, 1})),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                             makeEdgeIndex64(),
+                                             makeEdgeFeatures(),
+                                             makeTensor<float>({2})),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                             makeEdgeIndex64(),
+                                             makeEdgeFeatures(),
+                                             makeTensor<float>({2, 1})),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                             makeEdgeIndex64(),
+                                             makeEdgeFeatures(),
+                                             makeTensor<int64_t>({1, 1})),
+                          std::runtime_error);
+}
+
 CATCH_TEST_CASE("AMSExecute homogeneous graph fallback path", "[wf][graph]")
 {
   AMSInit();
 
-  // Setup: Register model with no surrogate path (forces fallback)
-  auto model = AMSRegisterAbstractModel("test_homo_graph", 0.5, "", false);
+  auto model =
+      AMSRegisterAbstractModel("test_homo_graph_fields", 0.5, "", false);
   AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
+  AMSHomogeneousGraph graph = makeValidGraph();
 
-  // Create simple homogeneous graph (dict of tensors)
-  AMSHomogeneousGraph graph;
-
-  // Insert node features tensor
-  AMSTensor::IntDimType node_shape[] = {10, 3};
-  AMSTensor::IntDimType node_strides[] = {3, 1};
-  auto node_features = AMSTensor::create<float>(
-      ams::ArrayRef<AMSTensor::IntDimType>(node_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(node_strides, 2),
-      AMSResourceType::AMS_HOST);
-
-  // Fill with test data
-  float* features_data = node_features.data<float>();
-  for (int i = 0; i < 30; ++i) {
-    features_data[i] = static_cast<float>(i);
-  }
-
-  insertTensor(graph, "node_features", std::move(node_features));
-
-  // Create output tensor
-  SmallVector<AMSTensor> outs;
-  AMSTensor::IntDimType out_shape[] = {10, 2};
-  AMSTensor::IntDimType out_strides[] = {2, 1};
-  auto out_tensor = AMSTensor::create<float>(
-      ams::ArrayRef<AMSTensor::IntDimType>(out_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(out_strides, 2),
-      AMSResourceType::AMS_HOST);
-
-  // Initialize outputs to zero
-  float* out_data = out_tensor.data<float>();
-  for (int i = 0; i < 20; ++i) {
-    out_data[i] = 0.0f;
-  }
-
-  outs.push_back(std::move(out_tensor));
-
-  // Define callback that processes graph
   bool callback_invoked = false;
-  HomogeneousGraphDomainFn callback = [&](const AMSHomogeneousGraph& g,
-                                          SmallVector<AMSTensor>& outputs) {
-    callback_invoked = true;
+  HomogeneousGraphDomainFn callback =
+      [&](const AMSHomogeneousGraph& g, AMSHomogeneousGraphFields& outputs) {
+        callback_invoked = true;
+        CATCH_REQUIRE(g.node_features.shape()[0] == 3);
+        CATCH_REQUIRE(g.edge_index.shape()[0] == 2);
 
-    // Verify graph structure
-    CATCH_REQUIRE(containsTensor(g, "node_features"));
-    const auto* features = findTensor(g, "node_features");
-    CATCH_REQUIRE(features != nullptr);
-    CATCH_REQUIRE(features->shape()[0] == 10);
-    CATCH_REQUIRE(features->shape()[1] == 3);
+        auto out = makeTensor<float>({3, 1});
+        float* out_data = out.data<float>();
+        out_data[0] = 2.0f;
+        out_data[1] = 4.0f;
+        out_data[2] = 6.0f;
+        outputs.node_fields.set("prediction", std::move(out));
+      };
 
-    // Verify input data
-    const float* features_data = features->data<float>();
-    CATCH_REQUIRE(features_data[0] == 0.0f);
-    CATCH_REQUIRE(features_data[29] == 29.0f);
+  AMSHomogeneousGraphFields outputs;
+  AMSExecute(executor, callback, graph, outputs);
 
-    // Fill outputs with computation result
-    CATCH_REQUIRE(outputs.size() == 1);
-    float* out_data = outputs[0].data<float>();
-    for (int i = 0; i < 20; ++i) {
-      out_data[i] = static_cast<float>(i * 2);
-    }
-  };
-
-  // Execute
-  AMSExecute(executor, callback, graph, outs);
-
-  // Verify callback was invoked (fallback path)
   CATCH_REQUIRE(callback_invoked);
-
-  // Verify outputs were written
-  const float* result_data = outs[0].data<float>();
-  CATCH_REQUIRE(result_data[0] == 0.0f);
-  CATCH_REQUIRE(result_data[10] == 20.0f);
-  CATCH_REQUIRE(result_data[19] == 38.0f);
-
-  // Note: Not destroying executor to avoid triggering AMSFinalize between tests
-  // The executor will be cleaned up at program exit
+  const auto& prediction = outputs.node_fields.at("prediction");
+  CATCH_REQUIRE(prediction.shape()[0] == 3);
+  CATCH_REQUIRE(prediction.data<float>()[1] == 4.0f);
 }
 
 CATCH_TEST_CASE("AMSExecute heterogeneous graph fallback path", "[wf][graph]")
 {
   AMSInit();
 
-  // Setup: Register model with no surrogate path (forces fallback)
-  auto model = AMSRegisterAbstractModel("test_hetero_graph", 0.5, "", false);
+  auto model =
+      AMSRegisterAbstractModel("test_hetero_graph_fields", 0.5, "", false);
   AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
 
-  // Create heterogeneous graph
   AMSHeterogeneousGraph graph;
-
-  // Add node store for "atom" nodes
   auto& atom_store = graph.getOrCreateNodeStore("atom");
-  AMSTensor::IntDimType atom_shape[] = {5, 2};
-  AMSTensor::IntDimType atom_strides[] = {2, 1};
-  auto atom_features = AMSTensor::create<float>(
-      ams::ArrayRef<AMSTensor::IntDimType>(atom_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(atom_strides, 2),
-      AMSResourceType::AMS_HOST);
+  insertTensor(atom_store, "features", makeNodeFeatures(5, 2));
 
-  // Fill with test data
-  float* atom_data = atom_features.data<float>();
-  for (int i = 0; i < 10; ++i) {
-    atom_data[i] = static_cast<float>(i + 1);
-  }
-
-  insertTensor(atom_store, "features", std::move(atom_features));
-
-  // Add edge store
   auto& edge_store =
       graph.getOrCreateEdgeStore(EdgeType{"atom", "bond", "atom"});
-  AMSTensor::IntDimType edge_shape[] = {2, 8};
-  AMSTensor::IntDimType edge_strides[] = {8, 1};
-  auto edge_index = AMSTensor::create<int64_t>(
-      ams::ArrayRef<AMSTensor::IntDimType>(edge_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(edge_strides, 2),
-      AMSResourceType::AMS_HOST);
+  insertTensor(edge_store, "edge_index", makeEdgeIndex64(4));
+  insertTensor(edge_store, "features", makeEdgeFeatures(4, 1));
+  insertTensor(graph.global_store, "global", makeGlobalFeatures());
 
-  // Fill with edge connectivity
-  int64_t* edge_data = edge_index.data<int64_t>();
-  for (int i = 0; i < 16; ++i) {
-    edge_data[i] = i % 5;
-  }
-
-  insertTensor(edge_store, "edge_index", std::move(edge_index));
-
-  // Add global features
-  AMSTensor::IntDimType global_shape[] = {1, 4};
-  AMSTensor::IntDimType global_strides[] = {4, 1};
-  auto global_features = AMSTensor::create<float>(
-      ams::ArrayRef<AMSTensor::IntDimType>(global_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(global_strides, 2),
-      AMSResourceType::AMS_HOST);
-
-  float* global_data = global_features.data<float>();
-  for (int i = 0; i < 4; ++i) {
-    global_data[i] = static_cast<float>(i * 10);
-  }
-
-  insertTensor(graph.global_store, "global", std::move(global_features));
-
-  // Create output tensor
-  SmallVector<AMSTensor> outs;
-  AMSTensor::IntDimType hetero_out_shape[] = {5, 1};
-  AMSTensor::IntDimType hetero_out_strides[] = {1, 1};
-  auto out_tensor = AMSTensor::create<float>(
-      ams::ArrayRef<AMSTensor::IntDimType>(hetero_out_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(hetero_out_strides, 2),
-      AMSResourceType::AMS_HOST);
-
-  // Initialize to zero
-  float* out_data = out_tensor.data<float>();
-  for (int i = 0; i < 5; ++i) {
-    out_data[i] = 0.0f;
-  }
-
-  outs.push_back(std::move(out_tensor));
-
-  // Define callback
   bool callback_invoked = false;
-  HeterogeneousGraphDomainFn callback = [&](const AMSHeterogeneousGraph& g,
-                                            SmallVector<AMSTensor>& outputs) {
-    callback_invoked = true;
+  HeterogeneousGraphDomainFn callback =
+      [&](const AMSHeterogeneousGraph& g,
+          AMSHeterogeneousGraphFields& outputs) {
+        callback_invoked = true;
+        CATCH_REQUIRE(g.containsNodeStore("atom"));
+        CATCH_REQUIRE(g.containsEdgeStore(EdgeType{"atom", "bond", "atom"}));
 
-    // Verify graph structure
-    CATCH_REQUIRE(g.containsNodeStore("atom"));
-    const auto* atom_store_ptr = g.findNodeStore("atom");
-    CATCH_REQUIRE(atom_store_ptr != nullptr);
-    CATCH_REQUIRE(containsTensor(*atom_store_ptr, "features"));
+        auto out = makeTensor<float>({5, 1});
+        float* out_data = out.data<float>();
+        for (int i = 0; i < 5; ++i) {
+          out_data[i] = static_cast<float>(i * 3);
+        }
+        outputs.getOrCreateNodeStore("atom").set("prediction", std::move(out));
+      };
 
-    // Verify node data
-    const auto* features = findTensor(*atom_store_ptr, "features");
-    CATCH_REQUIRE(features != nullptr);
-    const float* features_data = features->data<float>();
-    CATCH_REQUIRE(features_data[0] == 1.0f);
-    CATCH_REQUIRE(features_data[9] == 10.0f);
+  AMSHeterogeneousGraphFields outputs;
+  AMSExecute(executor, callback, graph, outputs);
 
-    // Verify edge store
-    CATCH_REQUIRE(g.containsEdgeStore(EdgeType{"atom", "bond", "atom"}));
-    const auto* edge_store_ptr =
-        g.findEdgeStore(EdgeType{"atom", "bond", "atom"});
-    CATCH_REQUIRE(edge_store_ptr != nullptr);
-    CATCH_REQUIRE(containsTensor(*edge_store_ptr, "edge_index"));
-
-    // Verify global store
-    CATCH_REQUIRE(containsTensor(g.global_store, "global"));
-    const auto* global = findTensor(g.global_store, "global");
-    CATCH_REQUIRE(global != nullptr);
-    const float* global_data = global->data<float>();
-    CATCH_REQUIRE(global_data[0] == 0.0f);
-    CATCH_REQUIRE(global_data[3] == 30.0f);
-
-    // Fill outputs
-    CATCH_REQUIRE(outputs.size() == 1);
-    float* out_data = outputs[0].data<float>();
-    for (int i = 0; i < 5; ++i) {
-      out_data[i] = static_cast<float>(i * 3);
-    }
-  };
-
-  // Execute
-  AMSExecute(executor, callback, graph, outs);
-
-  // Verify
   CATCH_REQUIRE(callback_invoked);
-  const float* result_data = outs[0].data<float>();
-  CATCH_REQUIRE(result_data[0] == 0.0f);
-  CATCH_REQUIRE(result_data[2] == 6.0f);
-  CATCH_REQUIRE(result_data[4] == 12.0f);
-
-  // Note: Not destroying executor to avoid triggering AMSFinalize between tests
-  // The executor will be cleaned up at program exit
+  const auto* atom_outputs = outputs.findNodeStore("atom");
+  CATCH_REQUIRE(atom_outputs != nullptr);
+  const auto& prediction = atom_outputs->at("prediction");
+  CATCH_REQUIRE(prediction.data<float>()[4] == 12.0f);
 }
 
 CATCH_TEST_CASE("Graph callback type safety", "[wf][graph]")
 {
-  // This test verifies that the type system prevents mismatches
-  // It primarily exists as a compile-time check
-
-  AMSHomogeneousGraph homo_graph;
-  AMSHeterogeneousGraph hetero_graph;
-
   HomogeneousGraphDomainFn homo_fn = [](const AMSHomogeneousGraph&,
-                                        SmallVector<AMSTensor>&) {};
+                                        AMSHomogeneousGraphFields&) {};
 
   HeterogeneousGraphDomainFn hetero_fn = [](const AMSHeterogeneousGraph&,
-                                            SmallVector<AMSTensor>&) {};
+                                            AMSHeterogeneousGraphFields&) {};
 
-  // These should compile:
-  // AMSExecute(executor, homo_fn, homo_graph, outs);
-  // AMSExecute(executor, hetero_fn, hetero_graph, outs);
-
-  // These should NOT compile (type mismatch):
-  // AMSExecute(executor, homo_fn, hetero_graph, outs);  // ERROR
-  // AMSExecute(executor, hetero_fn, homo_graph, outs);  // ERROR
-
+  (void)homo_fn;
+  (void)hetero_fn;
   CATCH_SUCCEED("Type safety validated at compile time");
 }
