@@ -1,4 +1,8 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include <stdexcept>
+#include <vector>
 
 #include "AMS.h"
 #include "AMSGraph.hpp"
@@ -6,83 +10,139 @@
 
 using namespace ams;
 
-// Paths to graph test models (relative to test executable)
+using Dim = AMSTensor::IntDimType;
+
 static const char* HOMOGENEOUS_GRAPH_MODEL_PATH =
     "../models/homogeneous_graph.pt";
 static const char* HETEROGENEOUS_GRAPH_MODEL_PATH =
     "../models/heterogeneous_graph.pt";
+static const char* BAD_KEY_GRAPH_MODEL_PATH =
+    "../models/homogeneous_graph_bad_key.pt";
+static const char* BAD_SHAPE_GRAPH_MODEL_PATH =
+    "../models/homogeneous_graph_bad_shape.pt";
 
-CATCH_TEST_CASE("AMSExecute homogeneous graph surrogate execution",
+static std::vector<Dim> contiguousStrides(const std::vector<Dim>& shape)
+{
+  std::vector<Dim> strides(shape.size(), 1);
+  Dim stride = 1;
+  for (std::size_t i = shape.size(); i-- > 0;) {
+    strides[i] = stride;
+    stride *= shape[i];
+  }
+  return strides;
+}
+
+template <typename T>
+static AMSTensor makeTensor(std::vector<Dim> shape)
+{
+  std::vector<Dim> strides = contiguousStrides(shape);
+  return AMSTensor::create<T>(shape, strides, AMSResourceType::AMS_HOST);
+}
+
+static AMSTensor makeMessageNodeFeatures()
+{
+  auto tensor = makeTensor<float>({4, 2});
+  float* data = tensor.data<float>();
+  data[0] = 1.0f;
+  data[1] = 10.0f;
+  data[2] = 2.0f;
+  data[3] = 20.0f;
+  data[4] = 3.0f;
+  data[5] = 30.0f;
+  data[6] = 4.0f;
+  data[7] = 40.0f;
+  return tensor;
+}
+
+template <typename T>
+static AMSTensor makeMessageEdgeIndex()
+{
+  auto tensor = makeTensor<T>({2, 5});
+  T* data = tensor.data<T>();
+  data[0] = static_cast<T>(0);
+  data[1] = static_cast<T>(1);
+  data[2] = static_cast<T>(2);
+  data[3] = static_cast<T>(0);
+  data[4] = static_cast<T>(3);
+  data[5] = static_cast<T>(1);
+  data[6] = static_cast<T>(2);
+  data[7] = static_cast<T>(3);
+  data[8] = static_cast<T>(3);
+  data[9] = static_cast<T>(0);
+  return tensor;
+}
+
+static AMSTensor makeMessageEdgeFeatures()
+{
+  auto tensor = makeTensor<float>({5, 1});
+  float* data = tensor.data<float>();
+  data[0] = 0.5f;
+  data[1] = 1.0f;
+  data[2] = 1.5f;
+  data[3] = 2.0f;
+  data[4] = 0.25f;
+  return tensor;
+}
+
+static AMSTensor makeMessageGlobalFeatures()
+{
+  auto tensor = makeTensor<float>({1, 1});
+  tensor.data<float>()[0] = 0.125f;
+  return tensor;
+}
+
+template <typename EdgeScalar>
+static AMSHomogeneousGraph makeMessageGraph()
+{
+  return AMSHomogeneousGraph(makeMessageNodeFeatures(),
+                             makeMessageEdgeIndex<EdgeScalar>(),
+                             makeMessageEdgeFeatures(),
+                             makeMessageGlobalFeatures());
+}
+
+static void verifyMessagePrediction(const AMSHomogeneousGraphFields& outputs)
+{
+  CATCH_REQUIRE(outputs.node_fields.contains("prediction"));
+  const auto& prediction = outputs.node_fields.at("prediction");
+  CATCH_REQUIRE(prediction.shape()[0] == 4);
+  CATCH_REQUIRE(prediction.shape()[1] == 1);
+
+  const float expected[] = {2.0f, 2.5f, 5.0f, 10.5f};
+  const float* data = prediction.data<float>();
+  for (int i = 0; i < 4; ++i) {
+    CATCH_REQUIRE(data[i] == Catch::Approx(expected[i]));
+  }
+}
+
+template <typename EdgeScalar>
+static void runHomogeneousSurrogate(const char* domain_name)
+{
+  auto model = AMSRegisterAbstractModel(
+      domain_name, 0.5, HOMOGENEOUS_GRAPH_MODEL_PATH, false);
+  AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
+  AMSHomogeneousGraph graph = makeMessageGraph<EdgeScalar>();
+
+  bool callback_invoked = false;
+  HomogeneousGraphDomainFn callback =
+      [&](const AMSHomogeneousGraph&, AMSHomogeneousGraphFields& outputs) {
+        callback_invoked = true;
+        outputs.node_fields.set("prediction", makeTensor<float>({4, 1}));
+      };
+
+  AMSHomogeneousGraphFields outputs;
+  AMSExecute(executor, callback, graph, outputs);
+
+  CATCH_REQUIRE_FALSE(callback_invoked);
+  verifyMessagePrediction(outputs);
+}
+
+CATCH_TEST_CASE("AMSExecute homogeneous graph surrogate message passing",
                 "[wf][graph][surrogate]")
 {
   AMSInit();
 
-  // Setup: Register model with actual generated model path
-  auto model = AMSRegisterAbstractModel("test_homo_surrogate",
-                                        0.5,
-                                        HOMOGENEOUS_GRAPH_MODEL_PATH,
-                                        false);
-  AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
-
-  // Create simple homogeneous graph with 'x' field (expected by test model)
-  AMSHomogeneousGraph graph;
-
-  // Insert node features tensor named 'x'
-  AMSTensor::IntDimType node_shape[] = {10, 16};  // 10 nodes, 16 features
-  AMSTensor::IntDimType node_strides[] = {16, 1};
-  auto node_features = AMSTensor::create<float>(
-      ams::ArrayRef<AMSTensor::IntDimType>(node_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(node_strides, 2),
-      AMSResourceType::AMS_HOST);
-
-  // Fill with test data
-  float* features_data = node_features.data<float>();
-  for (int i = 0; i < 160; ++i) {
-    features_data[i] = static_cast<float>(i) * 0.1f;
-  }
-
-  insertTensor(graph, "x", std::move(node_features));
-
-  // Define callback (should NOT be called if surrogate succeeds)
-  bool callback_invoked = false;
-  HomogeneousGraphDomainFn callback = [&](const AMSHomogeneousGraph& g,
-                                          SmallVector<AMSTensor>& outputs) {
-    callback_invoked = true;
-
-    // Verify graph structure
-    CATCH_REQUIRE(containsTensor(g, "x"));
-    const auto* x = findTensor(g, "x");
-    CATCH_REQUIRE(x != nullptr);
-    CATCH_REQUIRE(x->shape()[0] == 10);
-    CATCH_REQUIRE(x->shape()[1] == 16);
-
-    // Create output tensor (8 features per node, matching model output)
-    AMSTensor::IntDimType out_shape[] = {10, 8};
-    AMSTensor::IntDimType out_strides[] = {8, 1};
-    auto out_tensor = AMSTensor::create<float>(
-        ams::ArrayRef<AMSTensor::IntDimType>(out_shape, 2),
-        ams::ArrayRef<AMSTensor::IntDimType>(out_strides, 2),
-        AMSResourceType::AMS_HOST);
-
-    // Fill with physics computation result
-    float* out_data = out_tensor.data<float>();
-    for (int i = 0; i < 80; ++i) {
-      out_data[i] = static_cast<float>(i);
-    }
-
-    outputs.clear();
-    outputs.push_back(std::move(out_tensor));
-  };
-
-  // Execute
-  SmallVector<AMSTensor> outs;
-  AMSExecute(executor, callback, graph, outs);
-
-  // Model is available, so surrogate should be used (callback NOT invoked)
-  CATCH_REQUIRE_FALSE(callback_invoked);
-  CATCH_REQUIRE(outs.size() == 1);
-  CATCH_REQUIRE(outs[0].shape()[0] == 10);
-  CATCH_REQUIRE(outs[0].shape()[1] == 8);
+  runHomogeneousSurrogate<int64_t>("test_homo_surrogate_message_int64");
+  runHomogeneousSurrogate<int32_t>("test_homo_surrogate_message_int32");
 }
 
 CATCH_TEST_CASE("AMSExecute heterogeneous graph surrogate execution",
@@ -90,95 +150,44 @@ CATCH_TEST_CASE("AMSExecute heterogeneous graph surrogate execution",
 {
   AMSInit();
 
-  // Setup: Register model with actual generated model path
-  auto model = AMSRegisterAbstractModel("test_hetero_surrogate",
+  auto model = AMSRegisterAbstractModel("test_hetero_surrogate_fields",
                                         0.5,
                                         HETEROGENEOUS_GRAPH_MODEL_PATH,
                                         false);
   AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
 
-  // Create heterogeneous graph
   AMSHeterogeneousGraph graph;
-
-  // Add node store for "node" type with 'x' features
-  // Note: Using fixed "node" name to match test fixture model expectation
-  AMSTensorMap node_store;
-  AMSTensor::IntDimType node_shape[] = {10, 16};
-  AMSTensor::IntDimType node_strides[] = {16, 1};
-  auto node_features = AMSTensor::create<float>(
-      ams::ArrayRef<AMSTensor::IntDimType>(node_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(node_strides, 2),
-      AMSResourceType::AMS_HOST);
-
+  auto& node_store = graph.getOrCreateNodeStore("node");
+  auto node_features = makeTensor<float>({10, 16});
   float* node_data = node_features.data<float>();
   for (int i = 0; i < 160; ++i) {
     node_data[i] = static_cast<float>(i) * 0.1f;
   }
-
   insertTensor(node_store, "x", std::move(node_features));
-  graph.node_stores["node"] = std::move(node_store);
 
-  // Add edge store with dummy data (empty dicts can cause TorchScript issues)
-  AMSTensorMap edge_store;
-  AMSTensor::IntDimType dummy_shape[] = {1, 1};
-  AMSTensor::IntDimType dummy_strides[] = {1, 1};
-  auto dummy_edge = AMSTensor::create<float>(
-      ams::ArrayRef<AMSTensor::IntDimType>(dummy_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(dummy_strides, 2),
-      AMSResourceType::AMS_HOST);
-  dummy_edge.data<float>()[0] = 0.0f;
-  insertTensor(edge_store, "dummy", std::move(dummy_edge));
-  EdgeType edge_type{"node", "edge", "node"};
-  graph.edge_stores[edge_type] = std::move(edge_store);
+  auto& edge_store =
+      graph.getOrCreateEdgeStore(EdgeType{"node", "edge", "node"});
+  insertTensor(edge_store, "edge_index", makeMessageEdgeIndex<int64_t>());
+  insertTensor(edge_store, "features", makeMessageEdgeFeatures());
+  insertTensor(graph.global_store, "dummy", makeMessageGlobalFeatures());
 
-  // Add global store with dummy data
-  AMSTensor::IntDimType global_shape[] = {1, 1};
-  AMSTensor::IntDimType global_strides[] = {1, 1};
-  auto dummy_global = AMSTensor::create<float>(
-      ams::ArrayRef<AMSTensor::IntDimType>(global_shape, 2),
-      ams::ArrayRef<AMSTensor::IntDimType>(global_strides, 2),
-      AMSResourceType::AMS_HOST);
-  dummy_global.data<float>()[0] = 0.0f;
-  insertTensor(graph.global_store, "dummy", std::move(dummy_global));
-
-  // Define callback (should NOT be called if surrogate succeeds)
   bool callback_invoked = false;
-  HeterogeneousGraphDomainFn callback = [&](const AMSHeterogeneousGraph& g,
-                                            SmallVector<AMSTensor>& outputs) {
-    callback_invoked = true;
+  HeterogeneousGraphDomainFn callback =
+      [&](const AMSHeterogeneousGraph&, AMSHeterogeneousGraphFields& outputs) {
+        callback_invoked = true;
+        outputs.getOrCreateNodeStore("node").set("prediction",
+                                                 makeTensor<float>({10, 8}));
+      };
 
-    // Verify graph structure
-    CATCH_REQUIRE(g.containsNodeStore("node"));
-    const auto* node_store = g.findNodeStore("node");
-    CATCH_REQUIRE(node_store != nullptr);
-    CATCH_REQUIRE(containsTensor(*node_store, "x"));
+  AMSHeterogeneousGraphFields outputs;
+  AMSExecute(executor, callback, graph, outputs);
 
-    // Create output tensor
-    AMSTensor::IntDimType out_shape[] = {10, 8};
-    AMSTensor::IntDimType out_strides[] = {8, 1};
-    auto out_tensor = AMSTensor::create<float>(
-        ams::ArrayRef<AMSTensor::IntDimType>(out_shape, 2),
-        ams::ArrayRef<AMSTensor::IntDimType>(out_strides, 2),
-        AMSResourceType::AMS_HOST);
-
-    float* out_data = out_tensor.data<float>();
-    for (int i = 0; i < 80; ++i) {
-      out_data[i] = static_cast<float>(i);
-    }
-
-    outputs.clear();
-    outputs.push_back(std::move(out_tensor));
-  };
-
-  // Execute
-  SmallVector<AMSTensor> outs;
-  AMSExecute(executor, callback, graph, outs);
-
-  // Model is available, so surrogate should be used (callback NOT invoked)
   CATCH_REQUIRE_FALSE(callback_invoked);
-  CATCH_REQUIRE(outs.size() == 1);
-  CATCH_REQUIRE(outs[0].shape()[0] == 10);
-  CATCH_REQUIRE(outs[0].shape()[1] == 8);
+  const auto* node_outputs = outputs.findNodeStore("node");
+  CATCH_REQUIRE(node_outputs != nullptr);
+  const auto& prediction = node_outputs->at("prediction");
+  CATCH_REQUIRE(prediction.shape()[0] == 10);
+  CATCH_REQUIRE(prediction.shape()[1] == 8);
 }
 
 CATCH_TEST_CASE("Graph surrogate with no model triggers fallback",
@@ -186,48 +195,57 @@ CATCH_TEST_CASE("Graph surrogate with no model triggers fallback",
 {
   AMSInit();
 
-  // Setup: Register model with empty path (no model available)
-  auto model = AMSRegisterAbstractModel("test_no_model", 0.5, "", false);
+  auto model =
+      AMSRegisterAbstractModel("test_no_model_graph_fields", 0.5, "", false);
   AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
+  AMSHomogeneousGraph graph = makeMessageGraph<int64_t>();
 
-  // Create simple homogeneous graph
-  AMSHomogeneousGraph graph;
-  AMSTensor::IntDimType shape[] = {5, 16};
-  AMSTensor::IntDimType strides[] = {16, 1};
-  auto features =
-      AMSTensor::create<float>(ams::ArrayRef<AMSTensor::IntDimType>(shape, 2),
-                               ams::ArrayRef<AMSTensor::IntDimType>(strides, 2),
-                               AMSResourceType::AMS_HOST);
+  bool callback_invoked = false;
+  HomogeneousGraphDomainFn callback =
+      [&](const AMSHomogeneousGraph&, AMSHomogeneousGraphFields& outputs) {
+        callback_invoked = true;
+        auto out = makeTensor<float>({4, 1});
+        out.data<float>()[0] = 42.0f;
+        outputs.node_fields.set("prediction", std::move(out));
+      };
 
-  float* data = features.data<float>();
-  for (int i = 0; i < 80; ++i) {
-    data[i] = 1.0f;
+  AMSHomogeneousGraphFields outputs;
+  AMSExecute(executor, callback, graph, outputs);
+
+  CATCH_REQUIRE(callback_invoked);
+  CATCH_REQUIRE(outputs.node_fields.at("prediction").data<float>()[0] ==
+                42.0f);
+}
+
+CATCH_TEST_CASE("Malformed homogeneous graph surrogate outputs fail loudly",
+                "[wf][graph][surrogate][failure]")
+{
+  AMSInit();
+
+  HomogeneousGraphDomainFn callback =
+      [](const AMSHomogeneousGraph&, AMSHomogeneousGraphFields&) {};
+
+  {
+    auto model = AMSRegisterAbstractModel("test_bad_graph_key",
+                                          0.5,
+                                          BAD_KEY_GRAPH_MODEL_PATH,
+                                          false);
+    AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
+    AMSHomogeneousGraph graph = makeMessageGraph<int64_t>();
+    AMSHomogeneousGraphFields outputs;
+    CATCH_REQUIRE_THROWS_AS(AMSExecute(executor, callback, graph, outputs),
+                            std::runtime_error);
   }
 
-  insertTensor(graph, "x", std::move(features));
-
-  // Define callback
-  bool callback_invoked = false;
-  HomogeneousGraphDomainFn callback = [&](const AMSHomogeneousGraph& g,
-                                          SmallVector<AMSTensor>& outputs) {
-    callback_invoked = true;
-
-    AMSTensor::IntDimType out_shape[] = {5, 8};
-    AMSTensor::IntDimType out_strides[] = {8, 1};
-    auto out = AMSTensor::create<float>(
-        ams::ArrayRef<AMSTensor::IntDimType>(out_shape, 2),
-        ams::ArrayRef<AMSTensor::IntDimType>(out_strides, 2),
-        AMSResourceType::AMS_HOST);
-
-    outputs.clear();
-    outputs.push_back(std::move(out));
-  };
-
-  // Execute
-  SmallVector<AMSTensor> outs;
-  AMSExecute(executor, callback, graph, outs);
-
-  // Invalid model should trigger fallback
-  CATCH_REQUIRE(callback_invoked);
-  CATCH_REQUIRE(outs.size() == 1);
+  {
+    auto model = AMSRegisterAbstractModel("test_bad_graph_shape",
+                                          0.5,
+                                          BAD_SHAPE_GRAPH_MODEL_PATH,
+                                          false);
+    AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
+    AMSHomogeneousGraph graph = makeMessageGraph<int64_t>();
+    AMSHomogeneousGraphFields outputs;
+    CATCH_REQUIRE_THROWS_AS(AMSExecute(executor, callback, graph, outputs),
+                            std::runtime_error);
+  }
 }

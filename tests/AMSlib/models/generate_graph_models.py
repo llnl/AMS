@@ -23,32 +23,31 @@ from ams_model import (
 
 
 class HomogeneousGraphModel(nn.Module):
-    """Simple model for homogeneous graphs.
-
-    Accepts a Dict[str, Tensor] representing a homogeneous graph.
-    Reads the 'x' field (node features) and applies a linear transformation.
-    Returns (prediction, uncertainty) tuple where uncertainty is fixed low value.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.linear = nn.Linear(16, 8)
+    """Deterministic message-passing model for homogeneous graphs."""
 
     def forward(
         self, graph: Dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        # Read 'x' field from graph (node features)
-        x = graph['x']
+    ) -> Dict[str, torch.Tensor]:
+        node_features = graph["node_features"]
+        edge_index = graph["edge_index"].to(torch.int64)
+        edge_features = graph["edge_features"]
 
-        # Simple prediction: linear transform
-        prediction = self.linear(x)
+        src = edge_index[0]
+        dst = edge_index[1]
 
-        # Low fixed uncertainty (always accept for testing)
-        uncertainty = torch.full(
-            (x.shape[0], 1), 0.01, dtype=x.dtype, device=x.device
+        messages = edge_features[:, 0:1] * node_features.index_select(0, src)[:, 0:1]
+        aggregated = torch.zeros(
+            (node_features.shape[0], 1),
+            dtype=node_features.dtype,
+            device=node_features.device,
         )
+        aggregated = aggregated.index_add(0, dst, messages)
 
-        return prediction, uncertainty
+        prediction = node_features[:, 0:1] + aggregated
+        if "global_features" in graph:
+            prediction = prediction + graph["global_features"][0:1, 0:1] * 0.0
+
+        return {"node:prediction": prediction}
 
 
 class HeterogeneousGraphModel(nn.Module):
@@ -65,7 +64,7 @@ class HeterogeneousGraphModel(nn.Module):
     }
 
     Reads the 'x' field from the 'node' node store and applies transformation.
-    Returns (prediction, uncertainty) tuple where uncertainty is fixed low value.
+    Returns named node fields.
     """
 
     def __init__(self):
@@ -74,7 +73,7 @@ class HeterogeneousGraphModel(nn.Module):
 
     def forward(
         self, graph: Dict[str, Any]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> Dict[str, torch.Tensor]:
         # Extract node_stores with proper type recovery for TorchScript
         # The top-level dict has mixed types (node_stores/edge_stores are dicts,
         # global_store is also a dict but with different structure)
@@ -92,12 +91,23 @@ class HeterogeneousGraphModel(nn.Module):
         # Simple prediction
         prediction = self.linear(x)
 
-        # Low fixed uncertainty
-        uncertainty = torch.full(
-            (x.shape[0], 1), 0.01, dtype=x.dtype, device=x.device
-        )
+        return {"node:node:prediction": prediction}
 
-        return prediction, uncertainty
+
+class MalformedHomogeneousGraphModel(nn.Module):
+    def forward(
+        self, graph: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        node_features = graph["node_features"]
+        return {"bad:prediction": node_features[:, 0:1]}
+
+
+class WrongShapeHomogeneousGraphModel(nn.Module):
+    def forward(
+        self, graph: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        node_features = graph["node_features"]
+        return {"node:prediction": node_features[0:1, 0:1]}
 
 
 def main():
@@ -135,6 +145,26 @@ def main():
     hetero_path = out_dir / "heterogeneous_graph.pt"
     hetero_wrapped.save(str(hetero_path))
     print(f"[info] Saved heterogeneous graph model: {hetero_path}")
+
+    print("[info] Generating malformed homogeneous graph model...")
+    bad_key_model = MalformedHomogeneousGraphModel().to(device=device, dtype=dtype)
+    bad_key_wrapped = create_ams_homogeneous_graph_model(
+        bad_key_model, device, dtype
+    )
+    bad_key_path = out_dir / "homogeneous_graph_bad_key.pt"
+    bad_key_wrapped.save(str(bad_key_path))
+    print(f"[info] Saved malformed graph model: {bad_key_path}")
+
+    print("[info] Generating wrong-shape homogeneous graph model...")
+    bad_shape_model = WrongShapeHomogeneousGraphModel().to(
+        device=device, dtype=dtype
+    )
+    bad_shape_wrapped = create_ams_homogeneous_graph_model(
+        bad_shape_model, device, dtype
+    )
+    bad_shape_path = out_dir / "homogeneous_graph_bad_shape.pt"
+    bad_shape_wrapped.save(str(bad_shape_path))
+    print(f"[info] Saved wrong-shape graph model: {bad_shape_path}")
 
     print("[info] Done generating graph models")
 

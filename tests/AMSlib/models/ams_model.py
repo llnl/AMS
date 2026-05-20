@@ -95,14 +95,14 @@ class AMSHomogeneousGraphModel(nn.Module):
     def get_ams_info(self) -> Dict[str, str]:
         return self.ams_info
 
-    def forward(self, graph: Dict[str, Tensor]) -> Tuple[Tensor, Tensor]:
+    def forward(self, graph: Dict[str, Tensor]) -> Dict[str, Tensor]:
         """Forward pass for homogeneous graph.
 
         Args:
             graph: Dict[str, Tensor] representing homogeneous graph
 
         Returns:
-            Tuple of (prediction, uncertainty) tensors
+            Dict of named graph output fields
         """
         return self._model(graph)
 
@@ -115,7 +115,7 @@ def create_ams_homogeneous_graph_model(
     """Create AMS-wrapped homogeneous graph model.
 
     Args:
-        model: PyTorch model with forward(graph: Dict[str, Tensor]) -> Tuple[Tensor, Tensor]
+        model: PyTorch model with forward(graph: Dict[str, Tensor]) -> Dict[str, Tensor]
         device: Target device
         precision: Target dtype
 
@@ -174,7 +174,7 @@ class AMSHeterogeneousGraphModel(nn.Module):
     def get_ams_info(self) -> Dict[str, str]:
         return self.ams_info
 
-    def forward(self, graph: Dict[str, Any]) -> Tuple[Tensor, Tensor]:
+    def forward(self, graph: Dict[str, Any]) -> Dict[str, Tensor]:
         """Forward pass for heterogeneous graph.
 
         Args:
@@ -182,7 +182,7 @@ class AMSHeterogeneousGraphModel(nn.Module):
                    Uses Dict[str, Any] to handle mixed value types at top level
 
         Returns:
-            Tuple of (prediction, uncertainty) tensors
+            Dict of named graph output fields
         """
         return self._model(graph)
 
@@ -195,7 +195,7 @@ def create_ams_heterogeneous_graph_model(
     """Create AMS-wrapped heterogeneous graph model.
 
     Args:
-        model: PyTorch model with forward(graph: Dict[str, Any]) -> Tuple[Tensor, Tensor]
+        model: PyTorch model with forward(graph: Dict[str, Any]) -> Dict[str, Tensor]
                Uses Dict[str, Any] to handle mixed top-level value types
         device: Target device
         precision: Target dtype

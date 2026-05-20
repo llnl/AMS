@@ -31,10 +31,10 @@ namespace ams
 class AMSWorkflow;
 bool tryGraphSurrogate(AMSWorkflow*,
                        const AMSHomogeneousGraph&,
-                       SmallVector<AMSTensor>&);
+                       AMSHomogeneousGraphFields&);
 bool tryGraphSurrogate(AMSWorkflow*,
                        const AMSHeterogeneousGraph&,
-                       SmallVector<AMSTensor>&);
+                       AMSHeterogeneousGraphFields&);
 }  // namespace ams
 
 //! ----------------------------------------------------------------------------
@@ -46,10 +46,10 @@ class SurrogateModel
   // Note: These are defined in interface.cpp within the ams namespace
   friend bool ams::tryGraphSurrogate(ams::AMSWorkflow*,
                                      const ams::AMSHomogeneousGraph&,
-                                     ams::SmallVector<ams::AMSTensor>&);
+                                     ams::AMSHomogeneousGraphFields&);
   friend bool ams::tryGraphSurrogate(ams::AMSWorkflow*,
                                      const ams::AMSHeterogeneousGraph&,
-                                     ams::SmallVector<ams::AMSTensor>&);
+                                     ams::AMSHeterogeneousGraphFields&);
 
 private:
   const std::string _model_path;

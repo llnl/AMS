@@ -1,6 +1,7 @@
 #include "AMSGraph.hpp"
 
 #include <stdexcept>
+#include <string>
 
 namespace ams
 {
@@ -13,7 +14,165 @@ static std::size_t hashCombine(std::size_t seed, std::size_t value) noexcept
   return seed;
 }
 
+static bool isFloatingDType(AMSDType dtype) noexcept
+{
+  return dtype == AMS_SINGLE || dtype == AMS_DOUBLE;
+}
+
+static bool isIntegerDType(AMSDType dtype) noexcept
+{
+  return dtype == AMS_INT64 || dtype == AMS_INT32;
+}
+
+static std::string dtypeName(AMSDType dtype)
+{
+  switch (dtype) {
+    case AMS_SINGLE:
+      return "float32";
+    case AMS_DOUBLE:
+      return "float64";
+    case AMS_INT32:
+      return "int32";
+    case AMS_INT64:
+      return "int64";
+    default:
+      return "unknown";
+  }
+}
+
+static void requireRank(const AMSTensor& tensor,
+                        std::size_t rank,
+                        const std::string& name)
+{
+  if (tensor.shape().size() != rank) {
+    throw std::runtime_error("AMSHomogeneousGraph " + name +
+                             " must be rank " + std::to_string(rank) + ".");
+  }
+}
+
+static void requireFloating(const AMSTensor& tensor, const std::string& name)
+{
+  if (!isFloatingDType(tensor.dType())) {
+    throw std::runtime_error("AMSHomogeneousGraph " + name +
+                             " must be floating point, got " +
+                             dtypeName(tensor.dType()) + ".");
+  }
+}
+
 }  // namespace
+
+bool AMSTensorFieldMap::contains(const std::string& name) const
+{
+  return fields_.find(name) != fields_.end();
+}
+
+AMSTensor* AMSTensorFieldMap::find(const std::string& name) noexcept
+{
+  auto it = fields_.find(name);
+  if (it == fields_.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
+const AMSTensor* AMSTensorFieldMap::find(
+    const std::string& name) const noexcept
+{
+  auto it = fields_.find(name);
+  if (it == fields_.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
+AMSTensor& AMSTensorFieldMap::at(const std::string& name)
+{
+  return fields_.at(name);
+}
+
+const AMSTensor& AMSTensorFieldMap::at(const std::string& name) const
+{
+  return fields_.at(name);
+}
+
+AMSTensor& AMSTensorFieldMap::insert(std::string name, AMSTensor tensor)
+{
+  if (fields_.find(name) != fields_.end()) {
+    throw std::runtime_error("AMSTensorFieldMap::insert: field '" + name +
+                             "' already exists");
+  }
+  auto [it, inserted] = fields_.emplace(std::move(name), std::move(tensor));
+  (void)inserted;
+  return it->second;
+}
+
+AMSTensor& AMSTensorFieldMap::set(std::string name, AMSTensor tensor)
+{
+  auto it = fields_.find(name);
+  if (it != fields_.end()) {
+    fields_.erase(it);
+  }
+  auto [new_it, inserted] = fields_.emplace(std::move(name), std::move(tensor));
+  (void)inserted;
+  return new_it->second;
+}
+
+AMSHomogeneousGraph::AMSHomogeneousGraph(AMSTensor node_features_,
+                                         AMSTensor edge_index_,
+                                         AMSTensor edge_features_)
+    : node_features(std::move(node_features_)),
+      edge_index(std::move(edge_index_)),
+      edge_features(std::move(edge_features_))
+{
+  validate();
+}
+
+AMSHomogeneousGraph::AMSHomogeneousGraph(AMSTensor node_features_,
+                                         AMSTensor edge_index_,
+                                         AMSTensor edge_features_,
+                                         AMSTensor global_features_)
+    : node_features(std::move(node_features_)),
+      edge_index(std::move(edge_index_)),
+      edge_features(std::move(edge_features_)),
+      global_features(std::move(global_features_))
+{
+  validate();
+}
+
+void AMSHomogeneousGraph::validate() const
+{
+  requireRank(node_features, 2, "node_features");
+  requireFloating(node_features, "node_features");
+
+  requireRank(edge_index, 2, "edge_index");
+  if (!isIntegerDType(edge_index.dType())) {
+    throw std::runtime_error(
+        "AMSHomogeneousGraph edge_index must have integer dtype "
+        "(int64 preferred, int32 supported), got " +
+        dtypeName(edge_index.dType()) + ".");
+  }
+  if (edge_index.shape()[0] != 2) {
+    throw std::runtime_error(
+        "AMSHomogeneousGraph edge_index must have shape [2, E].");
+  }
+
+  requireRank(edge_features, 2, "edge_features");
+  requireFloating(edge_features, "edge_features");
+  if (edge_features.shape()[0] != edge_index.shape()[1]) {
+    throw std::runtime_error(
+        "AMSHomogeneousGraph edge_features first dimension must match "
+        "number of edges.");
+  }
+
+  if (global_features.has_value()) {
+    requireRank(*global_features, 2, "global_features");
+    requireFloating(*global_features, "global_features");
+    if (global_features->shape()[0] != 1) {
+      throw std::runtime_error(
+          "AMSHomogeneousGraph global_features must have shape [1, F].");
+    }
+  }
+}
 
 EdgeType::EdgeType(std::string src_, std::string rel_, std::string dst_)
     : src(std::move(src_)), rel(std::move(rel_)), dst(std::move(dst_))
@@ -168,6 +327,76 @@ AMSTensorMap* AMSHeterogeneousGraph::findEdgeStore(
 }
 
 const AMSTensorMap* AMSHeterogeneousGraph::findEdgeStore(
+    const EdgeType& edge_type) const noexcept
+{
+  auto it = edge_stores.find(edge_type);
+  if (it == edge_stores.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
+bool AMSHeterogeneousGraphFields::containsNodeStore(
+    const std::string& name) const
+{
+  return node_stores.find(name) != node_stores.end();
+}
+
+bool AMSHeterogeneousGraphFields::containsEdgeStore(
+    const EdgeType& edge_type) const
+{
+  return edge_stores.find(edge_type) != edge_stores.end();
+}
+
+AMSTensorFieldMap& AMSHeterogeneousGraphFields::getOrCreateNodeStore(
+    std::string name)
+{
+  auto [it, inserted] =
+      node_stores.try_emplace(std::move(name), AMSTensorFieldMap{});
+  (void)inserted;
+  return it->second;
+}
+
+AMSTensorFieldMap& AMSHeterogeneousGraphFields::getOrCreateEdgeStore(
+    EdgeType edge_type)
+{
+  auto [it, inserted] =
+      edge_stores.try_emplace(std::move(edge_type), AMSTensorFieldMap{});
+  (void)inserted;
+  return it->second;
+}
+
+AMSTensorFieldMap* AMSHeterogeneousGraphFields::findNodeStore(
+    const std::string& name) noexcept
+{
+  auto it = node_stores.find(name);
+  if (it == node_stores.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
+const AMSTensorFieldMap* AMSHeterogeneousGraphFields::findNodeStore(
+    const std::string& name) const noexcept
+{
+  auto it = node_stores.find(name);
+  if (it == node_stores.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
+AMSTensorFieldMap* AMSHeterogeneousGraphFields::findEdgeStore(
+    const EdgeType& edge_type) noexcept
+{
+  auto it = edge_stores.find(edge_type);
+  if (it == edge_stores.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
+const AMSTensorFieldMap* AMSHeterogeneousGraphFields::findEdgeStore(
     const EdgeType& edge_type) const noexcept
 {
   auto it = edge_stores.find(edge_type);

@@ -444,7 +444,7 @@ void AMSExecute(AMSExecutor executor,
 void AMSExecute(AMSExecutor executor,
                 HomogeneousGraphDomainFn& OrigComputation,
                 const ams::AMSHomogeneousGraph& graph_input,
-                ams::SmallVector<ams::AMSTensor>& outs)
+                ams::AMSHomogeneousGraphFields& outputs)
 {
   int64_t index = static_cast<int64_t>(executor);
   if (index >= _amsWrap->executors.size())
@@ -452,15 +452,15 @@ void AMSExecute(AMSExecutor executor,
   auto currExec = _amsWrap->executors[index];
 
   ams::AMSWorkflow* workflow = reinterpret_cast<ams::AMSWorkflow*>(currExec);
-  AMS_DBG(AMS, "Calling AMS with homogeneous graph, out:{}", outs.size());
+  AMS_DBG(AMS, "Calling AMS with homogeneous graph");
 
-  callAMS(workflow, OrigComputation, graph_input, outs);
+  callAMS(workflow, OrigComputation, graph_input, outputs);
 }
 
 void AMSExecute(AMSExecutor executor,
                 HeterogeneousGraphDomainFn& OrigComputation,
                 const ams::AMSHeterogeneousGraph& graph_input,
-                ams::SmallVector<ams::AMSTensor>& outs)
+                ams::AMSHeterogeneousGraphFields& outputs)
 {
   int64_t index = static_cast<int64_t>(executor);
   if (index >= _amsWrap->executors.size())
@@ -468,9 +468,9 @@ void AMSExecute(AMSExecutor executor,
   auto currExec = _amsWrap->executors[index];
 
   ams::AMSWorkflow* workflow = reinterpret_cast<ams::AMSWorkflow*>(currExec);
-  AMS_DBG(AMS, "Calling AMS with heterogeneous graph, out:{}", outs.size());
+  AMS_DBG(AMS, "Calling AMS with heterogeneous graph");
 
-  callAMS(workflow, OrigComputation, graph_input, outs);
+  callAMS(workflow, OrigComputation, graph_input, outputs);
 }
 
 void AMSCExecute(AMSExecutor executor,
