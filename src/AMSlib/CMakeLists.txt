@@ -21,8 +21,7 @@ message(STATUS "ALL INCLUDES ARE ${AMS_APP_INCLUDES}")
 target_compile_definitions(AMS PRIVATE ${AMS_APP_DEFINES})
 message(STATUS "All AMS Internal Defines are ${AMS_APP_DEFINES}")
 target_include_directories(AMS PRIVATE 
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>
-    ${AMS_APP_INCLUDES})
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>)
 target_include_directories(AMS PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
