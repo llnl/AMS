@@ -44,23 +44,18 @@ remove_static_from_libs(TO LINK_AMS_HDF5_TARGETS FROM ${AMS_HDF5_LINK_TARGETS})
 target_link_libraries(AMS PRIVATE ${LINK_AMS_HDF5_TARGETS})
 
 if (ENABLE_CALIPER)
-  target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:caliper> PRIVATE $<INSTALL_INTERFACE:caliper>)
+  target_link_libraries(AMS PRIVATE caliper)
 endif()
 
 if (ENABLE_MPI)
-  target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:MPI::MPI_CXX> PRIVATE $<INSTALL_INTERFACE:MPI::MPI_CXX>)
+  target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
 endif()
 
 if (ENABLE_RMQ)
-  target_link_libraries(AMS PUBLIC  $<BUILD_INTERFACE:amqpcpp> PRIVATE $<INSTALL_INTERFACE:amqpcpp>)
+  target_link_libraries(AMS PRIVATE amqpcpp)
 
   if (OPENSSL_FOUND)
-    target_link_libraries(AMS PUBLIC
-                               $<BUILD_INTERFACE:OpenSSL::SSL>
-                               $<BUILD_INTERFACE:OpenSSL::Crypto>
-                               PRIVATE
-                               $<INSTALL_INTERFACE:OpenSSL::SSL>
-                               $<INSTALL_INTERFACE:OpenSSL::Crypto>)
+    target_link_libraries(AMS PRIVATE OpenSSL::SSL OpenSSL::Crypto)
   endif()
   # NOTE: We set here the event/event pthreads as public. As there is no easy way
   # to do a find package(libevent) and RMQ is not exposing that properly.
@@ -69,9 +64,7 @@ if (ENABLE_RMQ)
   target_link_libraries(AMS PUBLIC ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
 endif()
 
-target_link_libraries(AMS PUBLIC
-    		$<BUILD_INTERFACE:stdc++fs torch> PRIVATE
-    		$<INSTALL_INTERFACE:stdc++fs torch>)
+target_link_libraries(AMS PRIVATE stdc++fs torch)
 if (ENABLE_RMQ)
   target_link_libraries(AMS PRIVATE Threads::Threads)
 endif()
