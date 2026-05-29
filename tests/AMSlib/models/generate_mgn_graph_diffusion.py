@@ -8,6 +8,7 @@ come from the exported TorchScript model.
 """
 
 import argparse
+import copy
 import os
 import sys
 from pathlib import Path
@@ -42,10 +43,10 @@ MODEL_SEED = 314159
 TRAIN_DATA_SEED = 271828
 VAL_DATA_SEED = 161803
 
-LATENT_DIM = 32
+LATENT_DIM = 64
 NUM_PROCESSOR_BLOCKS = 2
 K_NEIGHBORS = 6
-TRAIN_STEPS = 2000
+TRAIN_STEPS = 3000
 VAL_GRAPHS = 32
 LEARNING_RATE = 1.0e-3
 WEIGHT_DECAY = 1.0e-6
@@ -62,7 +63,7 @@ class MLP(nn.Module):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Linear(hidden_dim, output_dim),
         )
 
@@ -185,7 +186,17 @@ def _unique_directed_edges(knn: Tensor) -> Tensor:
 def generate_graph(num_nodes: int, seed: int) -> Tuple[Dict[str, Tensor], Tensor]:
     generator = make_generator(seed)
     positions = torch.rand((num_nodes, 2), generator=generator, dtype=torch.float32)
-    u = torch.rand((num_nodes, 1), generator=generator, dtype=torch.float32) * 2.0 - 1.0
+    phases = torch.rand((1, 4), generator=generator, dtype=torch.float32) * (2.0 * torch.pi)
+    amps = torch.rand((1, 4), generator=generator, dtype=torch.float32) * 0.5 + 0.5
+    x = positions[:, 0:1]
+    y = positions[:, 1:2]
+    u_raw = (
+        amps[:, 0:1] * torch.sin(2.0 * torch.pi * x + phases[:, 0:1])
+        + amps[:, 1:2] * torch.cos(2.0 * torch.pi * y + phases[:, 1:2])
+        + amps[:, 2:3] * torch.sin(2.0 * torch.pi * (x + y) + phases[:, 2:3])
+        + amps[:, 3:4] * torch.cos(2.0 * torch.pi * (x - y) + phases[:, 3:4])
+    )
+    u = torch.tanh(0.5 * u_raw)
     kappa = torch.rand((num_nodes, 1), generator=generator, dtype=torch.float32) + 0.5
     dt = torch.rand((1, 1), generator=generator, dtype=torch.float32) * 0.06 + 0.02
 
@@ -308,7 +319,16 @@ def run_train(out_dir: Path) -> None:
 
     model = make_model().train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer,
+        milestones=(TRAIN_STEPS // 2, (TRAIN_STEPS * 5) // 6),
+        gamma=0.3,
+    )
     val_cases = validation_graphs()
+    best_val_mse = float("inf")
+    best_zero_baseline_mse = float("inf")
+    best_step = 0
+    best_state_dict = copy.deepcopy(model.state_dict())
 
     for step in range(1, TRAIN_STEPS + 1):
         num_nodes = 16 + ((step * 53) % 113)
@@ -319,14 +339,22 @@ def run_train(out_dir: Path) -> None:
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         if step == 1 or step % 200 == 0 or step == TRAIN_STEPS:
             val_mse, zero_baseline_mse, _ = evaluate(model, val_cases)
+            if val_mse < best_val_mse:
+                best_val_mse = val_mse
+                best_zero_baseline_mse = zero_baseline_mse
+                best_step = step
+                best_state_dict = copy.deepcopy(model.state_dict())
             print(
                 f"[info] step={step:04d} train_mse={loss.item():.8e} "
-                f"val_mse={val_mse:.8e} zero_baseline_mse={zero_baseline_mse:.8e}"
+                f"val_mse={val_mse:.8e} zero_baseline_mse={zero_baseline_mse:.8e} "
+                f"best_step={best_step:04d} best_val_mse={best_val_mse:.8e}"
             )
 
+    model.load_state_dict(best_state_dict)
     val_mse, zero_baseline_mse, val_targets = evaluate(model, val_cases)
     target_mean = val_targets.mean().item()
     target_max_abs = val_targets.abs().max().item()
@@ -338,7 +366,7 @@ def run_train(out_dir: Path) -> None:
         f"mean={target_mean:.8e} max_abs={target_max_abs:.8e} std={target_std:.8e}"
     )
     print(
-        f"[info] final validation_mse={val_mse:.8e}, "
+        f"[info] selected best_step={best_step}, validation_mse={val_mse:.8e}, "
         f"zero_baseline_mse={zero_baseline_mse:.8e}, primary_threshold={primary_threshold:.8e}"
     )
     if val_mse > SECONDARY_ABSOLUTE_MSE:
@@ -363,6 +391,9 @@ def run_train(out_dir: Path) -> None:
         "learning_rate": LEARNING_RATE,
         "weight_decay": WEIGHT_DECAY,
         "validation_mse": val_mse,
+        "best_step": best_step,
+        "best_validation_mse": best_val_mse,
+        "best_zero_baseline_mse": best_zero_baseline_mse,
         "zero_baseline_mse": zero_baseline_mse,
         "primary_baseline_factor": PRIMARY_BASELINE_FACTOR,
         "secondary_absolute_mse": SECONDARY_ABSOLUTE_MSE,
