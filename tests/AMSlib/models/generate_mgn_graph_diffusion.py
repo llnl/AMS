@@ -400,7 +400,7 @@ def run_train(out_dir: Path) -> None:
         "target_mean": target_mean,
         "target_max_abs": target_max_abs,
         "target_std": target_std,
-        "torch_version": torch.__version__,
+        "torch_version": str(torch.__version__),
     }
     checkpoint = {
         "model_state_dict": model.state_dict(),
@@ -437,6 +437,13 @@ def flatten_float(tensor: Tensor) -> List[float]:
 
 def flatten_int(tensor: Tensor) -> List[int]:
     return [int(x) for x in tensor.detach().cpu().contiguous().view(-1).tolist()]
+
+
+def load_checkpoint(path: Path) -> Dict[str, object]:
+    try:
+        return torch.load(path, map_location="cpu", weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location="cpu")
 
 
 def write_fixture_header(path: Path, cases: List[Dict[str, object]], metadata: Dict[str, object]) -> None:
@@ -533,7 +540,7 @@ def run_fixtures(out_dir: Path) -> None:
             f"Missing checkpoint {checkpoint_path}. Run --mode train before --mode fixtures."
         )
 
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    checkpoint = load_checkpoint(checkpoint_path)
     metadata = checkpoint["metadata"]
     print(f"[info] Loading checkpoint: {checkpoint_path}")
     print(f"[info] metadata={metadata}")
