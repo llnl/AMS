@@ -4,6 +4,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/generate_linear_model.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate_base_models.py"
   "${CMAKE_CURRENT_SOURCE_DIR}/generate_graph_models.py"
+  "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
 )
 
 # Where to drop the .pt files
@@ -113,4 +114,51 @@ configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/ams_test_linear_models.hpp
   ${CMAKE_CURRENT_BINARY_DIR}/ams_test_linear_models.hpp
   COPYONLY
+)
+
+find_program(AMS_PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
+
+set(MGN_GRAPH_DIFFUSION_CHECKPOINT
+  "${CMAKE_CURRENT_BINARY_DIR}/mgn_graph_diffusion_checkpoint.pt"
+)
+set(MGN_GRAPH_DIFFUSION_MODEL
+  "${CMAKE_CURRENT_BINARY_DIR}/mgn_graph_diffusion.pt"
+)
+set(MGN_GRAPH_DIFFUSION_FIXTURES
+  "${CMAKE_CURRENT_BINARY_DIR}/mgn_graph_fixtures.hpp"
+)
+
+add_custom_command(
+  OUTPUT
+    "${MGN_GRAPH_DIFFUSION_CHECKPOINT}"
+    "${MGN_GRAPH_DIFFUSION_MODEL}"
+    "${MGN_GRAPH_DIFFUSION_FIXTURES}"
+  COMMAND
+    "${AMS_PYTHON_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
+    --out-dir "${CMAKE_CURRENT_BINARY_DIR}"
+    --mode feasibility
+  COMMAND
+    "${AMS_PYTHON_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
+    --out-dir "${CMAKE_CURRENT_BINARY_DIR}"
+    --mode train
+  COMMAND
+    "${AMS_PYTHON_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
+    --out-dir "${CMAKE_CURRENT_BINARY_DIR}"
+    --mode fixtures
+  DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/ams_model.py"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMENT "Generating Stage 2 pure-Torch MGN graph diffusion model and fixtures"
+  VERBATIM
+)
+
+add_custom_target(generate_mgn_graph_diffusion
+  DEPENDS
+    "${MGN_GRAPH_DIFFUSION_CHECKPOINT}"
+    "${MGN_GRAPH_DIFFUSION_MODEL}"
+    "${MGN_GRAPH_DIFFUSION_FIXTURES}"
 )

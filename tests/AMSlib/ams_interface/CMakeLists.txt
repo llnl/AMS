@@ -43,3 +43,9 @@ ADD_AMS_UNIT_TEST(AMS_GRAPH_FALLBACK ams_graph_fallback)
 
 BUILD_UNIT_TEST(ams_graph_surrogate test_graph_surrogate.cpp Catch2::Catch2 ../ams_catch_main.cpp)
 ADD_AMS_UNIT_TEST(AMS_GRAPH_SURROGATE ams_graph_surrogate)
+
+BUILD_UNIT_TEST(ams_graph_mgn_surrogate test_graph_mgn_surrogate.cpp)
+if (TARGET generate_mgn_graph_diffusion)
+  add_dependencies(ams_graph_mgn_surrogate generate_mgn_graph_diffusion)
+endif()
+ADD_AMS_UNIT_TEST(AMS_GRAPH_MGN_SURROGATE ams_graph_mgn_surrogate)
