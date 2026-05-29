@@ -3,7 +3,10 @@ function(BUILD_TEST exe source)
   target_include_directories(${exe} PRIVATE "${PROJECT_SOURCE_DIR}/src/AMSlib/" "${PROJECT_SOURCE_DIR}/src/AMSlib/include" ${caliper_INCLUDE_DIR} ${MPI_INCLUDE_PATH})
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES})
   message("On test defines are ${AMS_APP_DEFINES}")
-  target_link_libraries(${exe} PRIVATE AMS torch)
+  target_link_libraries(${exe} PRIVATE AMS)
+  if (ENABLE_TORCH)
+    target_link_libraries(${exe} PRIVATE torch)
+  endif()
   target_link_libraries(${exe} PRIVATE Threads::Threads)
   target_link_libraries(${exe} PRIVATE ${AMS_HDF5_LINK_TARGETS})
   if (ENABLE_CALIPER)
@@ -24,9 +27,6 @@ function(BUILD_TEST exe source)
   endif()
 endfunction()
 
-
 # AMS Database benchmark (RMQ and/or HDF5 + MPI / No ML models used)
 BUILD_TEST(ams_benchmark_db ams_bench_db.cpp)
-# The AMS DB Benchmark requires mfem
-# TODO: Remove mfem requirement from the benchmark
 target_link_libraries(ams_benchmark_db PRIVATE AMS ${AMS_EXAMPLE_LIBRARIES})

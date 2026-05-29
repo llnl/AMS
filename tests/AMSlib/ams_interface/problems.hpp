@@ -1,4 +1,8 @@
-#include <torch/torch.h>
+#pragma once
+
+#include <cstddef>
+#include <stdexcept>
+#include <vector>
 
 #include "AMS.h"
 using namespace ams;
@@ -15,8 +19,8 @@ struct Problem2D {
   }
 
   void run(long num_elements,
-           DType* input1,
-           DType* input2,
+           const DType* input1,
+           const DType* input2,
            DType* inout,
            DType* out1,
            DType* out2,
@@ -66,28 +70,30 @@ struct Problem2D {
       SmallVector<AMSTensor> inout_tensors;
       SmallVector<AMSTensor> output_tensors;
 
-      // Allocate Input memory
+      std::vector<std::vector<DType>> input_buffers(num_inputs,
+                                                    std::vector<DType>(
+                                                        elements));
       for (int j = 0; j < num_inputs; j++) {
-        DType* data = new DType[elements];
         input_tensors.push_back(AMSTensor::view(
-            initialize_inputs(data, elements),
+            initialize_inputs(input_buffers[j].data(), elements),
             SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
             SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
             resource));
       }
 
-      DType* inout_data = new DType[elements * num_inouts];
+      std::vector<DType> inout_data(elements * num_inouts);
       inout_tensors.push_back(AMSTensor::view(
-          initialize_inout(inout_data, elements, num_inouts),
+          initialize_inout(inout_data.data(), elements, num_inouts),
           SmallVector<ams::AMSTensor::IntDimType>({num_elements, num_inouts}),
           SmallVector<ams::AMSTensor::IntDimType>({num_inouts, 1}),
           resource));
 
-      // Allocate Output memory
+      std::vector<std::vector<DType>> output_buffers(num_outputs,
+                                                     std::vector<DType>(
+                                                         elements));
       for (int j = 0; j < num_outputs; j++) {
-        auto tmp = new DType[elements];
         output_tensors.push_back(AMSTensor::view(
-            initialize_inputs(tmp, elements),
+            initialize_inputs(output_buffers[j].data(), elements),
             SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
             SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
             resource));
@@ -99,8 +105,8 @@ struct Problem2D {
                                              ams_inouts,
                                          ams::SmallVector<ams::AMSTensor>&
                                              ams_outs) {
-        DType* ins[num_inputs];
-        DType* outs[num_outputs];
+        std::vector<const DType*> ins(num_inputs);
+        std::vector<DType*> outs(num_outputs);
         DType* inout;
 
         if (ams_inouts.size() != 1) {
@@ -134,18 +140,6 @@ struct Problem2D {
 
       AMSExecute(
           wf, OrigComputation, input_tensors, inout_tensors, output_tensors);
-
-      for (int i = 0; i < input_tensors.size(); i++) {
-        delete input_tensors[i].data<DType>();
-      }
-
-      inout_tensors.clear();
-      delete[] inout_data;
-
-
-      for (int i = 0; i < output_tensors.size(); i++) {
-        delete output_tensors[i].data<DType>();
-      }
     }
   }
 };
@@ -158,7 +152,7 @@ struct Problem {
   int multiplier;
   Problem(int ni, int no) : num_inputs(ni), num_outputs(no), multiplier(100) {}
 
-  void run(long num_elements, DType** inputs, DType** outputs)
+  void run(long num_elements, const DType* const* inputs, DType** outputs)
   {
     for (int i = 0; i < num_elements; i++) {
       DType sum = 0;
@@ -191,22 +185,23 @@ struct Problem {
       SmallVector<AMSTensor> input_tensors;
       SmallVector<AMSTensor> output_tensors;
 
-      // Allocate Input memory
+      std::vector<std::vector<DType>> input_buffers(num_inputs,
+                                                    std::vector<DType>(
+                                                        elements));
       for (int j = 0; j < num_inputs; j++) {
-        DType* data = new DType[elements];
-        DType* ptr = initialize_inputs(data, elements);
         input_tensors.push_back(AMSTensor::view(
-            ptr,
+            initialize_inputs(input_buffers[j].data(), elements),
             SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
             SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
             resource));
       }
 
-      // Allocate Output memory
+      std::vector<std::vector<DType>> output_buffers(num_outputs,
+                                                     std::vector<DType>(
+                                                         elements));
       for (int j = 0; j < num_outputs; j++) {
-        auto tmp = new DType[elements];
         output_tensors.push_back(AMSTensor::view(
-            initialize_inputs(tmp, elements),
+            initialize_inputs(output_buffers[j].data(), elements),
             SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
             SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
             resource));
@@ -214,14 +209,14 @@ struct Problem {
 
       DomainLambda OrigComputation =
           [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
-              ams::SmallVector<ams::AMSTensor>& ams_inouts,
+              ams::SmallVector<ams::AMSTensor>& /*ams_inouts*/,
               ams::SmallVector<ams::AMSTensor>& ams_outs) {
-            DType* ins[num_inputs];
-            DType* outs[num_outputs];
-            if (num_inputs != ams_ins.size())
+            std::vector<const DType*> ins(num_inputs);
+            std::vector<DType*> outs(num_outputs);
+            if (static_cast<std::size_t>(num_inputs) != ams_ins.size())
               throw std::runtime_error(
                   "Expecting dimensions of inputs to remain the same");
-            else if (num_outputs != ams_outs.size())
+            else if (static_cast<std::size_t>(num_outputs) != ams_outs.size())
               throw std::runtime_error(
                   "Expecting dimensions of outputs to remain the same");
 
@@ -239,20 +234,11 @@ struct Problem {
                 throw std::runtime_error(
                     "Expected tensors to have the same shape");
             }
-            run(num_elements, ins, outs);
+            run(num_elements, ins.data(), outs.data());
           };
 
       ams::SmallVector<AMSTensor> inouts;
       AMSExecute(wf, OrigComputation, input_tensors, inouts, output_tensors);
-
-      for (int i = 0; i < input_tensors.size(); i++) {
-        delete input_tensors[i].data<DType>();
-      }
-
-
-      for (int i = 0; i < output_tensors.size(); i++) {
-        delete output_tensors[i].data<DType>();
-      }
     }
   }
 };
@@ -268,7 +254,10 @@ struct ProblemBroadcast {
   {
   }
 
-  void run(long num_elements, DType** inputs, DType** outputs, DType constant)
+  void run(long num_elements,
+           const DType* const* inputs,
+           DType** outputs,
+           DType constant)
   {
     for (int i = 0; i < num_elements; i++) {
       DType sum = constant;
@@ -302,11 +291,12 @@ struct ProblemBroadcast {
       SmallVector<AMSTensor> input_tensors;
       SmallVector<AMSTensor> output_tensors;
 
-      // Allocate Input memory
+      std::vector<std::vector<DType>> input_buffers(num_inputs - 1,
+                                                    std::vector<DType>(
+                                                        elements));
       for (int j = 0; j < num_inputs - 1; j++) {
-        DType* data = new DType[elements];
         input_tensors.push_back(AMSTensor::view(
-            initialize_inputs(data, elements),
+            initialize_inputs(input_buffers[j].data(), elements),
             SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
             SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
             resource));
@@ -319,11 +309,12 @@ struct ProblemBroadcast {
           resource));
 
 
-      // Allocate Output memory
+      std::vector<std::vector<DType>> output_buffers(num_outputs,
+                                                     std::vector<DType>(
+                                                         elements));
       for (int j = 0; j < num_outputs; j++) {
-        auto tmp = new DType[elements];
         output_tensors.push_back(AMSTensor::view(
-            initialize_inputs(tmp, elements),
+            initialize_inputs(output_buffers[j].data(), elements),
             SmallVector<ams::AMSTensor::IntDimType>({num_elements, 1}),
             SmallVector<ams::AMSTensor::IntDimType>({1, 1}),
             resource));
@@ -331,14 +322,14 @@ struct ProblemBroadcast {
 
       DomainLambda OrigComputation =
           [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
-              ams::SmallVector<ams::AMSTensor>& ams_inouts,
+              ams::SmallVector<ams::AMSTensor>& /*ams_inouts*/,
               ams::SmallVector<ams::AMSTensor>& ams_outs) {
-            DType* ins[num_inputs - 1];
-            DType* outs[num_outputs];
-            if (num_inputs != ams_ins.size())
+            std::vector<const DType*> ins(num_inputs - 1);
+            std::vector<DType*> outs(num_outputs);
+            if (static_cast<std::size_t>(num_inputs) != ams_ins.size())
               throw std::runtime_error(
                   "Expecting dimensions of inputs to remain the same");
-            else if (num_outputs != ams_outs.size())
+            else if (static_cast<std::size_t>(num_outputs) != ams_outs.size())
               throw std::runtime_error(
                   "Expecting dimensions of outputs to remain the same");
 
@@ -357,22 +348,13 @@ struct ProblemBroadcast {
                     "Expected tensors to have the same shape");
             }
             run(num_elements,
-                ins,
-                outs,
+                ins.data(),
+                outs.data(),
                 *ams_ins[num_inputs - 1].data<DType>());
           };
 
       ams::SmallVector<AMSTensor> inouts;
       AMSExecute(wf, OrigComputation, input_tensors, inouts, output_tensors);
-
-      for (int i = 0; i < input_tensors.size() - 1; i++) {
-        delete input_tensors[i].data<DType>();
-      }
-
-
-      for (int i = 0; i < output_tensors.size(); i++) {
-        delete output_tensors[i].data<DType>();
-      }
     }
   }
 };

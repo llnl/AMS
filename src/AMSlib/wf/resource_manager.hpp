@@ -9,7 +9,11 @@
 #define __AMS_ALLOCATOR__
 
 #include <cstddef>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "AMS.h"
@@ -57,16 +61,12 @@ class ResourceManager
 private:
   /** @brief  Used internally to map resource types (Device, host, pinned memory) to
    * umpire allocator ids. */
-  std::vector<AMSAllocator*> RMAllocators;
+  mutable std::vector<std::shared_ptr<AMSAllocator>> RMAllocators;
+  mutable std::mutex Mutex;
   ResourceManager() : RMAllocators({nullptr, nullptr, nullptr}) {};
 
 public:
-  ~ResourceManager()
-  {
-    for (auto allocator : RMAllocators) {
-      if (allocator) delete allocator;
-    }
-  };
+  ~ResourceManager() = default;
   ResourceManager(const ResourceManager&) = delete;
   ResourceManager(ResourceManager&&) = delete;
   ResourceManager& operator=(const ResourceManager&) = delete;
@@ -81,7 +81,29 @@ public:
   /** @brief return the name of an allocator */
   const std::string getAllocatorName(AMSResourceType resource) const
   {
-    return RMAllocators[resource]->getName();
+    return getAllocator(resource)->getName();
+  }
+
+  std::shared_ptr<AMSAllocator> getAllocator(AMSResourceType resource) const
+  {
+    if (resource < AMS_HOST || resource > AMS_PINNED)
+      throw std::invalid_argument("Invalid AMS memory resource");
+    std::lock_guard<std::mutex> lock(Mutex);
+    auto allocator = RMAllocators[resource];
+    if (!allocator) {
+      if (resource != AMS_HOST) {
+#if !defined(__AMS_ENABLE_CUDA__) && !defined(__AMS_ENABLE_HIP__)
+        throw std::invalid_argument(
+            "Requested AMS device/pinned memory resource is unavailable");
+#endif
+      }
+      std::string name = resource == AMS_HOST     ? "HOST"
+                         : resource == AMS_DEVICE ? "DEVICE"
+                                                  : "PINNED";
+      allocator.reset(ams::internal::_get_allocator(name, resource));
+      RMAllocators[resource] = allocator;
+    }
+    return allocator;
   }
 
   /** @brief Allocates nvalues on the specified device.
@@ -96,8 +118,9 @@ public:
                         AMSResourceType dev,
                         size_t alignment = sizeof(TypeInValue))
   {
+    auto allocator = getAllocator(dev);
     return static_cast<TypeInValue*>(
-        RMAllocators[dev]->allocate(nvalues * sizeof(TypeInValue), alignment));
+        allocator->allocate(nvalues * sizeof(TypeInValue), alignment));
   }
 
   /** @brief deallocates pointer from the specified device.
@@ -105,12 +128,14 @@ public:
    *  @param[in] data pointer to deallocate.
    *  @param[in] dev device to de-allocate from .
    *  @return void.
+   *  @note void* is not allowed, you must cast to the same type used in allocate().
    */
-  template <typename TypeInValue>
+  template <typename TypeInValue,
+            typename = std::enable_if_t<!std::is_void_v<TypeInValue>>>
   PERFFASPECT()
   void deallocate(TypeInValue* data, AMSResourceType dev)
   {
-    RMAllocators[dev]->deallocate(data);
+    getAllocator(dev)->deallocate(data);
   }
 
   /** @brief copy values from src to destination regardless of their memory location.
@@ -144,7 +169,7 @@ public:
   void deallocate(std::vector<T*>& dPtr, AMSResourceType resource)
   {
     for (auto* I : dPtr)
-      RMAllocators[resource]->deallocate(I);
+      getAllocator(resource)->deallocate(I);
   }
 
   void init()
@@ -166,12 +191,11 @@ public:
 
   void setAllocator(std::string& alloc_name, AMSResourceType resource)
   {
-    if (RMAllocators[resource]) {
-      delete RMAllocators[resource];
-    }
-
-    RMAllocators[resource] =
-        ams::internal::_get_allocator(alloc_name, resource);
+    if (resource < AMS_HOST || resource > AMS_PINNED)
+      throw std::invalid_argument("Invalid AMS memory resource");
+    std::lock_guard<std::mutex> lock(Mutex);
+    RMAllocators[resource].reset(
+        ams::internal::_get_allocator(alloc_name, resource));
     AMS_DBG(ResourceManager,
             "Set Allocator [{}] to pool with name : {}",
             resource,
@@ -180,6 +204,8 @@ public:
 
   bool isActive(AMSResourceType resource)
   {
+    if (resource < AMS_HOST || resource > AMS_PINNED) return false;
+    std::lock_guard<std::mutex> lock(Mutex);
     return RMAllocators[resource] != nullptr;
   }
 
