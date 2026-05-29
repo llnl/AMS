@@ -216,8 +216,8 @@ def generate_graph(num_nodes: int, seed: int) -> Tuple[Dict[str, Tensor], Tensor
     weight = raw_weight / incoming_sum.index_select(0, dst).clamp_min(1.0e-8)
 
     node_features = torch.cat((positions, u, kappa), dim=1).contiguous()
-    edge_features = torch.cat((delta_pos, distance, weight), dim=1).contiguous()
     messages = weight * (u.index_select(0, src) - u.index_select(0, dst))
+    edge_features = torch.cat((delta_pos, distance, messages), dim=1).contiguous()
     target = torch.zeros((num_nodes, 1), dtype=torch.float32)
     target = target.index_add(0, dst, messages)
     target = dt * target
