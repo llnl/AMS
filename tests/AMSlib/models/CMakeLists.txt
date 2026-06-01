@@ -118,41 +118,66 @@ configure_file(
 
 find_program(AMS_PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
 
+set(MGN_GRAPH_DIFFUSION_DIR
+  "${CMAKE_CURRENT_BINARY_DIR}/mgn_graph_diffusion"
+)
 set(MGN_GRAPH_DIFFUSION_CHECKPOINT
-  "${CMAKE_CURRENT_BINARY_DIR}/mgn_graph_diffusion_checkpoint.pt"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_graph_diffusion_checkpoint.pt"
 )
 set(MGN_GRAPH_DIFFUSION_MODEL
-  "${CMAKE_CURRENT_BINARY_DIR}/mgn_graph_diffusion.pt"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_graph_diffusion.pt"
 )
-set(MGN_GRAPH_DIFFUSION_FIXTURES
-  "${CMAKE_CURRENT_BINARY_DIR}/mgn_graph_fixtures.hpp"
+set(MGN_GRAPH_DIFFUSION_FEASIBILITY_MODEL
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_graph_diffusion_feasibility.pt"
+)
+set(MGN_GRAPH_DIFFUSION_MANIFEST
+  "${MGN_GRAPH_DIFFUSION_DIR}/fixtures.json"
+)
+set(MGN_GRAPH_DIFFUSION_METRICS
+  "${MGN_GRAPH_DIFFUSION_DIR}/training_metrics.json"
+)
+set(MGN_GRAPH_DIFFUSION_TENSOR_FILES
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n24/node_features.bin"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n24/edge_index.bin"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n24/edge_features.bin"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n24/global_features.bin"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n24/reference_delta_u.bin"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n73/node_features.bin"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n73/edge_index.bin"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n73/edge_features.bin"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n73/global_features.bin"
+  "${MGN_GRAPH_DIFFUSION_DIR}/mgn_diffusion_n73/reference_delta_u.bin"
 )
 
 add_custom_command(
   OUTPUT
     "${MGN_GRAPH_DIFFUSION_CHECKPOINT}"
     "${MGN_GRAPH_DIFFUSION_MODEL}"
-    "${MGN_GRAPH_DIFFUSION_FIXTURES}"
+    "${MGN_GRAPH_DIFFUSION_MANIFEST}"
+    ${MGN_GRAPH_DIFFUSION_TENSOR_FILES}
+  BYPRODUCTS
+    "${MGN_GRAPH_DIFFUSION_FEASIBILITY_MODEL}"
+    "${MGN_GRAPH_DIFFUSION_METRICS}"
   COMMAND
     "${AMS_PYTHON_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
-    --out-dir "${CMAKE_CURRENT_BINARY_DIR}"
+    --out-dir "${MGN_GRAPH_DIFFUSION_DIR}"
     --mode feasibility
   COMMAND
     "${AMS_PYTHON_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
-    --out-dir "${CMAKE_CURRENT_BINARY_DIR}"
+    --out-dir "${MGN_GRAPH_DIFFUSION_DIR}"
     --mode train
   COMMAND
     "${AMS_PYTHON_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
-    --out-dir "${CMAKE_CURRENT_BINARY_DIR}"
+    --out-dir "${MGN_GRAPH_DIFFUSION_DIR}"
     --mode fixtures
   DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/ams_model.py"
-  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-  COMMENT "Generating Stage 2 pure-Torch MGN graph diffusion model and fixtures"
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+  COMMENT "Generating pure-Torch MGN graph diffusion model and fixtures"
   VERBATIM
 )
 
@@ -160,5 +185,47 @@ add_custom_target(generate_mgn_graph_diffusion
   DEPENDS
     "${MGN_GRAPH_DIFFUSION_CHECKPOINT}"
     "${MGN_GRAPH_DIFFUSION_MODEL}"
-    "${MGN_GRAPH_DIFFUSION_FIXTURES}"
+    "${MGN_GRAPH_DIFFUSION_MANIFEST}"
+    ${MGN_GRAPH_DIFFUSION_TENSOR_FILES}
+)
+
+add_test(
+  NAME MGN_DIFFUSION_FEASIBILITY
+  COMMAND
+    "${AMS_PYTHON_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
+    --out-dir "${MGN_GRAPH_DIFFUSION_DIR}"
+    --mode feasibility
+)
+set_tests_properties(MGN_DIFFUSION_FEASIBILITY PROPERTIES
+  LABELS MGN_DIFFUSION
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+
+add_test(
+  NAME MGN_DIFFUSION_TRAIN
+  COMMAND
+    "${AMS_PYTHON_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
+    --out-dir "${MGN_GRAPH_DIFFUSION_DIR}"
+    --mode train
+)
+set_tests_properties(MGN_DIFFUSION_TRAIN PROPERTIES
+  DEPENDS MGN_DIFFUSION_FEASIBILITY
+  LABELS MGN_DIFFUSION
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+
+add_test(
+  NAME MGN_DIFFUSION_FIXTURES
+  COMMAND
+    "${AMS_PYTHON_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/generate_mgn_graph_diffusion.py"
+    --out-dir "${MGN_GRAPH_DIFFUSION_DIR}"
+    --mode fixtures
+)
+set_tests_properties(MGN_DIFFUSION_FIXTURES PROPERTIES
+  DEPENDS MGN_DIFFUSION_TRAIN
+  LABELS MGN_DIFFUSION
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )

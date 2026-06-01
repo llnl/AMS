@@ -45,7 +45,18 @@ BUILD_UNIT_TEST(ams_graph_surrogate test_graph_surrogate.cpp Catch2::Catch2 ../a
 ADD_AMS_UNIT_TEST(AMS_GRAPH_SURROGATE ams_graph_surrogate)
 
 BUILD_UNIT_TEST(ams_graph_mgn_surrogate test_graph_mgn_surrogate.cpp)
-if (TARGET generate_mgn_graph_diffusion)
-  add_dependencies(ams_graph_mgn_surrogate generate_mgn_graph_diffusion)
-endif()
-ADD_AMS_UNIT_TEST(AMS_GRAPH_MGN_SURROGATE ams_graph_mgn_surrogate)
+target_link_libraries(ams_graph_mgn_surrogate PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(ams_graph_mgn_surrogate
+  PRIVATE
+    AMS_MGN_DIFFUSION_FIXTURE_DIR="${AMS_TEST_ROOT}/models/mgn_graph_diffusion"
+)
+
+add_test(
+  NAME MGN_DIFFUSION_AMS_PARITY
+  COMMAND $<TARGET_FILE:ams_graph_mgn_surrogate> -s --reporter console
+)
+set_tests_properties(MGN_DIFFUSION_AMS_PARITY PROPERTIES
+  DEPENDS MGN_DIFFUSION_FIXTURES
+  LABELS "AMS_INTERFACE;MGN_DIFFUSION"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
