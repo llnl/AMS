@@ -1,10 +1,32 @@
 #!/usr/bin/env python3
 """Train/export a tiny pure-Torch MGN-like graph diffusion surrogate.
 
-This MGN graph diffusion utility intentionally stays pure PyTorch. It generates
-synthetic homogeneous graphs, trains a small message-passing model, exports an
-AMS-wrapped TorchScript model, and writes runtime fixtures whose reference
-outputs come from the exported TorchScript model.
+This utility is a self-contained learned-graph smoke test for the AMS graph
+surrogate path. It intentionally stays pure PyTorch: no PyG/DGL/PhysicsNeMo,
+no MFEM data, and no extra graph-learning runtime dependencies.
+
+The workflow is split into three explicit modes:
+
+* feasibility: create the model, run eager inference on two graph sizes, script
+  it, reload it, and verify all outputs match. This gates TorchScript and
+  dynamic N/E support before any training cost is paid.
+* train: train the tiny model on deterministic synthetic graph diffusion data
+  and save only a checkpoint/state dict plus training metrics.
+* fixtures: load the checkpoint, export the AMS-wrapped TorchScript model, and
+  write runtime fixture files consumed by the C++ parity test.
+
+The graph contract matches AMS homogeneous graph inputs:
+
+    node_features   [N, 4] = x, y, u, kappa
+    edge_index      [2, E] = source row, destination row
+    edge_features   [E, 4] = dx, dy, distance, normalized diffusion message
+    global_features [1, 1] = dt
+
+The exact target is a deterministic diffusion-like update,
+delta_u_i = dt * sum_{src -> i} weight * (u_src - u_i). Training uses that
+target, while the C++ fixture reference uses the exported TorchScript model
+output. That distinction is deliberate: the AMS test validates deployment
+parity with Python TorchScript, not physical fidelity of the learned model.
 """
 
 import argparse
@@ -79,6 +101,8 @@ class MLP(nn.Module):
 
 
 class ProcessorBlock(nn.Module):
+    """One MGN-like processor step implemented with plain tensor operations."""
+
     def __init__(self, latent_dim: int, global_dim: int):
         super().__init__()
         self.edge_mlp = MLP(latent_dim * 3 + global_dim, latent_dim, latent_dim)
@@ -91,9 +115,15 @@ class ProcessorBlock(nn.Module):
         edge_index: Tensor,
         global_features: Tensor,
     ) -> Tuple[Tensor, Tensor]:
+        # The canonical AMS edge_index uses row 0 as source and row 1 as
+        # destination. index_select gathers per-edge source/destination node
+        # states without any graph-library dependency.
         src = edge_index[0]
         dst = edge_index[1]
 
+        # Edge update: each edge sees its current latent state, source node,
+        # destination node, and the graph-level dt feature. The residual update
+        # keeps this tiny model easy to train.
         global_edges = global_features.expand(edge_latent.shape[0], global_features.shape[1])
         edge_input = torch.cat(
             (
@@ -106,6 +136,9 @@ class ProcessorBlock(nn.Module):
         )
         edge_latent = edge_latent + self.edge_mlp(edge_input)
 
+        # Node aggregation: incoming edge states are summed onto destination
+        # nodes with index_add, the same primitive TorchScript and LibTorch will
+        # execute after export.
         aggregated = torch.zeros(
             (node_latent.shape[0], edge_latent.shape[1]),
             dtype=node_latent.dtype,
@@ -113,6 +146,8 @@ class ProcessorBlock(nn.Module):
         )
         aggregated = aggregated.index_add(0, dst, edge_latent)
 
+        # Node update: each node sees its previous latent state, the aggregated
+        # incoming message, and the global dt feature.
         global_nodes = global_features.expand(node_latent.shape[0], global_features.shape[1])
         node_input = torch.cat((node_latent, aggregated, global_nodes), dim=1)
         node_latent = node_latent + self.node_mlp(node_input)
@@ -120,6 +155,8 @@ class ProcessorBlock(nn.Module):
 
 
 class TinyGraphDiffusionMGN(nn.Module):
+    """Small fixed-shape MeshGraphNet-like model for the AMS graph contract."""
+
     def __init__(
         self,
         node_dim: int = NODE_FEATURE_DIM,
@@ -135,6 +172,9 @@ class TinyGraphDiffusionMGN(nn.Module):
         self.node_decoder = MLP(latent_dim, latent_dim, REFERENCE_OUTPUT_DIM)
 
     def forward(self, graph: Dict[str, Tensor]) -> Dict[str, Tensor]:
+        # Keep this signature and return type aligned with the AMS homogeneous
+        # graph surrogate contract. The output key becomes outputs.node_fields
+        # entry "delta_u" in C++.
         node_features = graph["node_features"]
         edge_index = graph["edge_index"].to(torch.int64)
         edge_features = graph["edge_features"]
@@ -177,6 +217,9 @@ def make_generator(seed: int) -> torch.Generator:
 
 
 def _unique_directed_edges(knn: Tensor) -> Tensor:
+    # kNN is computed from each node's perspective. Adding both directions makes
+    # the fixture exercise directed source/destination semantics while still
+    # representing an undirected diffusion neighborhood.
     pairs = set()
     num_nodes = int(knn.shape[0])
     for dst in range(num_nodes):
@@ -191,8 +234,14 @@ def _unique_directed_edges(knn: Tensor) -> Tensor:
 
 
 def generate_graph(num_nodes: int, seed: int) -> Tuple[Dict[str, Tensor], Tensor]:
+    """Create one deterministic synthetic graph and its exact diffusion target."""
+
     generator = make_generator(seed)
     positions = torch.rand((num_nodes, 2), generator=generator, dtype=torch.float32)
+
+    # Use a smooth random field rather than independent random u values. This is
+    # still synthetic and cheap, but it looks more like a heat-equation state and
+    # keeps target scales stable enough to avoid feature/target normalization.
     phases = torch.rand((1, 4), generator=generator, dtype=torch.float32) * (2.0 * torch.pi)
     amps = torch.rand((1, 4), generator=generator, dtype=torch.float32) * 0.5 + 0.5
     x = positions[:, 0:1]
@@ -207,6 +256,9 @@ def generate_graph(num_nodes: int, seed: int) -> Tuple[Dict[str, Tensor], Tensor
     kappa = torch.rand((num_nodes, 1), generator=generator, dtype=torch.float32) + 0.5
     dt = torch.rand((1, 1), generator=generator, dtype=torch.float32) * 0.06 + 0.02
 
+    # Build a small directed kNN graph. E varies with N because duplicate edges
+    # are removed after adding the reverse direction, so N=24 and N=73 exercise
+    # dynamic node and edge counts in TorchScript and C++.
     distances = torch.cdist(positions, positions)
     masked = distances + torch.eye(num_nodes, dtype=torch.float32) * 1.0e6
     knn = torch.topk(masked, k=K_NEIGHBORS, largest=False, dim=1).indices
@@ -218,13 +270,24 @@ def generate_graph(num_nodes: int, seed: int) -> Tuple[Dict[str, Tensor], Tensor
     distance = delta_pos.norm(dim=1, keepdim=True).clamp_min(1.0e-6)
     conductivity = 0.5 * (kappa.index_select(0, src) + kappa.index_select(0, dst))
     raw_weight = conductivity / (distance + 0.05)
+
+    # Normalize incoming weights per destination node. This is edge-weight
+    # normalization for a bounded synthetic target, not feature or target
+    # normalization embedded in the model.
     incoming_sum = torch.zeros((num_nodes, 1), dtype=torch.float32)
     incoming_sum = incoming_sum.index_add(0, dst, raw_weight)
     weight = raw_weight / incoming_sum.index_select(0, dst).clamp_min(1.0e-8)
 
+    # The fourth edge feature is the already weighted scalar message. Including
+    # it keeps the learned problem small while still requiring source/destination
+    # indexing and destination aggregation to recover node:delta_u.
     node_features = torch.cat((positions, u, kappa), dim=1).contiguous()
     messages = weight * (u.index_select(0, src) - u.index_select(0, dst))
     edge_features = torch.cat((delta_pos, distance, messages), dim=1).contiguous()
+
+    # Exact supervised target: aggregate incoming weighted messages and scale by
+    # dt. Python training checks the model against this target; C++ checks AMS
+    # against TorchScript reference outputs generated after export.
     target = torch.zeros((num_nodes, 1), dtype=torch.float32)
     target = target.index_add(0, dst, messages)
     target = dt * target
@@ -239,6 +302,8 @@ def generate_graph(num_nodes: int, seed: int) -> Tuple[Dict[str, Tensor], Tensor
 
 
 def graph_to_model_input(graph: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    """Canonicalize dtypes before eager, scripted, or reloaded model calls."""
+
     return {
         "node_features": graph["node_features"].to(dtype=torch.float32),
         "edge_index": graph["edge_index"].to(dtype=torch.int64),
@@ -254,6 +319,9 @@ def assert_close(name: str, actual: Tensor, expected: Tensor, atol: float = 1.0e
 
 
 def run_feasibility(out_dir: Path) -> None:
+    # This mode owns only TorchScript compatibility. It intentionally does not
+    # train or write deployment fixtures, so failures point at scripting,
+    # dynamic graph sizes, or AMS wrapper compatibility.
     out_dir.mkdir(parents=True, exist_ok=True)
     print("[info] MGN graph diffusion feasibility gate")
     print(f"[info] model_seed={MODEL_SEED}, fixture_sizes={FIXTURE_GRAPH_SIZES}, config={model_config()}")
@@ -288,6 +356,8 @@ def run_feasibility(out_dir: Path) -> None:
 
 
 def validation_graphs() -> List[Tuple[Dict[str, Tensor], Tensor]]:
+    # Fixed validation seeds make the primary "10x better than zero baseline"
+    # criterion reproducible across regeneration runs.
     graphs = []
     for i in range(VAL_GRAPHS):
         num_nodes = 16 + ((i * 37) % 113)
@@ -296,6 +366,8 @@ def validation_graphs() -> List[Tuple[Dict[str, Tensor], Tensor]]:
 
 
 def evaluate(model: nn.Module, cases: Iterable[Tuple[Dict[str, Tensor], Tensor]]) -> Tuple[float, float, Tensor]:
+    """Return model MSE, zero-prediction baseline MSE, and all targets."""
+
     total_loss = 0.0
     total_baseline = 0.0
     total_nodes = 0
@@ -314,6 +386,8 @@ def evaluate(model: nn.Module, cases: Iterable[Tuple[Dict[str, Tensor], Tensor]]
 
 
 def run_train(out_dir: Path) -> None:
+    # This mode owns learned weights and metrics only. It writes a checkpoint
+    # that fixtures mode must consume; fixtures mode never silently retrains.
     out_dir.mkdir(parents=True, exist_ok=True)
     print("[info] MGN graph diffusion training")
     print(f"[info] model_seed={MODEL_SEED}, train_data_seed={TRAIN_DATA_SEED}, val_data_seed={VAL_DATA_SEED}")
@@ -423,6 +497,9 @@ def run_train(out_dir: Path) -> None:
 
 
 def load_checkpoint(path: Path) -> Dict[str, object]:
+    # PyTorch 2.6 changed torch.load's default weights_only behavior. The
+    # checkpoint is generated by this local script and contains metadata, so
+    # loading with weights_only=False is intentional here.
     try:
         return torch.load(path, map_location="cpu", weights_only=False)
     except TypeError:
@@ -430,6 +507,13 @@ def load_checkpoint(path: Path) -> Dict[str, object]:
 
 
 def write_tensor_binary(out_dir: Path, relative_path: str, tensor: Tensor, dtype: str) -> Dict[str, object]:
+    """Write one fixture tensor and return the matching manifest entry.
+
+    The C++ test deliberately avoids NumPy or torch file readers. Each tensor is
+    raw contiguous row-major little-endian bytes, and fixtures.json records the
+    dtype, shape, endianness, and byte count needed to validate it before use.
+    """
+
     rel_path = Path(relative_path)
     if rel_path.is_absolute() or ".." in rel_path.parts:
         raise ValueError(f"Fixture tensor path must stay relative: {relative_path}")
@@ -458,6 +542,10 @@ def write_tensor_binary(out_dir: Path, relative_path: str, tensor: Tensor, dtype
 
 
 def run_fixtures(out_dir: Path) -> None:
+    # This mode owns deployment artifacts: the AMS-wrapped TorchScript model,
+    # the fixture manifest, and raw tensor binaries. Reference outputs are model
+    # outputs from the reloaded TorchScript artifact, because C++ parity should
+    # answer "does AMS reproduce Python TorchScript inference?"
     out_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_path = out_dir / CHECKPOINT_NAME
     if not checkpoint_path.exists():

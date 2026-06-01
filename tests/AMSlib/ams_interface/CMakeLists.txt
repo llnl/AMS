@@ -51,6 +51,8 @@ target_compile_definitions(ams_graph_mgn_surrogate
     AMS_MGN_DIFFUSION_FIXTURE_DIR="${AMS_TEST_ROOT}/models/mgn_graph_diffusion"
 )
 
+# Final runtime check for the MGN diffusion workflow: fixtures mode must have
+# produced the TorchScript model and binary graph cases before AMS parity runs.
 add_test(
   NAME MGN_DIFFUSION_AMS_PARITY
   COMMAND $<TARGET_FILE:ams_graph_mgn_surrogate> -s --reporter console

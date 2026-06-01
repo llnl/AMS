@@ -118,6 +118,9 @@ configure_file(
 
 find_program(AMS_PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
 
+# MGN diffusion artifacts are generated in the build tree. The custom target is
+# available for explicit regeneration, but normal C++ builds do not depend on
+# training/export; the CTest workflow below owns the runtime validation path.
 set(MGN_GRAPH_DIFFUSION_DIR
   "${CMAKE_CURRENT_BINARY_DIR}/mgn_graph_diffusion"
 )
@@ -189,6 +192,8 @@ add_custom_target(generate_mgn_graph_diffusion
     ${MGN_GRAPH_DIFFUSION_TENSOR_FILES}
 )
 
+# Runtime workflow tests. The dependency chain keeps the expensive learned-model
+# path ordered even under parallel CTest: feasibility -> train -> fixtures.
 add_test(
   NAME MGN_DIFFUSION_FEASIBILITY
   COMMAND

@@ -20,6 +20,10 @@ using json = nlohmann::json;
 
 using Dim = AMSTensor::IntDimType;
 
+// The MGN diffusion workflow writes fixtures into the build tree at CTest
+// runtime. CMake compiles that build-tree directory into this focused parity
+// test so the test can be launched like any other Catch executable while still
+// keeping generated tensors out of the source tree.
 #ifndef AMS_MGN_DIFFUSION_FIXTURE_DIR
 #define AMS_MGN_DIFFUSION_FIXTURE_DIR ""
 #endif
@@ -119,6 +123,9 @@ static void validateTensorMetadata(const TensorMetadata& metadata,
                                    const std::string& expected_dtype,
                                    const std::vector<std::int64_t>& expected_shape)
 {
+  // Validate the manifest before allocating AMSTensors. The binary files are
+  // intentionally simple raw bytes, so the manifest is the only place where
+  // dtype, shape, byte order, and size are described.
   CATCH_REQUIRE_FALSE(metadata.path.empty());
   CATCH_REQUIRE_FALSE(metadata.path.is_absolute());
   for (const auto& part : metadata.path) {
@@ -143,6 +150,8 @@ static std::vector<T> readTensorBinary(const std::filesystem::path& manifest_dir
   TensorMetadata metadata = parseTensorMetadata(tensor);
   validateTensorMetadata(metadata, expected_dtype, expected_shape);
 
+  // All tensor paths are relative to fixtures.json. That keeps the generated
+  // fixture directory relocatable inside different build trees.
   const std::filesystem::path tensor_path = manifest_dir / metadata.path;
   CATCH_REQUIRE(std::filesystem::exists(tensor_path));
   CATCH_REQUIRE(std::filesystem::is_regular_file(tensor_path));
@@ -179,6 +188,9 @@ static json loadManifest(const std::filesystem::path& fixture_dir)
   std::ifstream input(manifest_path);
   CATCH_REQUIRE(input);
   json manifest = json::parse(input);
+  // Keep the manifest version check close to parsing so future fixture format
+  // changes fail loudly instead of being interpreted as the current raw-binary
+  // contract.
   CATCH_REQUIRE(manifest.contains("format_version"));
   CATCH_REQUIRE(manifest.contains("endianness"));
   CATCH_REQUIRE(manifest.at("format_version").get<int>() ==
@@ -194,6 +206,8 @@ static json loadManifest(const std::filesystem::path& fixture_dir)
 static std::filesystem::path resolveManifestRelativePath(
     const std::filesystem::path& manifest_dir, const json& object)
 {
+  // Model and tensor paths in the manifest are relative by design. Avoiding
+  // absolute paths makes fixtures reusable if the whole build directory moves.
   const std::filesystem::path relative_path = object.at("path").get<std::string>();
   CATCH_REQUIRE_FALSE(relative_path.empty());
   CATCH_REQUIRE_FALSE(relative_path.is_absolute());
@@ -206,6 +220,9 @@ static std::filesystem::path resolveManifestRelativePath(
 static AMSHomogeneousGraph makeGraph(const std::filesystem::path& manifest_dir,
                                      const json& graph_case)
 {
+  // Runtime fixture binaries become the same AMSTensor-backed homogeneous graph
+  // that an application would pass to AMS: node features, canonical edge_index,
+  // edge features, and required global features.
   const std::int64_t num_nodes = graph_case.at("num_nodes").get<std::int64_t>();
   const std::int64_t num_edges = graph_case.at("num_edges").get<std::int64_t>();
   const std::int64_t node_dim =
@@ -254,6 +271,8 @@ static void verifyDeltaU(const json& graph_case,
                          double rtol,
                          double atol)
 {
+  // The reference is the Python TorchScript output, not the exact synthetic
+  // diffusion target. This test is about AMS/LibTorch deployment parity.
   const std::int64_t num_nodes = graph_case.at("num_nodes").get<std::int64_t>();
   const std::int64_t output_dim =
       graph_case.at("reference_output_dim").get<std::int64_t>();
@@ -302,6 +321,9 @@ CATCH_TEST_CASE("AMSExecute homogeneous graph MGN diffusion surrogate",
                                         false);
   AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
 
+  // The two fixed fixture sizes intentionally have different N and E values.
+  // Running both cases catches accidental static-shape assumptions in the
+  // exported TorchScript model or in AMS graph tensor handling.
   const std::vector<std::int64_t> expected_node_counts = {24, 73};
   std::size_t case_index = 0;
   for (const json& graph_case : manifest.at("cases")) {
@@ -314,6 +336,10 @@ CATCH_TEST_CASE("AMSExecute homogeneous graph MGN diffusion surrogate",
           loadReferenceDeltaU(manifest_dir, graph_case);
 
       bool callback_invoked = false;
+      // If the surrogate path fails, AMS would call the domain fallback. For
+      // this parity test that would hide a deployment failure, so the callback
+      // records whether it was invoked and supplies the reference only as a
+      // valid fallback value.
       HomogeneousGraphDomainFn callback =
           [&](const AMSHomogeneousGraph&, AMSHomogeneousGraphFields& outputs) {
             callback_invoked = true;
