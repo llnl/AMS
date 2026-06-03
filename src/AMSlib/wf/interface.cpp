@@ -169,7 +169,7 @@ void callAMS(ams::AMSWorkflow* executor,
              ams::SmallVector<ams::AMSTensor>& outs)
 {
   // In training mode, we can directlty use AMSTensor, no conversion needed
-  executor->evaluate(Physics, tins, tinouts, touts);
+  executor->evaluate(Physics, ins, inouts, outs);
 }
 
 #endif // __AMS_ENABLE_TORCH__
