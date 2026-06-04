@@ -172,5 +172,4 @@ void callAMS(ams::AMSWorkflow* executor,
   executor->evaluate(Physics, ins, inouts, outs);
 }
 
-#endif // __AMS_ENABLE_TORCH__
-
+#endif  // __AMS_ENABLE_TORCH__
