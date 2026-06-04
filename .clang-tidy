@@ -17,10 +17,7 @@ Checks: >
   -modernize-avoid-c-arrays,
   -modernize-use-nodiscard,
   performance-*,
-  readability-identifier-naming,
-  readability-redundant-*,
-  readability-simplify-*,
-  readability-braces-around-statements,
+  readability-identifier-naming
 
 WarningsAsErrors: ''
 
