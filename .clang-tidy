@@ -1,0 +1,42 @@
+---
+# AMS clang-tidy configuration
+#
+# Run manually:  clang-tidy -p build/ src/AMSlib/wf/workflow.hpp
+# Integrated via the pre-commit git hook.
+
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  misc-*,
+  -misc-non-private-member-variables-in-classes,
+  -misc-no-recursion,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
+  performance-*,
+  readability-identifier-naming,
+  readability-redundant-*,
+  readability-simplify-*,
+  readability-braces-around-statements,
+
+WarningsAsErrors: ''
+
+HeaderFilterRegex: 'src/AMSlib/.*'
+
+CheckOptions:
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.PrivateMemberPrefix
+    value: '_'
+  - key: readability-identifier-naming.FunctionCase
+    value: camelBack
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+  - key: modernize-use-override.AllowOverrideAndFinal
+    value: false
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: 'std::shared_ptr;std::unique_ptr'
+
