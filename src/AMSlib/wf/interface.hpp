@@ -23,11 +23,11 @@ void callApplication(ams::HeterogeneousGraphDomainFn CallBack,
                      ams::AMSHeterogeneousGraphFields& outputs);
 
 
-void callAMS(ams::AMSWorkflow *executor,
+void callAMS(ams::AMSWorkflow* executor,
              ams::DomainLambda Physics,
-             const ams::SmallVector<ams::AMSTensor> &ins,
-             ams::SmallVector<ams::AMSTensor> &inouts,
-             ams::SmallVector<ams::AMSTensor> &outs);
+             const ams::SmallVector<ams::AMSTensor>& ins,
+             ams::SmallVector<ams::AMSTensor>& inouts,
+             ams::SmallVector<ams::AMSTensor>& outs);
 
 void callAMS(ams::AMSWorkflow* executor,
              ams::HomogeneousGraphDomainFn Physics,

@@ -1,7 +1,8 @@
+#include "AMSTensor.hpp"
+
 #include <stdexcept>
 
 #include "AMS.h"
-#include "AMSTensor.hpp"
 #include "ArrayRef.hpp"
 #include "SmallVector.hpp"
 #include "include/AMSTensor.hpp"
