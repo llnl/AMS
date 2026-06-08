@@ -13,7 +13,8 @@ namespace ams
 
 using AMSTensorMap = std::unordered_map<std::string, AMSTensor>;
 
-class AMSTensorFieldMap {
+class AMSTensorFieldMap
+{
   AMSTensorMap fields_;
 
 public:
@@ -171,10 +172,9 @@ struct AMSHeterogeneousGraphFields {
   AMSHeterogeneousGraphFields(const AMSHeterogeneousGraphFields&) = delete;
   AMSHeterogeneousGraphFields& operator=(const AMSHeterogeneousGraphFields&) =
       delete;
-  AMSHeterogeneousGraphFields(AMSHeterogeneousGraphFields&&) noexcept =
-      default;
-  AMSHeterogeneousGraphFields& operator=(AMSHeterogeneousGraphFields&&)
-      noexcept = default;
+  AMSHeterogeneousGraphFields(AMSHeterogeneousGraphFields&&) noexcept = default;
+  AMSHeterogeneousGraphFields& operator=(
+      AMSHeterogeneousGraphFields&&) noexcept = default;
   ~AMSHeterogeneousGraphFields() = default;
 
   bool containsNodeStore(const std::string& name) const;

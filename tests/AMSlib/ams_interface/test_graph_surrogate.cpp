@@ -1,6 +1,5 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
-
 #include <stdexcept>
 #include <vector>
 
@@ -117,17 +116,19 @@ static void verifyMessagePrediction(const AMSHomogeneousGraphFields& outputs)
 template <typename EdgeScalar>
 static void runHomogeneousSurrogate(const char* domain_name)
 {
-  auto model = AMSRegisterAbstractModel(
-      domain_name, 0.5, HOMOGENEOUS_GRAPH_MODEL_PATH, false);
+  auto model = AMSRegisterAbstractModel(domain_name,
+                                        0.5,
+                                        HOMOGENEOUS_GRAPH_MODEL_PATH,
+                                        false);
   AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
   AMSHomogeneousGraph graph = makeMessageGraph<EdgeScalar>();
 
   bool callback_invoked = false;
-  HomogeneousGraphDomainFn callback =
-      [&](const AMSHomogeneousGraph&, AMSHomogeneousGraphFields& outputs) {
-        callback_invoked = true;
-        outputs.node_fields.set("prediction", makeTensor<float>({4, 1}));
-      };
+  HomogeneousGraphDomainFn callback = [&](const AMSHomogeneousGraph&,
+                                          AMSHomogeneousGraphFields& outputs) {
+    callback_invoked = true;
+    outputs.node_fields.set("prediction", makeTensor<float>({4, 1}));
+  };
 
   AMSHomogeneousGraphFields outputs;
   AMSExecute(executor, callback, graph, outputs);
@@ -201,20 +202,19 @@ CATCH_TEST_CASE("Graph surrogate with no model triggers fallback",
   AMSHomogeneousGraph graph = makeMessageGraph<int64_t>();
 
   bool callback_invoked = false;
-  HomogeneousGraphDomainFn callback =
-      [&](const AMSHomogeneousGraph&, AMSHomogeneousGraphFields& outputs) {
-        callback_invoked = true;
-        auto out = makeTensor<float>({4, 1});
-        out.data<float>()[0] = 42.0f;
-        outputs.node_fields.set("prediction", std::move(out));
-      };
+  HomogeneousGraphDomainFn callback = [&](const AMSHomogeneousGraph&,
+                                          AMSHomogeneousGraphFields& outputs) {
+    callback_invoked = true;
+    auto out = makeTensor<float>({4, 1});
+    out.data<float>()[0] = 42.0f;
+    outputs.node_fields.set("prediction", std::move(out));
+  };
 
   AMSHomogeneousGraphFields outputs;
   AMSExecute(executor, callback, graph, outputs);
 
   CATCH_REQUIRE(callback_invoked);
-  CATCH_REQUIRE(outputs.node_fields.at("prediction").data<float>()[0] ==
-                42.0f);
+  CATCH_REQUIRE(outputs.node_fields.at("prediction").data<float>()[0] == 42.0f);
 }
 
 CATCH_TEST_CASE("Malformed homogeneous graph surrogate outputs fail loudly",
@@ -222,8 +222,8 @@ CATCH_TEST_CASE("Malformed homogeneous graph surrogate outputs fail loudly",
 {
   AMSInit();
 
-  HomogeneousGraphDomainFn callback =
-      [](const AMSHomogeneousGraph&, AMSHomogeneousGraphFields&) {};
+  HomogeneousGraphDomainFn callback = [](const AMSHomogeneousGraph&,
+                                         AMSHomogeneousGraphFields&) {};
 
   {
     auto model = AMSRegisterAbstractModel("test_bad_graph_key",

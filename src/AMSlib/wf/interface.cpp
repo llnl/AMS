@@ -138,25 +138,34 @@ static ams::AMSTensor torchToAMSTensorCopy(const torch::Tensor& tensor)
   switch (dType) {
     case AMSDType::AMS_SINGLE: {
       auto out = AMSTensor::create<float>(shapes, strides, rType);
-      rm.copy(src.data_ptr<float>(), rType, out.data<float>(), rType,
-              src.numel());
+      rm.copy(
+          src.data_ptr<float>(), rType, out.data<float>(), rType, src.numel());
       return out;
     }
     case AMSDType::AMS_DOUBLE: {
       auto out = AMSTensor::create<double>(shapes, strides, rType);
-      rm.copy(src.data_ptr<double>(), rType, out.data<double>(), rType,
+      rm.copy(src.data_ptr<double>(),
+              rType,
+              out.data<double>(),
+              rType,
               src.numel());
       return out;
     }
     case AMSDType::AMS_INT32: {
       auto out = AMSTensor::create<int32_t>(shapes, strides, rType);
-      rm.copy(src.data_ptr<int32_t>(), rType, out.data<int32_t>(), rType,
+      rm.copy(src.data_ptr<int32_t>(),
+              rType,
+              out.data<int32_t>(),
+              rType,
               src.numel());
       return out;
     }
     case AMSDType::AMS_INT64: {
       auto out = AMSTensor::create<int64_t>(shapes, strides, rType);
-      rm.copy(src.data_ptr<int64_t>(), rType, out.data<int64_t>(), rType,
+      rm.copy(src.data_ptr<int64_t>(),
+              rType,
+              out.data<int64_t>(),
+              rType,
               src.numel());
       return out;
     }
@@ -236,8 +245,7 @@ static torch::Tensor amsTensorToTorchModelInput(const ams::AMSTensor& tensor,
 {
   torch::Tensor out = amsToTorchTensorView(tensor);
   torch::Dtype dtype = preserve_dtype ? out.scalar_type() : model_dtype;
-  if (out.device().type() != model_device ||
-      out.scalar_type() != dtype) {
+  if (out.device().type() != model_device || out.scalar_type() != dtype) {
     out = out.to(model_device, dtype);
   }
   return out;
@@ -254,10 +262,9 @@ static void requireOutputFirstDim(const torch::Tensor& tensor,
   }
   if (tensor.sizes()[0] != expected) {
     throw std::runtime_error("Graph surrogate output '" + key + "' for " +
-                             entity +
-                             " fields has first dimension " +
-                             std::to_string(tensor.sizes()[0]) +
-                             ", expected " + std::to_string(expected) + ".");
+                             entity + " fields has first dimension " +
+                             std::to_string(tensor.sizes()[0]) + ", expected " +
+                             std::to_string(expected) + ".");
   }
 }
 
@@ -521,8 +528,10 @@ bool tryGraphSurrogate(AMSWorkflow* executor,
 
   try {
     // Convert AMS graph → Torch Dict[str, Tensor]
-    auto torch_graph = amsToTorchHomogeneousGraph(
-        graph, executor->MLModel->torch_device, executor->MLModel->torch_dtype);
+    auto torch_graph =
+        amsToTorchHomogeneousGraph(graph,
+                                   executor->MLModel->torch_device,
+                                   executor->MLModel->torch_dtype);
 
     // Call model forward pass
     std::vector<torch::jit::IValue> inputs = {torch::jit::IValue(torch_graph)};
@@ -539,10 +548,11 @@ bool tryGraphSurrogate(AMSWorkflow* executor,
       const std::string key = item.key().toStringRef();
       const auto parts = splitKey(key, ':');
       if (parts.size() != 2 || parts[0].empty() || parts[1].empty()) {
-        throw std::runtime_error(
-            "Malformed homogeneous graph output key '" + key +
-            "'. Expected 'node:<field>', 'edge:<field>', or "
-            "'global:<field>'.");
+        throw std::runtime_error("Malformed homogeneous graph output key '" +
+                                 key +
+                                 "'. Expected 'node:<field>', 'edge:<field>', "
+                                 "or "
+                                 "'global:<field>'.");
       }
 
       torch::Tensor tensor = item.value().toTensor();
@@ -556,16 +566,17 @@ bool tryGraphSurrogate(AMSWorkflow* executor,
         requireGlobalOutputShape(tensor, key);
         outputs.global_fields.insert(parts[1], torchToAMSTensorCopy(tensor));
       } else {
-        throw std::runtime_error(
-            "Malformed homogeneous graph output key '" + key +
-            "'. Expected entity prefix 'node', 'edge', or 'global'.");
+        throw std::runtime_error("Malformed homogeneous graph output key '" +
+                                 key +
+                                 "'. Expected entity prefix 'node', 'edge', or "
+                                 "'global'.");
       }
     }
 
     return true;
   } catch (const std::exception& e) {
-    throw std::runtime_error(std::string("Homogeneous graph surrogate failed: ") +
-                             e.what());
+    throw std::runtime_error(
+        std::string("Homogeneous graph surrogate failed: ") + e.what());
   }
 }
 
@@ -599,47 +610,50 @@ bool tryGraphSurrogate(AMSWorkflow* executor,
           !parts[2].empty()) {
         const auto* store = graph.findNodeStore(parts[1]);
         if (!store || store->empty()) {
-          throw std::runtime_error(
-              "Heterogeneous graph output key '" + key +
-              "' references an unknown or empty node store.");
+          throw std::runtime_error("Heterogeneous graph output key '" + key +
+                                   "' references an unknown or empty node "
+                                   "store.");
         }
         const auto& reference_tensor = store->begin()->second;
         if (reference_tensor.shape().size() < 1) {
-          throw std::runtime_error(
-              "Heterogeneous graph output key '" + key +
-              "' cannot infer node count from a scalar input field.");
+          throw std::runtime_error("Heterogeneous graph output key '" + key +
+                                   "' cannot infer node count from a scalar "
+                                   "input field.");
         }
         const int64_t num_nodes = reference_tensor.shape()[0];
         requireOutputFirstDim(tensor, num_nodes, key, "node");
-        outputs.getOrCreateNodeStore(parts[1]).insert(
-            parts[2], torchToAMSTensorCopy(tensor));
-      } else if (parts.size() == 3 && parts[0] == "edge" &&
-                 !parts[1].empty() && !parts[2].empty()) {
+        outputs.getOrCreateNodeStore(parts[1]).insert(parts[2],
+                                                      torchToAMSTensorCopy(
+                                                          tensor));
+      } else if (parts.size() == 3 && parts[0] == "edge" && !parts[1].empty() &&
+                 !parts[2].empty()) {
         EdgeType edge_type = edgeTypeFromString(parts[1]);
         const auto* store = graph.findEdgeStore(edge_type);
         if (!store) {
-          throw std::runtime_error(
-              "Heterogeneous graph output key '" + key +
-              "' references an unknown edge store.");
+          throw std::runtime_error("Heterogeneous graph output key '" + key +
+                                   "' references an unknown edge store.");
         }
         const AMSTensor* edge_index = findTensor(*store, "edge_index");
         if (!edge_index || edge_index->shape().size() != 2) {
-          throw std::runtime_error(
-              "Heterogeneous graph edge output key '" + key +
-              "' requires an input edge_index tensor with shape [2, E].");
+          throw std::runtime_error("Heterogeneous graph edge output key '" +
+                                   key +
+                                   "' requires an input edge_index tensor with "
+                                   "shape [2, E].");
         }
         requireOutputFirstDim(tensor, edge_index->shape()[1], key, "edge");
-        outputs.getOrCreateEdgeStore(edge_type).insert(
-            parts[2], torchToAMSTensorCopy(tensor));
+        outputs.getOrCreateEdgeStore(edge_type).insert(parts[2],
+                                                       torchToAMSTensorCopy(
+                                                           tensor));
       } else if (parts.size() == 2 && parts[0] == "global" &&
                  !parts[1].empty()) {
         requireGlobalOutputShape(tensor, key);
         outputs.global_store.insert(parts[1], torchToAMSTensorCopy(tensor));
       } else {
-        throw std::runtime_error(
-            "Malformed heterogeneous graph output key '" + key +
-            "'. Expected 'node:<node_type>:<field>', "
-            "'edge:<src>__<rel>__<dst>:<field>', or 'global:<field>'.");
+        throw std::runtime_error("Malformed heterogeneous graph output key '" +
+                                 key +
+                                 "'. Expected 'node:<node_type>:<field>', "
+                                 "'edge:<src>__<rel>__<dst>:<field>', or "
+                                 "'global:<field>'.");
       }
     }
 

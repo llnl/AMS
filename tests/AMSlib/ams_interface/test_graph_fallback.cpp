@@ -1,5 +1,4 @@
 #include <catch2/catch_test_macros.hpp>
-
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
@@ -125,56 +124,56 @@ CATCH_TEST_CASE("AMSHomogeneousGraph validates construction",
   AMSInit();
 
   CATCH_REQUIRE_NOTHROW(makeValidGraph());
-  CATCH_REQUIRE_NOTHROW(AMSHomogeneousGraph(
-      makeNodeFeatures(), makeEdgeIndex32(), makeEdgeFeatures()));
+  CATCH_REQUIRE_NOTHROW(AMSHomogeneousGraph(makeNodeFeatures(),
+                                            makeEdgeIndex32(),
+                                            makeEdgeFeatures()));
 
-  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(
-                              makeTensor<int64_t>({3, 2}),
-                              makeEdgeIndex64(),
-                              makeEdgeFeatures()),
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeTensor<int64_t>({3, 2}),
+                                              makeEdgeIndex64(),
+                                              makeEdgeFeatures()),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeTensor<float>({3}),
-                                             makeEdgeIndex64(),
-                                             makeEdgeFeatures()),
+                                              makeEdgeIndex64(),
+                                              makeEdgeFeatures()),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                             makeTensor<float>({2, 2}),
-                                             makeEdgeFeatures()),
+                                              makeTensor<float>({2, 2}),
+                                              makeEdgeFeatures()),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                             makeTensor<int64_t>({2}),
-                                             makeEdgeFeatures()),
+                                              makeTensor<int64_t>({2}),
+                                              makeEdgeFeatures()),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                             makeTensor<int64_t>({3, 2}),
-                                             makeEdgeFeatures()),
+                                              makeTensor<int64_t>({3, 2}),
+                                              makeEdgeFeatures()),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                             makeEdgeIndex64(),
-                                             makeTensor<float>({2})),
+                                              makeEdgeIndex64(),
+                                              makeTensor<float>({2})),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                             makeEdgeIndex64(),
-                                             makeEdgeFeatures(3)),
+                                              makeEdgeIndex64(),
+                                              makeEdgeFeatures(3)),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                             makeEdgeIndex64(),
-                                             makeTensor<int64_t>({2, 1})),
+                                              makeEdgeIndex64(),
+                                              makeTensor<int64_t>({2, 1})),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                             makeEdgeIndex64(),
-                                             makeEdgeFeatures(),
-                                             makeTensor<float>({2})),
+                                              makeEdgeIndex64(),
+                                              makeEdgeFeatures(),
+                                              makeTensor<float>({2})),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                             makeEdgeIndex64(),
-                                             makeEdgeFeatures(),
-                                             makeTensor<float>({2, 1})),
+                                              makeEdgeIndex64(),
+                                              makeEdgeFeatures(),
+                                              makeTensor<float>({2, 1})),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                             makeEdgeIndex64(),
-                                             makeEdgeFeatures(),
-                                             makeTensor<int64_t>({1, 1})),
+                                              makeEdgeIndex64(),
+                                              makeEdgeFeatures(),
+                                              makeTensor<int64_t>({1, 1})),
                           std::runtime_error);
 }
 
@@ -188,19 +187,19 @@ CATCH_TEST_CASE("AMSExecute homogeneous graph fallback path", "[wf][graph]")
   AMSHomogeneousGraph graph = makeValidGraph();
 
   bool callback_invoked = false;
-  HomogeneousGraphDomainFn callback =
-      [&](const AMSHomogeneousGraph& g, AMSHomogeneousGraphFields& outputs) {
-        callback_invoked = true;
-        CATCH_REQUIRE(g.node_features.shape()[0] == 3);
-        CATCH_REQUIRE(g.edge_index.shape()[0] == 2);
+  HomogeneousGraphDomainFn callback = [&](const AMSHomogeneousGraph& g,
+                                          AMSHomogeneousGraphFields& outputs) {
+    callback_invoked = true;
+    CATCH_REQUIRE(g.node_features.shape()[0] == 3);
+    CATCH_REQUIRE(g.edge_index.shape()[0] == 2);
 
-        auto out = makeTensor<float>({3, 1});
-        float* out_data = out.data<float>();
-        out_data[0] = 2.0f;
-        out_data[1] = 4.0f;
-        out_data[2] = 6.0f;
-        outputs.node_fields.set("prediction", std::move(out));
-      };
+    auto out = makeTensor<float>({3, 1});
+    float* out_data = out.data<float>();
+    out_data[0] = 2.0f;
+    out_data[1] = 4.0f;
+    out_data[2] = 6.0f;
+    outputs.node_fields.set("prediction", std::move(out));
+  };
 
   AMSHomogeneousGraphFields outputs;
   AMSExecute(executor, callback, graph, outputs);

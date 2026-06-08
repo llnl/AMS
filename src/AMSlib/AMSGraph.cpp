@@ -45,8 +45,8 @@ static void requireRank(const AMSTensor& tensor,
                         const std::string& name)
 {
   if (tensor.shape().size() != rank) {
-    throw std::runtime_error("AMSHomogeneousGraph " + name +
-                             " must be rank " + std::to_string(rank) + ".");
+    throw std::runtime_error("AMSHomogeneousGraph " + name + " must be rank " +
+                             std::to_string(rank) + ".");
   }
 }
 
@@ -75,8 +75,7 @@ AMSTensor* AMSTensorFieldMap::find(const std::string& name) noexcept
   return &it->second;
 }
 
-const AMSTensor* AMSTensorFieldMap::find(
-    const std::string& name) const noexcept
+const AMSTensor* AMSTensorFieldMap::find(const std::string& name) const noexcept
 {
   auto it = fields_.find(name);
   if (it == fields_.end()) {
