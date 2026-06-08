@@ -1,13 +1,12 @@
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <nlohmann/json.hpp>
-
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
@@ -57,7 +56,8 @@ static std::vector<Dim> contiguousStrides(const std::vector<Dim>& shape)
 }
 
 template <typename T>
-static AMSTensor makeTensor(std::vector<Dim> shape, const std::vector<T>& values)
+static AMSTensor makeTensor(std::vector<Dim> shape,
+                            const std::vector<T>& values)
 {
   std::vector<Dim> strides = contiguousStrides(shape);
   auto tensor = AMSTensor::create<T>(shape, strides, AMSResourceType::AMS_HOST);
@@ -87,8 +87,8 @@ static std::uintmax_t dtypeByteWidth(const std::string& dtype)
   if (dtype == "int64") {
     return sizeof(std::int64_t);
   }
-  CATCH_FAIL("Unsupported MGN graph diffusion tensor dtype in manifest: "
-             << dtype);
+  CATCH_FAIL(
+      "Unsupported MGN graph diffusion tensor dtype in manifest: " << dtype);
   return 0;
 }
 
@@ -119,9 +119,10 @@ static TensorMetadata parseTensorMetadata(const json& tensor)
   return metadata;
 }
 
-static void validateTensorMetadata(const TensorMetadata& metadata,
-                                   const std::string& expected_dtype,
-                                   const std::vector<std::int64_t>& expected_shape)
+static void validateTensorMetadata(
+    const TensorMetadata& metadata,
+    const std::string& expected_dtype,
+    const std::vector<std::int64_t>& expected_shape)
 {
   // Validate the manifest before allocating AMSTensors. The binary files are
   // intentionally simple raw bytes, so the manifest is the only place where
@@ -142,10 +143,11 @@ static void validateTensorMetadata(const TensorMetadata& metadata,
 }
 
 template <typename T>
-static std::vector<T> readTensorBinary(const std::filesystem::path& manifest_dir,
-                                       const json& tensor,
-                                       const std::string& expected_dtype,
-                                       const std::vector<std::int64_t>& expected_shape)
+static std::vector<T> readTensorBinary(
+    const std::filesystem::path& manifest_dir,
+    const json& tensor,
+    const std::string& expected_dtype,
+    const std::vector<std::int64_t>& expected_shape)
 {
   TensorMetadata metadata = parseTensorMetadata(tensor);
   validateTensorMetadata(metadata, expected_dtype, expected_shape);
@@ -204,11 +206,13 @@ static json loadManifest(const std::filesystem::path& fixture_dir)
 }
 
 static std::filesystem::path resolveManifestRelativePath(
-    const std::filesystem::path& manifest_dir, const json& object)
+    const std::filesystem::path& manifest_dir,
+    const json& object)
 {
   // Model and tensor paths in the manifest are relative by design. Avoiding
   // absolute paths makes fixtures reusable if the whole build directory moves.
-  const std::filesystem::path relative_path = object.at("path").get<std::string>();
+  const std::filesystem::path relative_path =
+      object.at("path").get<std::string>();
   CATCH_REQUIRE_FALSE(relative_path.empty());
   CATCH_REQUIRE_FALSE(relative_path.is_absolute());
   for (const auto& part : relative_path) {
@@ -236,14 +240,22 @@ static AMSHomogeneousGraph makeGraph(const std::filesystem::path& manifest_dir,
   CATCH_REQUIRE(global_dim == kGlobalFeatureDim);
 
   const json& tensors = graph_case.at("tensors");
-  auto node_features = readTensorBinary<float>(
-      manifest_dir, tensors.at("node_features"), "float32", {num_nodes, node_dim});
-  auto edge_index = readTensorBinary<std::int64_t>(
-      manifest_dir, tensors.at("edge_index"), "int64", {2, num_edges});
-  auto edge_features = readTensorBinary<float>(
-      manifest_dir, tensors.at("edge_features"), "float32", {num_edges, edge_dim});
-  auto global_features = readTensorBinary<float>(
-      manifest_dir, tensors.at("global_features"), "float32", {1, global_dim});
+  auto node_features = readTensorBinary<float>(manifest_dir,
+                                               tensors.at("node_features"),
+                                               "float32",
+                                               {num_nodes, node_dim});
+  auto edge_index = readTensorBinary<std::int64_t>(manifest_dir,
+                                                   tensors.at("edge_index"),
+                                                   "int64",
+                                                   {2, num_edges});
+  auto edge_features = readTensorBinary<float>(manifest_dir,
+                                               tensors.at("edge_features"),
+                                               "float32",
+                                               {num_edges, edge_dim});
+  auto global_features = readTensorBinary<float>(manifest_dir,
+                                                 tensors.at("global_features"),
+                                                 "float32",
+                                                 {1, global_dim});
 
   return AMSHomogeneousGraph(
       makeTensor<float>({toDim(num_nodes), toDim(node_dim)}, node_features),
@@ -253,14 +265,16 @@ static AMSHomogeneousGraph makeGraph(const std::filesystem::path& manifest_dir,
 }
 
 static std::vector<float> loadReferenceDeltaU(
-    const std::filesystem::path& manifest_dir, const json& graph_case)
+    const std::filesystem::path& manifest_dir,
+    const json& graph_case)
 {
   const std::int64_t num_nodes = graph_case.at("num_nodes").get<std::int64_t>();
   const std::int64_t output_dim =
       graph_case.at("reference_output_dim").get<std::int64_t>();
   CATCH_REQUIRE(output_dim == kReferenceOutputDim);
   return readTensorBinary<float>(manifest_dir,
-                                 graph_case.at("tensors").at("reference_delta_u"),
+                                 graph_case.at("tensors").at("reference_delta_"
+                                                             "u"),
                                  "float32",
                                  {num_nodes, output_dim});
 }
@@ -288,9 +302,9 @@ static void verifyDeltaU(const json& graph_case,
   const float* actual = delta_u.data<float>();
   const std::int64_t count = num_nodes * output_dim;
   for (std::int64_t i = 0; i < count; ++i) {
-    CATCH_REQUIRE(actual[i] == Catch::Approx(reference_delta_u[i])
-                                      .epsilon(rtol)
-                                      .margin(atol));
+    CATCH_REQUIRE(
+        actual[i] ==
+        Catch::Approx(reference_delta_u[i]).epsilon(rtol).margin(atol));
   }
 }
 
@@ -329,7 +343,8 @@ CATCH_TEST_CASE("AMSExecute homogeneous graph MGN diffusion surrogate",
   for (const json& graph_case : manifest.at("cases")) {
     CATCH_REQUIRE(graph_case.at("num_nodes").get<std::int64_t>() ==
                   expected_node_counts.at(case_index));
-    CATCH_DYNAMIC_SECTION("fixture " << graph_case.at("name").get<std::string>())
+    CATCH_DYNAMIC_SECTION("fixture "
+                          << graph_case.at("name").get<std::string>())
     {
       AMSHomogeneousGraph graph = makeGraph(manifest_dir, graph_case);
       std::vector<float> reference_delta_u =
@@ -347,10 +362,10 @@ CATCH_TEST_CASE("AMSExecute homogeneous graph MGN diffusion surrogate",
                 graph_case.at("num_nodes").get<std::int64_t>();
             const std::int64_t output_dim =
                 graph_case.at("reference_output_dim").get<std::int64_t>();
-            outputs.node_fields.set(
-                "delta_u",
-                makeTensor<float>({toDim(num_nodes), toDim(output_dim)},
-                                  reference_delta_u));
+            outputs.node_fields.set("delta_u",
+                                    makeTensor<float>({toDim(num_nodes),
+                                                       toDim(output_dim)},
+                                                      reference_delta_u));
           };
 
       AMSHomogeneousGraphFields outputs;
