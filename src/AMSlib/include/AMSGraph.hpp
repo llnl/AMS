@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -50,11 +49,11 @@ struct AMSHomogeneousGraph {
   // edge_index [2, E] integer connectivity, int64 canonical and int32 allowed
   // when the model handles it explicitly
   // edge_features [E, F_edge] floating point
-  // global_features [1, F_global] optional floating point
+  // global_features [F_global] floating point, with [0] meaning unused
   AMSTensor node_features;
   AMSTensor edge_index;
   AMSTensor edge_features;
-  std::optional<AMSTensor> global_features;
+  AMSTensor global_features;
 
   AMSTensorMap node_fields;
   AMSTensorMap edge_fields;

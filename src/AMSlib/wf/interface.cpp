@@ -337,10 +337,10 @@ static c10::Dict<std::string, torch::Tensor> amsToTorchHomogeneousGraph(
   out.insert("edge_features",
              amsTensorToTorchModelInput(
                  g.edge_features, model_device, model_dtype, false));
-  if (g.global_features.has_value()) {
+  if (g.global_features.shape()[0] != 0) {
     out.insert("global_features",
                amsTensorToTorchModelInput(
-                   *g.global_features, model_device, model_dtype, false));
+                   g.global_features, model_device, model_dtype, false));
   }
   return out;
 }

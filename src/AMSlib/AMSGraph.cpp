@@ -59,6 +59,27 @@ static void requireFloating(const AMSTensor& tensor, const std::string& name)
   }
 }
 
+static AMSTensor makeEmptyGlobalFeatures(const AMSTensor& node_features)
+{
+  using Dim = AMSTensor::IntDimType;
+  const Dim shape[] = {0};
+  const Dim strides[] = {1};
+
+  switch (node_features.dType()) {
+    case AMS_SINGLE:
+      return AMSTensor::create<float>(shape, strides, node_features.location());
+    case AMS_DOUBLE:
+      return AMSTensor::create<double>(shape,
+                                       strides,
+                                       node_features.location());
+    default:
+      throw std::runtime_error(
+          "AMSHomogeneousGraph cannot create empty global_features from "
+          "non-floating node_features dtype " +
+          dtypeName(node_features.dType()) + ".");
+  }
+}
+
 }  // namespace
 
 bool AMSTensorFieldMap::contains(const std::string& name) const
@@ -121,7 +142,8 @@ AMSHomogeneousGraph::AMSHomogeneousGraph(AMSTensor node_features_,
                                          AMSTensor edge_features_)
     : node_features(std::move(node_features_)),
       edge_index(std::move(edge_index_)),
-      edge_features(std::move(edge_features_))
+      edge_features(std::move(edge_features_)),
+      global_features(makeEmptyGlobalFeatures(node_features))
 {
   validate();
 }
@@ -163,14 +185,8 @@ void AMSHomogeneousGraph::validate() const
         "number of edges.");
   }
 
-  if (global_features.has_value()) {
-    requireRank(*global_features, 2, "global_features");
-    requireFloating(*global_features, "global_features");
-    if (global_features->shape()[0] != 1) {
-      throw std::runtime_error(
-          "AMSHomogeneousGraph global_features must have shape [1, F].");
-    }
-  }
+  requireRank(global_features, 1, "global_features");
+  requireFloating(global_features, "global_features");
 }
 
 EdgeType::EdgeType(std::string src_, std::string rel_, std::string dst_)

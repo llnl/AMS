@@ -45,7 +45,7 @@ class HomogeneousGraphModel(nn.Module):
 
         prediction = node_features[:, 0:1] + aggregated
         if "global_features" in graph:
-            prediction = prediction + graph["global_features"][0:1, 0:1] * 0.0
+            prediction = prediction + graph["global_features"][0] * 0.0
 
         return {"node:prediction": prediction}
 

@@ -85,7 +85,7 @@ static AMSTensor makeMessageEdgeFeatures()
 
 static AMSTensor makeMessageGlobalFeatures()
 {
-  auto tensor = makeTensor<float>({1, 1});
+  auto tensor = makeTensor<float>({1});
   tensor.data<float>()[0] = 0.125f;
   return tensor;
 }
@@ -97,6 +97,14 @@ static AMSHomogeneousGraph makeMessageGraph()
                              makeMessageEdgeIndex<EdgeScalar>(),
                              makeMessageEdgeFeatures(),
                              makeMessageGlobalFeatures());
+}
+
+template <typename EdgeScalar>
+static AMSHomogeneousGraph makeMessageGraphWithoutGlobals()
+{
+  return AMSHomogeneousGraph(makeMessageNodeFeatures(),
+                             makeMessageEdgeIndex<EdgeScalar>(),
+                             makeMessageEdgeFeatures());
 }
 
 static void verifyMessagePrediction(const AMSHomogeneousGraphFields& outputs)
@@ -144,6 +152,34 @@ CATCH_TEST_CASE("AMSExecute homogeneous graph surrogate message passing",
 
   runHomogeneousSurrogate<int64_t>("test_homo_surrogate_message_int64");
   runHomogeneousSurrogate<int32_t>("test_homo_surrogate_message_int32");
+}
+
+CATCH_TEST_CASE("AMSExecute homogeneous graph surrogate without globals",
+                "[wf][graph][surrogate]")
+{
+  AMSInit();
+
+  auto model = AMSRegisterAbstractModel("test_homo_surrogate_no_globals",
+                                        0.5,
+                                        HOMOGENEOUS_GRAPH_MODEL_PATH,
+                                        false);
+  AMSExecutor executor = AMSCreateExecutor(model, 0, 1);
+  AMSHomogeneousGraph graph = makeMessageGraphWithoutGlobals<int64_t>();
+  CATCH_REQUIRE(graph.global_features.shape().size() == 1);
+  CATCH_REQUIRE(graph.global_features.shape()[0] == 0);
+
+  bool callback_invoked = false;
+  HomogeneousGraphDomainFn callback = [&](const AMSHomogeneousGraph&,
+                                          AMSHomogeneousGraphFields& outputs) {
+    callback_invoked = true;
+    outputs.node_fields.set("prediction", makeTensor<float>({4, 1}));
+  };
+
+  AMSHomogeneousGraphFields outputs;
+  AMSExecute(executor, callback, graph, outputs);
+
+  CATCH_REQUIRE_FALSE(callback_invoked);
+  verifyMessagePrediction(outputs);
 }
 
 CATCH_TEST_CASE("AMSExecute heterogeneous graph surrogate execution",
