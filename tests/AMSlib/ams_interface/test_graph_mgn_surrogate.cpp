@@ -299,7 +299,7 @@ static AMSHomogeneousGraph makeGraph(const std::filesystem::path& manifest_dir,
   //   node_features   [N, 4]  -> x, y, u, kappa
   //   edge_index      [2, E]  -> source row, destination row
   //   edge_features   [E, 4]  -> dx, dy, distance, message
-  //   global_features [1, 1]  -> dt
+  //   global_features [1]     -> dt
   //
   // Keeping this conversion here, instead of compiling arrays into the test,
   // makes the test closer to a real AMS deployment path: model and tensors are
@@ -339,13 +339,13 @@ static AMSHomogeneousGraph makeGraph(const std::filesystem::path& manifest_dir,
   auto global_features = readTensorBinary<float>(manifest_dir,
                                                  tensors.at("global_features"),
                                                  "float32",
-                                                 {1, global_dim});
+                                                 {global_dim});
 
   return AMSHomogeneousGraph(
       makeTensor<float>({toDim(num_nodes), toDim(node_dim)}, node_features),
       makeTensor<std::int64_t>({2, toDim(num_edges)}, edge_index),
       makeTensor<float>({toDim(num_edges), toDim(edge_dim)}, edge_features),
-      makeTensor<float>({1, toDim(global_dim)}, global_features));
+      makeTensor<float>({toDim(global_dim)}, global_features));
 }
 
 static std::vector<float> loadReferenceDeltaU(

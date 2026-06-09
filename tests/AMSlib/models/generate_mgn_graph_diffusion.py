@@ -166,6 +166,12 @@ class ProcessorBlock(nn.Module):
         edge_index: Tensor,
         global_features: Tensor,
     ) -> Tuple[Tensor, Tensor]:
+        # AMS homogeneous graphs provide global_features as one graph-level
+        # vector with shape [F_global]. For concatenation, this block needs one
+        # copy per edge and one copy per node, so the broadcast happens here at
+        # the point where graph-wide data is turned into per-entity inputs.
+        global_row = global_features.unsqueeze(0)
+
         # The canonical AMS edge_index uses row 0 as source and row 1 as
         # destination. index_select gathers per-edge source/destination node
         # states without any graph-library dependency.
@@ -175,7 +181,7 @@ class ProcessorBlock(nn.Module):
         # Edge update: each edge sees its current latent state, source node,
         # destination node, and the graph-level dt feature. The residual update
         # keeps this tiny model easy to train.
-        global_edges = global_features.expand(edge_latent.shape[0], global_features.shape[1])
+        global_edges = global_row.expand(edge_latent.shape[0], global_row.shape[1])
         edge_input = torch.cat(
             (
                 edge_latent,
@@ -199,7 +205,7 @@ class ProcessorBlock(nn.Module):
 
         # Node update: each node sees its previous latent state, the aggregated
         # incoming message, and the global dt feature.
-        global_nodes = global_features.expand(node_latent.shape[0], global_features.shape[1])
+        global_nodes = global_row.expand(node_latent.shape[0], global_row.shape[1])
         node_input = torch.cat((node_latent, aggregated, global_nodes), dim=1)
         node_latent = node_latent + self.node_mlp(node_input)
         return node_latent, edge_latent
@@ -341,7 +347,7 @@ def generate_graph(num_nodes: int, seed: int) -> Tuple[Dict[str, Tensor], Tensor
     # kappa changes how strongly values diffuse across edges; dt scales the
     # final update for every node in the graph.
     kappa = torch.rand((num_nodes, 1), generator=generator, dtype=torch.float32) + 0.5
-    dt = torch.rand((1, 1), generator=generator, dtype=torch.float32) * 0.06 + 0.02
+    dt = torch.rand((1,), generator=generator, dtype=torch.float32) * 0.06 + 0.02
 
     # 4. Connect nearby nodes with a k-nearest-neighbor graph. The model sees
     # directed edges, so edge_index[0, e] is the source node and edge_index[1, e]

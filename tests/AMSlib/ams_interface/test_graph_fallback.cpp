@@ -163,17 +163,12 @@ CATCH_TEST_CASE("AMSHomogeneousGraph validates construction",
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
                                               makeEdgeIndex64(),
                                               makeEdgeFeatures(),
-                                              makeTensor<float>({2})),
-                          std::runtime_error);
-  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
-                                              makeEdgeIndex64(),
-                                              makeEdgeFeatures(),
                                               makeTensor<float>({2, 1})),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
                                               makeEdgeIndex64(),
                                               makeEdgeFeatures(),
-                                              makeTensor<int64_t>({1, 1})),
+                                              makeTensor<int64_t>({1})),
                           std::runtime_error);
 }
 
