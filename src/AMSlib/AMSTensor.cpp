@@ -84,7 +84,8 @@ AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
   auto numElements = computeNumElements(shapes);
   auto& rm = ams::ResourceManager::getInstance();
   using U = std::remove_cv_t<ScalarType>;
-  U* data = rm.allocate<U>(numElements, location, sizeof(U));
+  auto allocationElements = numElements == 0 ? 1 : numElements;
+  U* data = rm.allocate<U>(allocationElements, location, sizeof(U));
   return AMSTensor(reinterpret_cast<uint8_t*>(data),
                    shapes,
                    strides,
