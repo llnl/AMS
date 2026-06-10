@@ -32,7 +32,6 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-  "ruff",
   "h5py",
   "argparse",
   "SQLAlchemy",
@@ -40,6 +39,11 @@ dependencies = [
   "pika>=1.3.0",
   "numpy>=1.2.0",
   "flux-python>=0.75.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff",
 ]
 
 [project.scripts]
