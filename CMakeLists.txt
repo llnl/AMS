@@ -60,7 +60,7 @@ if (ENABLE_CUDA AND ENABLE_HIP)
 endif()
 
 if (NOT BLT_SOURCE_DIR)
-  set(BLT_SOURCE_DIR "${PROJECT_SOURCE_DIR}/blt" CACHE PATH "Path to a BLT checkout")
+  set(BLT_SOURCE_DIR "${PROJECT_SOURCE_DIR}/blt/0.7.1" CACHE PATH "Path to a BLT checkout")
 endif()
 
 if (NOT EXISTS "${BLT_SOURCE_DIR}/SetupBLT.cmake")

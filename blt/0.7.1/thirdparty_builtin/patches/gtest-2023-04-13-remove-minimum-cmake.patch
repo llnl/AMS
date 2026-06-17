@@ -1,0 +1,37 @@
+diff --git a/thirdparty_builtin/googletest-1.16.0/CMakeLists.txt b/thirdparty_builtin/googletest-1.16.0/CMakeLists.txt
+index b97d290..ca4aceb 100644
+--- a/thirdparty_builtin/googletest-1.16.0/CMakeLists.txt
++++ b/thirdparty_builtin/googletest-1.16.0/CMakeLists.txt
+@@ -1,8 +1,6 @@
+ # Note: CMake support is community-based. The maintainers do not use CMake
+ # internally.
+ 
+-cmake_minimum_required(VERSION 3.13)
+-
+ project(googletest-distribution)
+ set(GOOGLETEST_VERSION 1.16.0)
+ 
+diff --git a/thirdparty_builtin/googletest-1.16.0/googlemock/CMakeLists.txt b/thirdparty_builtin/googletest-1.16.0/googlemock/CMakeLists.txt
+index 99b2411..3be7b72 100644
+--- a/thirdparty_builtin/googletest-1.16.0/googlemock/CMakeLists.txt
++++ b/thirdparty_builtin/googletest-1.16.0/googlemock/CMakeLists.txt
+@@ -36,7 +36,6 @@ endif()
+ # as ${gmock_SOURCE_DIR} and to the root binary directory as
+ # ${gmock_BINARY_DIR}.
+ # Language "C" is required for find_package(Threads).
+-cmake_minimum_required(VERSION 3.13)
+ project(gmock VERSION ${GOOGLETEST_VERSION} LANGUAGES CXX C)
+ 
+ if (COMMAND set_up_hermetic_build)
+diff --git a/thirdparty_builtin/googletest-1.16.0/googletest/CMakeLists.txt b/thirdparty_builtin/googletest-1.16.0/googletest/CMakeLists.txt
+index dce6a7c..5f2d667 100644
+--- a/thirdparty_builtin/googletest-1.16.0/googletest/CMakeLists.txt
++++ b/thirdparty_builtin/googletest-1.16.0/googletest/CMakeLists.txt
+@@ -46,7 +46,6 @@ endif()
+ 
+ # Project version.
+ 
+-cmake_minimum_required(VERSION 3.13)
+ project(gtest VERSION ${GOOGLETEST_VERSION} LANGUAGES CXX C)
+ 
+ if (COMMAND set_up_hermetic_build)
