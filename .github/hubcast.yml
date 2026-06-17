@@ -3,7 +3,7 @@ Repo:
   dest_org: autonomous-multiscale-project
 
   # Required: name of the destination repository on CZ GitLab
-  dest_name: ams-ci
+  dest_name: ams-mirror-ci
 
   # Optional: name of the CI check as reported back to GitHub (default: gitlab-ci)
   check_name: gitlab-ci
