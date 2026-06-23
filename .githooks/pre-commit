@@ -3,8 +3,8 @@
 # Git pre-commit hook for AMS:
 #   Runs non-mutating checks on staged C/C++ and Python files.
 #
-# Install (automatic via cmake/setup-git-hooks.cmake):
-#   .githooks/pre-commit
+# Install:
+#   git config core.hooksPath .githooks
 #
 # Skip temporarily:
 #   git commit --no-verify
