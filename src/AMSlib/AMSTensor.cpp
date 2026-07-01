@@ -1,7 +1,8 @@
+#include "AMSTensor.hpp"
+
 #include <stdexcept>
 
 #include "AMS.h"
-#include "AMSTensor.hpp"
 #include "ArrayRef.hpp"
 #include "SmallVector.hpp"
 #include "include/AMSTensor.hpp"
@@ -69,6 +70,7 @@ AMSTensor::AMSTensor(uint8_t* data,
 {
   _elements = computeNumElements(shapes);
   _bytes = _elements * _element_size;
+  _contiguous = isContiguous(1);
   if (!_data) {
     throw std::runtime_error("Generating tensor with Null Pointer AMSTensor.");
   }
@@ -82,7 +84,8 @@ AMSTensor AMSTensor::create(ams::ArrayRef<AMSTensor::IntDimType> shapes,
   auto numElements = computeNumElements(shapes);
   auto& rm = ams::ResourceManager::getInstance();
   using U = std::remove_cv_t<ScalarType>;
-  U* data = rm.allocate<U>(numElements, location, sizeof(U));
+  auto allocationElements = numElements == 0 ? 1 : numElements;
+  U* data = rm.allocate<U>(allocationElements, location, sizeof(U));
   return AMSTensor(reinterpret_cast<uint8_t*>(data),
                    shapes,
                    strides,
@@ -151,7 +154,9 @@ AMSTensor::AMSTensor(AMSTensor&& other) noexcept
       _strides(std::move(other._strides)),
       _dType(other._dType),
       _location(other._location),
-      _owned(other._owned)
+      _owned(other._owned),
+      _contiguous(other._contiguous),
+      _bytes(other._bytes)
 {
   other._data = nullptr;
   other._owned = false;
@@ -160,7 +165,10 @@ AMSTensor::AMSTensor(AMSTensor&& other) noexcept
 AMSTensor& AMSTensor::operator=(AMSTensor&& other) noexcept
 {
   if (this != &other) {
-    // Free existing resources
+    if (_owned && _data) {
+      auto& rm = ams::ResourceManager::getInstance();
+      rm.deallocate(_data, _location);
+    }
 
     // Steal resources from `other`
     _data = other._data;
@@ -171,6 +179,8 @@ AMSTensor& AMSTensor::operator=(AMSTensor&& other) noexcept
     _dType = other._dType;
     _location = other._location;
     _owned = other._owned;
+    _contiguous = other._contiguous;
+    _bytes = other._bytes;
 
     other._data = nullptr;
     other._owned = false;

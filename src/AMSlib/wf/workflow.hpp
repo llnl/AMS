@@ -35,6 +35,13 @@ namespace ams
 {
 class AMSWorkflow
 {
+  // Friend declarations for graph surrogate execution access to private MLModel
+  friend bool tryGraphSurrogate(AMSWorkflow*,
+                                const AMSHomogeneousGraph&,
+                                AMSHomogeneousGraphFields&);
+  friend bool tryGraphSurrogate(AMSWorkflow*,
+                                const AMSHeterogeneousGraph&,
+                                AMSHeterogeneousGraphFields&);
 
   /** @brief A string identifier describing the domain-model being solved. */
   std::string domainName;
@@ -90,6 +97,26 @@ class AMSWorkflow
             StoreInputTensors[0].sizes()[0]);
     DB->store(StoreInputTensors, StoreOutputTensors);
     CALIPER(CALI_MARK_END("DBSTORE");)
+  }
+
+  void storeGraphData(const ams::AMSHomogeneousGraph& graph,
+                      const ams::AMSHomogeneousGraphFields& outputs)
+  {
+    // TODO: Implement graph storage when database supports it
+    // For now, this is a no-op placeholder
+    (void)graph;
+    (void)outputs;
+    AMS_DBG(Workflow, "Graph storage not yet implemented (homogeneous)");
+  }
+
+  void storeGraphData(const ams::AMSHeterogeneousGraph& graph,
+                      const ams::AMSHeterogeneousGraphFields& outputs)
+  {
+    // TODO: Implement graph storage when database supports it
+    // For now, this is a no-op placeholder
+    (void)graph;
+    (void)outputs;
+    AMS_DBG(Workflow, "Graph storage not yet implemented (heterogeneous)");
   }
 
   /** \brief Check if we can perform a surrogate model update.

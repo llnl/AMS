@@ -441,6 +441,38 @@ void AMSExecute(AMSExecutor executor,
   callAMS(workflow, OrigComputation, ins, inouts, outs);
 }
 
+void AMSExecute(AMSExecutor executor,
+                HomogeneousGraphDomainFn& OrigComputation,
+                const ams::AMSHomogeneousGraph& graph_input,
+                ams::AMSHomogeneousGraphFields& outputs)
+{
+  int64_t index = static_cast<int64_t>(executor);
+  if (index >= _amsWrap->executors.size())
+    throw std::runtime_error("AMS Executor identifier does not exist\n");
+  auto currExec = _amsWrap->executors[index];
+
+  ams::AMSWorkflow* workflow = reinterpret_cast<ams::AMSWorkflow*>(currExec);
+  AMS_DBG(AMS, "Calling AMS with homogeneous graph");
+
+  callAMS(workflow, OrigComputation, graph_input, outputs);
+}
+
+void AMSExecute(AMSExecutor executor,
+                HeterogeneousGraphDomainFn& OrigComputation,
+                const ams::AMSHeterogeneousGraph& graph_input,
+                ams::AMSHeterogeneousGraphFields& outputs)
+{
+  int64_t index = static_cast<int64_t>(executor);
+  if (index >= _amsWrap->executors.size())
+    throw std::runtime_error("AMS Executor identifier does not exist\n");
+  auto currExec = _amsWrap->executors[index];
+
+  ams::AMSWorkflow* workflow = reinterpret_cast<ams::AMSWorkflow*>(currExec);
+  AMS_DBG(AMS, "Calling AMS with heterogeneous graph");
+
+  callAMS(workflow, OrigComputation, graph_input, outputs);
+}
+
 void AMSCExecute(AMSExecutor executor,
                  DomainCFn OrigCComputation,
                  void* args,
