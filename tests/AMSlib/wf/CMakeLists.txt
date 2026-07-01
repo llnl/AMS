@@ -44,6 +44,7 @@ function(BUILD_UNIT_TEST exe source)
 endfunction()
 
 BUILD_UNIT_TEST(operations operations.cpp)
+target_link_libraries(operations PRIVATE fmt::fmt)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::OPERATIONS operations)
 
 BUILD_UNIT_TEST(evaluate_in_and_outs evaluate_in_and_outs.cpp)
@@ -61,13 +62,17 @@ target_link_libraries(pointwise PRIVATE fmt::fmt)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::POINTWISE pointwise)
 
 BUILD_UNIT_TEST(action action.cpp)
+target_link_libraries(action PRIVATE fmt::fmt)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::ACTION action)
 
 BUILD_UNIT_TEST(pipeline pipeline.cpp)
+target_link_libraries(pipeline PRIVATE fmt::fmt)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::PIPELINE pipeline)
 
 BUILD_UNIT_TEST(policy policy.cpp)
+target_link_libraries(policy PRIVATE fmt::fmt)
 ADD_WORKFLOW_UNIT_TEST(WORKFLOW::POLICY policy)
 
 BUILD_UNIT_TEST(int_tensors int_tensors.cpp)
+target_link_libraries(int_tensors PRIVATE fmt::fmt)
 ADD_WORKFLOW_UNIT_TEST(AMS_INT_TENSOR int_tensors)

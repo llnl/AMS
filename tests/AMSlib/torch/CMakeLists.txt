@@ -33,5 +33,5 @@ target_link_libraries(ams_test_base_model PRIVATE fmt::fmt nlohmann_json::nlohma
 ADD_TORCH_UNIT_TEST(BaseModel ams_test_base_model)
 
 BUILD_UNIT_TEST(ams_test_inference_model test_inference_model.cpp)
-target_link_libraries(ams_test_inference_model PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(ams_test_inference_model PRIVATE fmt::fmt nlohmann_json::nlohmann_json)
 ADD_TORCH_UNIT_TEST(InferenceModel ams_test_inference_model)
