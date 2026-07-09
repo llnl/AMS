@@ -11,8 +11,8 @@
 #   scripts/run-code-quality.sh
 #   scripts/run-code-quality.sh --fix
 #   scripts/run-code-quality.sh --ruff --fix
-#   scripts/run-code-quality.sh --clang-format --clang-tidy src tests
-#   scripts/run-code-quality.sh --check --staged
+#   scripts/run-code-quality.sh --all --clang-format --clang-tidy src tests
+#   scripts/run-code-quality.sh --check
 
 set -euo pipefail
 
@@ -20,14 +20,15 @@ usage() {
   cat <<'EOF'
 Usage: scripts/run-code-quality.sh [options] [paths...]
 
-Run code-quality tools across the repository or a selected subset of files.
-By default, this runs check-only mode on tracked files under:
+Run code-quality tools on staged files by default, or across the repository
+with --all. Full-codebase runs use tracked files under:
   src tests examples tools scripts .githooks
 
 Options:
   --check              Run non-mutating checks only (default)
   --fix                Apply clang-format and ruff fixes explicitly
-  --staged             Operate on staged files instead of the full codebase
+  --staged             Operate on staged files (default)
+  --all                Operate on the full codebase instead of staged files
   --fail-on-partial    Refuse staged runs when relevant files also have unstaged changes
   --ruff               Run ruff format/check on Python files
   --clang-format       Run clang-format on C/C++ files
@@ -76,17 +77,25 @@ append_if_exists() {
 
 is_cpp_file() {
   local path="$1"
-  [[ "$path" =~ \.(cpp|hpp|cc|hh|h|c|cxx|hxx)$ ]]
+  local lower="${path,,}"
+  [[ "$lower" =~ \.(cpp|hpp|cc|hh|h|c|cxx|hxx)$ ]]
 }
 
 is_tidy_file() {
   local path="$1"
-  [[ "$path" =~ \.(cpp|cc|c|cxx)$ ]]
+  local lower="${path,,}"
+  [[ "$lower" =~ \.(cpp|cc|c|cxx)$ ]]
+}
+
+is_dependency_file() {
+  local path="$1"
+  [[ "$path" == _deps/* || "$path" == */_deps/* ]]
 }
 
 is_python_file() {
   local path="$1"
-  [[ "$path" =~ \.py$ ]]
+  local lower="${path,,}"
+  [[ "$lower" =~ \.py$ ]]
 }
 
 collect_files() {
@@ -147,6 +156,162 @@ find_compile_db() {
   done
 
   return 1
+}
+
+append_unique_compile_db_tidy_file() {
+  local candidate="$1"
+  local file=""
+
+  for file in "${COMPILE_DB_TIDY_FILES[@]}"; do
+    if [[ "$file" == "$candidate" ]]; then
+      return 0
+    fi
+  done
+
+  COMPILE_DB_TIDY_FILES+=("$candidate")
+}
+
+tidy_file_in_compile_db() {
+  local candidate="$1"
+  local file=""
+
+  for file in "${COMPILE_DB_TIDY_FILES[@]}"; do
+    if [[ "$file" == "$candidate" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+collect_compile_db_tidy_files() {
+  local file=""
+  local parsed_files=""
+
+  [[ "$RUN_CLANG_TIDY" -eq 1 && "$SKIP_TIDY" -eq 0 ]] || return 0
+
+  if ! COMPILE_DB=$(find_compile_db); then
+    return 0
+  fi
+
+  COMPILE_DB_DIR=$(dirname "$COMPILE_DB")
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    warn "python3 not found, cannot read compile_commands.json for clang-tidy discovery."
+    return 0
+  fi
+
+  if ! parsed_files=$(python3 - "$REPO_ROOT" "$COMPILE_DB" "${TARGETS[@]}" <<'PY'
+import json
+import os
+import sys
+
+repo_root = os.path.realpath(sys.argv[1])
+compile_db = sys.argv[2]
+targets = sys.argv[3:]
+tidy_extensions = (".cpp", ".cc", ".c", ".cxx")
+
+
+def repo_relative(path):
+    abs_path = os.path.realpath(path)
+    try:
+        rel_path = os.path.relpath(abs_path, repo_root)
+    except ValueError:
+        return None
+    if rel_path == os.pardir or rel_path.startswith(os.pardir + os.sep):
+        return None
+    return rel_path.replace(os.sep, "/")
+
+
+def normalize_target(target):
+    if target in ("", "."):
+        return ""
+    if os.path.isabs(target):
+        rel_target = repo_relative(target)
+    else:
+        rel_target = repo_relative(os.path.join(repo_root, target))
+    if rel_target in (None, "."):
+        return ""
+    return rel_target.rstrip("/")
+
+
+target_filters = [normalize_target(target) for target in targets]
+target_filters = [target for target in target_filters if target is not None]
+
+
+def target_matches(rel_path):
+    for target in target_filters:
+        if target == "" or rel_path == target or rel_path.startswith(target + "/"):
+            return True
+    return False
+
+
+def is_dependency_path(rel_path):
+    return "_deps" in rel_path.split("/")
+
+
+with open(compile_db, encoding="utf-8") as handle:
+    entries = json.load(handle)
+
+seen = set()
+for entry in entries:
+    raw_file = entry.get("file")
+    if not isinstance(raw_file, str):
+        continue
+
+    if os.path.isabs(raw_file):
+        source_path = raw_file
+    else:
+        directory = entry.get("directory")
+        if not isinstance(directory, str):
+            directory = os.path.dirname(compile_db)
+        source_path = os.path.join(directory, raw_file)
+
+    rel_path = repo_relative(source_path)
+    if rel_path is None or rel_path in seen:
+        continue
+    if is_dependency_path(rel_path):
+        continue
+    if not rel_path.lower().endswith(tidy_extensions):
+        continue
+    if not target_matches(rel_path):
+        continue
+
+    seen.add(rel_path)
+    print(rel_path)
+PY
+); then
+    warn "failed to read $COMPILE_DB for clang-tidy discovery."
+    return 0
+  fi
+
+  COMPILE_DB_PARSED=1
+
+  while IFS= read -r file; do
+    if [[ -n "$file" ]]; then
+      append_unique_compile_db_tidy_file "$file"
+    fi
+  done <<< "$parsed_files"
+}
+
+sync_tidy_files_with_compile_db() {
+  local file=""
+  local staged_tidy_files=()
+
+  [[ "$RUN_CLANG_TIDY" -eq 1 && "$COMPILE_DB_PARSED" -eq 1 ]] || return 0
+
+  if [[ "$USE_STAGED" -eq 0 ]]; then
+    TIDY_FILES=("${COMPILE_DB_TIDY_FILES[@]}")
+    return 0
+  fi
+
+  for file in "${TIDY_FILES[@]}"; do
+    if tidy_file_in_compile_db "$file"; then
+      staged_tidy_files+=("$file")
+    fi
+  done
+
+  TIDY_FILES=("${staged_tidy_files[@]}")
 }
 
 run_clang_format() {
@@ -221,12 +386,10 @@ run_ruff() {
 }
 
 run_clang_tidy() {
-  local compile_db=""
-  local compile_db_dir=""
+  local compile_db="$COMPILE_DB"
+  local compile_db_dir="$COMPILE_DB_DIR"
   local file=""
   local failed=0
-  local rel_file=""
-  local abs_file=""
 
   if [[ "$SKIP_TIDY" -eq 1 || "${#TIDY_FILES[@]}" -eq 0 ]]; then
     return 0
@@ -237,19 +400,20 @@ run_clang_tidy() {
     return 0
   fi
 
-  if ! compile_db=$(find_compile_db); then
-    warn "compile_commands.json not found, skipping clang-tidy."
-    warn "Run cmake first, or set AMS_BUILD_DIR / --build-dir."
-    return 0
+  if [[ -z "$compile_db" ]]; then
+    if ! compile_db=$(find_compile_db); then
+      warn "compile_commands.json not found, skipping clang-tidy."
+      warn "Run cmake first, or set AMS_BUILD_DIR / --build-dir."
+      return 0
+    fi
+    compile_db_dir=$(dirname "$compile_db")
   fi
-
-  compile_db_dir=$(dirname "$compile_db")
-
   for file in "${TIDY_FILES[@]}"; do
-    rel_file="$file"
-    abs_file="$REPO_ROOT/$file"
+    if is_dependency_file "$file"; then
+      continue
+    fi
 
-    if ! grep -Fq "\"$rel_file\"" "$compile_db" && ! grep -Fq "\"$abs_file\"" "$compile_db"; then
+    if [[ "$COMPILE_DB_PARSED" -eq 1 ]] && ! tidy_file_in_compile_db "$file"; then
       continue
     fi
 
@@ -277,8 +441,12 @@ RELEVANT_FILES=()
 CPP_FILES=()
 PY_FILES=()
 TIDY_FILES=()
+COMPILE_DB_TIDY_FILES=()
+COMPILE_DB=""
+COMPILE_DB_DIR=""
+COMPILE_DB_PARSED=0
 
-USE_STAGED=0
+USE_STAGED=1
 FAIL_ON_PARTIAL=0
 APPLY_FIXES=0
 RUN_RUFF=0
@@ -301,6 +469,9 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --staged)
       USE_STAGED=1
+      ;;
+    --all)
+      USE_STAGED=0
       ;;
     --fail-on-partial)
       FAIL_ON_PARTIAL=1
@@ -366,10 +537,13 @@ for file in "${RELEVANT_FILES[@]}"; do
     PY_FILES+=("$file")
   fi
 
-  if [[ "$RUN_CLANG_TIDY" -eq 1 ]] && is_tidy_file "$file"; then
+  if [[ "$RUN_CLANG_TIDY" -eq 1 ]] && is_tidy_file "$file" && ! is_dependency_file "$file"; then
     TIDY_FILES+=("$file")
   fi
 done
+
+collect_compile_db_tidy_files
+sync_tidy_files_with_compile_db
 
 if [[ "${#CPP_FILES[@]}" -eq 0 && "${#PY_FILES[@]}" -eq 0 && "${#TIDY_FILES[@]}" -eq 0 ]]; then
   exit 0
