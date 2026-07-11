@@ -14,7 +14,6 @@ cmake_policy(SET CMP0074 NEW)
 
 project(AMS VERSION 0.1.1 LANGUAGES CXX C)
 
-
 # NOTE: This may break some of our integrations with the applications. But flux requires > C++20, RMQ requires C++17 and although AMS does not have 
 # any restrictions on the CXX standard the application may impose those. The solution would be to compile RMQ with an older GCC version  (8) and 
 # have flux to be an external of the system environment
