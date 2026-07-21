@@ -12,7 +12,7 @@ host=${host//[0-9]/}
 host=$(hostname)
 host=${host//[0-9]/}
 
-SPACK_VER="1.0"
+SPACK_VER="1.1"
 
 if [[ "$SYS_TYPE" == "toss_4_x86_64_ib_cray" ]]; then
     echo "Loading MPI and ROCm"
@@ -42,6 +42,11 @@ export AMS_HDF5_PATH=`spack location -i hdf5`
 export AMS_CALIPER_PATH=`spack location -i caliper`
 export AMS_AMQPCPP_PATH=`spack location -i amqp-cpp`
 export AMS_ADIAK_PATH=`spack location -i adiak`
+export AMS_NLOHMANN_JSON_DIR=`spack location -i  nlohmann-json`
+export AMS_ZLIB_PATH=`spack location -i zlib-ng`
+export AMS_FMT_DIR=`spack location -i fmt`
+export AMS_TL_EXPECTED_DIR=`spack location -i tl-expected`
+
 export AMS_CUDA_ARCH=${CUDA_ARCH}
 export AMS_HIP_ARCH=${ROCM_ARCH}
 
@@ -54,13 +59,20 @@ echo "AMS_HDF5_PATH                = $AMS_HDF5_PATH"
 echo "AMS_CALIPER_PATH             = $AMS_CALIPER_PATH"
 echo "AMS_AMQPCPP_PATH             = $AMS_AMQPCPP_PATH"
 echo "AMS_ADIAK_PATH               = $AMS_ADIAK_PATH"
+echo "AMS_NLOHMANN_JSON_DIR        = $AMS_NLOHMANN_JSON_DIR"
+echo "AMS_FMT_DIR                  = $AMS_FMT_DIR"
+echo "AMS_TL_EXPECTED_DIR          = $AMS_TL_EXPECTED_DIR"
 
-export AMS_TORCH_PATH=$(echo $AMS_TORCH_PATH/lib/python3.*/site-packages/torch/share/cmake/Torch)
+export AMS_TORCH_PATH=$(echo $AMS_TORCH_PATH/lib*/python3.*/site-packages/torch/share/cmake/Torch)
 export AMS_AMQPCPP_PATH=$(echo $AMS_AMQPCPP_PATH/cmake)
 export AMS_CALIPER_PATH=$(echo $AMS_CALIPER_PATH/share/cmake/caliper)
+export AMS_NLOHMANN_JSON_DIR=$(echo $AMS_NLOHMANN_JSON_DIR/share/cmake/nlohmann_json/)
+export AMS_TL_EXPECTED_DIR=$(echo $AMS_TL_EXPECTED_DIR/share/cmake/tl-expected/)
 
-echo "(for cmake) AMS_TORCH_PATH   = $AMS_TORCH_PATH"
-echo "(for cmake) AMS_AMQPCPP_PATH = $AMS_AMQPCPP_PATH"
-echo "(for cmake) AMS_CALIPER_PATH = $AMS_CALIPER_PATH"
+echo "(for cmake) AMS_TORCH_PATH        = $AMS_TORCH_PATH"
+echo "(for cmake) AMS_AMQPCPP_PATH      = $AMS_AMQPCPP_PATH"
+echo "(for cmake) AMS_CALIPER_PATH      = $AMS_CALIPER_PATH"
+echo "(for cmake) AMS_NLOHMANN_JSON_DIR = $AMS_NLOHMANN_JSON_DIR"
+echo "(for cmake) AMS_TL_EXPECTED_DIR   = $AMS_TL_EXPECTED_DIR"
 
 export AMS_LOG_LEVEL=Debug
