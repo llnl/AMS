@@ -70,6 +70,41 @@ if (NOT EXISTS "${BLT_SOURCE_DIR}/SetupBLT.cmake")
 endif()
 
 list(PREPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" "${BLT_SOURCE_DIR}/cmake")
+
+if (ENABLE_HIP)
+  # CMAKE_HIP_ARCHITECTURES is incorrect so we need to perform our own
+  find_program(ROCM_AGENT_ENUMERATOR
+      NAMES rocm_agent_enumerator
+      HINTS ${ROCM_PATH} $ENV{ROCM_PATH} /opt/rocm
+      PATH_SUFFIXES bin
+    )
+
+  if(ROCM_AGENT_ENUMERATOR)
+    execute_process(
+      COMMAND ${ROCM_AGENT_ENUMERATOR}
+      OUTPUT_VARIABLE _rocm_agents
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE _rocm_agents_result
+    )
+
+    if(_rocm_agents_result EQUAL 0)
+      # Split lines into a list, drop the gfx000 CPU agent, dedup
+      string(REPLACE "\n" ";" _rocm_agents "${_rocm_agents}")
+      list(REMOVE_ITEM _rocm_agents "gfx000")
+      list(REMOVE_DUPLICATES _rocm_agents)
+      if(_rocm_agents)
+        set(CMAKE_HIP_ARCHITECTURES ${_rocm_agents} CACHE PATH "AMD GPU Architecture")
+      endif()
+    endif()
+  endif()
+
+  if(CMAKE_HIP_ARCHITECTURES)
+    message(STATUS "Detected HIP architectures: ${CMAKE_HIP_ARCHITECTURES}")
+  else()
+    message(WARNING "Could not auto-detect HIP architectures; set CMAKE_HIP_ARCHITECTURES manually.")
+  endif()
+endif()
+
 include("${BLT_SOURCE_DIR}/SetupBLT.cmake")
 
 include(CMakePackageConfigHelpers)
@@ -180,9 +215,7 @@ if (AMS_DEFER_STATIC_TPL_RESOLUTION AND NOT BUILD_SHARED_LIBS)
           "AMS_DEFER_STATIC_TPL_RESOLUTION is ignored when BUILD_SHARED_LIBS=OFF.")
 endif()
 
-if (ENABLE_RMQ)
-  find_package(Threads REQUIRED)
-endif()
+find_package(Threads REQUIRED)
 
 include(cmake/FetchAndAddFmt.cmake)
 set(_ams_fmt_args)
@@ -231,7 +264,7 @@ elseif (ENABLE_HIP)
   find_package(HIP REQUIRED)
   list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_HIP__")
   if (DEFINED ROCM_PATH)
-    list(APPEND CMAKE_CXX_FLAGS "-I${ROCM_PATH}/include/")
+    string(APPEND CMAKE_CXX_FLAGS "-I${ROCM_PATH}/include/")
   endif()
 endif()
 

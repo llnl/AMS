@@ -6,6 +6,7 @@ function(BUILD_UNIT_TEST exe source)
   target_include_directories(${exe} PRIVATE ${CMAKE_BINARY_DIR}/include/)
   target_link_libraries(${exe} PRIVATE stdc++fs AMS torch Catch2::Catch2WithMain)
   target_include_directories(${exe} PRIVATE ${AMS_TEST_ROOT})
+  target_link_libraries(${exe} PRIVATE Threads::Threads)
   target_compile_features(${exe} PRIVATE cxx_std_17)
 
   target_link_libraries(${exe} PRIVATE ${AMS_HDF5_LINK_TARGETS})

@@ -65,7 +65,9 @@ if (ENABLE_RMQ)
 endif()
 
 target_link_libraries(AMS PRIVATE stdc++fs torch)
-if (ENABLE_RMQ)
+
+if (ENABLE_RMQ OR ENABLE_HIP)
+  # needed by HIP because of --no-allow-shlib-undefined
   target_link_libraries(AMS PRIVATE Threads::Threads)
 endif()
 

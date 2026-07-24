@@ -12,6 +12,7 @@ function(BUILD_UNIT_TEST exe source)
     target_link_libraries(${exe} PRIVATE CUDA::cudart)
   elseif (ENABLE_HIP)
     target_link_libraries(${exe} PRIVATE hip::host)
+    target_link_libraries(${exe} PRIVATE Threads::Threads)
   endif()
   
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)

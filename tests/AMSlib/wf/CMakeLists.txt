@@ -22,6 +22,7 @@ function(BUILD_UNIT_TEST exe source)
     target_link_libraries(${exe} PRIVATE CUDA::cudart)
   elseif (ENABLE_HIP)
     target_link_libraries(${exe} PRIVATE hip::host)
+    target_link_libraries(${exe} PRIVATE Threads::Threads)
   endif()
 
   if (ENABLE_CALIPER)
