@@ -24,16 +24,10 @@ jobs:
       - name: Build WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          source load-env.sh
           rm -rf build/
           mkdir build
           cd build
-          export AMS_MFEM_PATH=$(spack location -i mfem)
-          export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
-          export AMS_UMPIRE_PATH=$(spack location -i umpire)
-          export AMS_HDF5_PATH=$(spack location -i hdf5)
           cmake \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_INSTALL_PREFIX=./install \
@@ -51,15 +45,13 @@ jobs:
       - name: Run Tests WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         run: |
           cd build
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          source load-env.sh
           env CTEST_OUTPUT_ON_FAILURE=1 make test
 
       - name: Install AMS WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         run: |
           cd build
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          source load-env.sh
           make -j$(nproc) install
 
   build-cuda-tests:
@@ -87,16 +79,20 @@ jobs:
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=On \
             -DCMAKE_INSTALL_PREFIX=${AMS_INSTALL_PATH} \
-            -DWITH_CALIPER=${{ matrix.with_caliper }} \
+            -DENABLE_CALIPER=${{ matrix.with_caliper }} \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_MPI=${{ matrix.with_mpi }} \
-            -DWITH_TESTS=On \
-            -DTorch_DIR=$AMS_TORCH_PATH \
-            -DAMS_HDF5_DIR=/usr/local/cmake/ \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=Off \
-            -DWITH_CUDA=On \
+            -DENABLE_MPI=${{ matrix.with_mpi }} \
+            -DENABLE_TESTS=On \
+            -DAMS_ENABLE_DEBUG=On \
+            -DENABLE_WORKFLOW=Off \
+            -DENABLE_CUDA=On \
             -DTORCH_CUDA_ARCH_LIST="9.0" \
+            -DTorch_DIR=$AMS_TORCH_PATH \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
             $GITHUB_WORKSPACE
             make -j$(nproc)
       - name: Install AMS WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
@@ -120,19 +116,11 @@ jobs:
       - name: Build SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          source load-env.sh
           rm -rf build/
           mkdir -p build
           cd build
-          export AMS_INSTALL_PATH=$(pwd)/install
-          echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
-          export AMS_MFEM_PATH=$(spack location -i mfem)
-          export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
-          export AMS_UMPIRE_PATH=$(spack location -i umpire)
-          export AMS_HDF5_PATH=$(spack location -i hdf5)
-          export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
+          
           cmake \
             -DBUILD_SHARED_LIBS=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=${{ matrix.with_shared }} \
@@ -153,18 +141,6 @@ jobs:
             make -j$(nproc) install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
-      # - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
-      #   shell: bash -l {0}
-      #   run: |
-      #     module load gcc/11.2.1
-      #     source /spack/share/spack/setup-env.sh
-      #     spack env activate -p /ams-spack-env
-      #     mkdir build_idealgas/
-      #     cd build_idealgas/
-      #     export AMS_MFEM_PATH=$(spack location -i mfem)
-      #     echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
-      #     cmake -DWITH_CUDA=Off -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
-      #     make -j$(nproc) VERBOSE=1
 
   install-link-cuda-tests:
     # The type of runner that the job will run on
@@ -192,32 +168,26 @@ jobs:
             -DBUILD_SHARED_LIBS=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_PREFIX=$AMS_INSTALL_PATH \
-            -DWITH_CALIPER=On \
+            -DENABLE_CALIPER=On \
             -DCMAKE_BUILD_TYPE=Release \
             -DWITH_CUDA=On \
+            -DENABLE_RMQ=Off \
+            -DENABLE_MPI=On \
+            -DENABLE_TESTS=On \
+            -DAMS_ENABLE_DEBUG=On \
+            -DENABLE_WORKFLOW=Off \
             -DTORCH_CUDA_ARCH_LIST="9.0" \
-            -DWITH_MPI=On \
-            -DWITH_TESTS=On \
-            -DAMS_HDF5_DIR=/usr/local/cmake/ \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=Off \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
             $GITHUB_WORKSPACE
             make -j$(nproc)
             make -j$(nproc) install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
             ls ${AMS_INSTALL_PATH}
-      # - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
-      #   shell: bash -l {0}
-      #   run: |
-      #     module load gcc/11.2.1
-      #     source /spack/share/spack/setup-env.sh
-      #     spack env activate -p /ams-spack-env
-      #     mkdir build_idealgas/
-      #     cd build_idealgas/
-      #     export AMS_MFEM_PATH=$(spack location -i mfem)
-      #     cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
-      #     make -j$(nproc) VERBOSE=1
       - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
@@ -257,18 +227,10 @@ jobs:
       - name: Build Torch=On RMQ=On AMS
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
-          export SPACK_ROOT=/spack/
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          source load-env.sh
           rm -rf build/
           mkdir build
           cd build
-          export AMS_MFEM_PATH=$(spack location -i mfem)
-          export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
-          export AMS_UMPIRE_PATH=$(spack location -i umpire)
-          export AMS_HDF5_PATH=$(spack location -i hdf5)
-          export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
           echo """{
                 \"rabbitmq-user\": \"${RABBITMQ_USER}\",
                 \"rabbitmq-password\": \"${RABBITMQ_PASS}\",
@@ -302,9 +264,7 @@ jobs:
       - name: Run tests Torch=On RMQ=On AMSlib RabbitMQ egress
         run: |
           cd build
-          export SPACK_ROOT=/spack/
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          source load-env.sh
           # We overwrite the rmq.json created by CMake
           ctest --output-on-failure ./
         env:

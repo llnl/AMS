@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         target: [
-          { context: "x86_64-broadwell-gcc11.2.1", tag: "ams-ci-almalinux8" },
+          { context: "x86_64-sapphire-rapids-gcc13.3.1", tag: "ams-ci-almalinux8" },
           { context: "x86_64-sapphire-rapids-cuda12.9.1", tag: "ams-ci-cuda12.9.1" },
           { context: "x86_64-gcc.12.2-mariadb-flux", tag: "ams-ci-flux-mariadb" }
         ]
