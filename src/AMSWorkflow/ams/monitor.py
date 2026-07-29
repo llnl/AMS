@@ -13,6 +13,20 @@ import time
 from collections import deque
 from typing import Callable, List, Union
 
+class classproperty:
+    """Read-only class-level property.
+
+    Replaces the ``@classmethod``/``@property`` stacking that was removed in
+    Python 3.13 (deprecated in 3.11). Works on all supported versions.
+    """
+
+    def __init__(self, fget):
+        self.fget = fget
+
+    def __get__(self, obj, owner=None):
+        if owner is None:
+            owner = type(obj)
+        return self.fget(owner)
 
 class AMSMonitor:
     """
@@ -188,13 +202,11 @@ class AMSMonitor:
                         s += f"\n"
         return s.rstrip()
 
-    @classmethod
-    @property
+    @classproperty
     def stats(cls):
         return cls._stats
 
-    @classmethod
-    @property
+    @classproperty
     def format_ts(cls):
         return cls._ts_format
 
