@@ -6,12 +6,6 @@ source /etc/profile.d/z00_lmod.sh
 host=$(hostname)
 host=${host//[0-9]/}
 
-#!/usr/bin/env bash
-
-## load relevant modules on tuo/tioga
-host=$(hostname)
-host=${host//[0-9]/}
-
 SPACK_VER="1.1"
 
 if [[ "$SYS_TYPE" == "toss_4_x86_64_ib_cray" ]]; then

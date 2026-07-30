@@ -18,7 +18,7 @@ jobs:
         with_mpi: [ON, OFF]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Build WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
@@ -64,7 +64,7 @@ jobs:
         with_caliper: [ON, OFF]
         with_mpi: [ON, OFF]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Build WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
@@ -110,7 +110,7 @@ jobs:
       matrix:
         with_shared: [ON, OFF]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Build SharedLibray=${{ matrix.with_shared }}
@@ -151,7 +151,7 @@ jobs:
       matrix:
         with_shared: [ON, OFF]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Build SharedLibray=${{ matrix.with_shared }}
@@ -221,7 +221,7 @@ jobs:
         RABBITMQ_HOST: rabbitmq
         RABBITMQ_PORT: 5672
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Build Torch=On RMQ=On AMS
@@ -277,7 +277,7 @@ jobs:
     container: ghcr.io/llnl/ams-ci-flux-mariadb:latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Install AMS package (editable)
@@ -296,7 +296,7 @@ jobs:
     container: ghcr.io/llnl/ams-ci-flux-mariadb:latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Start MariaDB
