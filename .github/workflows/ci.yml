@@ -46,14 +46,14 @@ jobs:
             make -j$(nproc)
       - name: Run Tests WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         run: |
-          cd build
           source load-env.sh
+          cd build
           env CTEST_OUTPUT_ON_FAILURE=1 make test
 
       - name: Install AMS WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         run: |
-          cd build
           source load-env.sh
+          cd build
           make -j$(nproc) install
 
   build-cuda-tests:
@@ -74,7 +74,7 @@ jobs:
       - name: Build WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
-          . /venv/bin/activate
+          . venv/bin/activate
           rm -rf build/
           mkdir build
           cd build
@@ -101,8 +101,8 @@ jobs:
             make -j$(nproc)
       - name: Install AMS WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
         run: |
+          . venv/bin/activate
           cd build
-          . /venv/bin/activate
           make -j$(nproc) install
 
   install-link-cpu-tests:
@@ -154,7 +154,6 @@ jobs:
     container:
       image: ghcr.io/llnl/ams-ci-cuda12.9.1:latest
       options: --user root
-
     strategy:
       matrix:
         with_shared: [ON, OFF]
@@ -165,7 +164,7 @@ jobs:
       - name: Build SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          . /venv/bin/activate
+          . venv/bin/activate
           rm -rf build/
           mkdir -p build
           cd build
@@ -180,7 +179,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DWITH_CUDA=On \
             -DENABLE_RMQ=Off \
-            -DENABLE_MPI=On \
+            -DENABLE_MPI=Off \
             -DENABLE_TESTS=On \
             -DAMS_ENABLE_DEBUG=On \
             -DENABLE_WORKFLOW=Off \
@@ -199,7 +198,7 @@ jobs:
       - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          . /venv/bin/activate
+          . venv/bin/activate
           mkdir -p build_bnm_opt/
           cd build_bnm_opt/
           cmake \
@@ -272,8 +271,8 @@ jobs:
             make
       - name: Run tests Torch=On RMQ=On AMSlib RabbitMQ egress
         run: |
-          cd build
           source load-env.sh
+          cd build
           # We overwrite the rmq.json created by CMake
           ctest --output-on-failure ./
         env:
@@ -281,6 +280,7 @@ jobs:
           RABBITMQ_PASS: ams
           RABBITMQ_HOST: rabbitmq
           RABBITMQ_PORT: 5672
+
   sqlite-tests:
     runs-on: ubuntu-latest
     container:
@@ -295,12 +295,12 @@ jobs:
         run: |
           source /venv/bin/activate
           pip install -e ./
-
       - name: Run AMS unittests (SQlite)
         shell: bash -l {0}
         run: |
           source /venv/bin/activate
           python -m unittest discover -s tests/AMSWorkflow -p "test_*.py" -v
+
   mariadb-tests:
     runs-on: ubuntu-latest
     container:
