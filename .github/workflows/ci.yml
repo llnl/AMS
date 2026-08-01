@@ -10,7 +10,9 @@ jobs:
   build-run-tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-almalinux8:latest
+    container:
+      image: ghcr.io/llnl/ams-ci-almalinux8:latest
+      options: --user root
 
     strategy:
       matrix:
@@ -57,7 +59,9 @@ jobs:
   build-cuda-tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-cuda12.9.1:latest
+    container:
+      image: ghcr.io/llnl/ams-ci-cuda12.9.1:latest
+      options: --user root
 
     strategy:
       matrix:
@@ -104,7 +108,9 @@ jobs:
   install-link-cpu-tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-almalinux8:latest
+    container:
+      image: ghcr.io/llnl/ams-ci-almalinux8:latest
+      options: --user root
 
     strategy:
       matrix:
@@ -145,7 +151,9 @@ jobs:
   install-link-cuda-tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-cuda12.9.1:latest
+    container:
+      image: ghcr.io/llnl/ams-ci-cuda12.9.1:latest
+      options: --user root
 
     strategy:
       matrix:
@@ -215,6 +223,7 @@ jobs:
 
     container:
       image: ghcr.io/llnl/ams-ci-almalinux8:latest
+      options: --user root
       env:
         RABBITMQ_USER: ams
         RABBITMQ_PASS: ams
@@ -274,8 +283,9 @@ jobs:
           RABBITMQ_PORT: 5672
   sqlite-tests:
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-flux-mariadb:latest
-
+    container:
+      image: ghcr.io/llnl/ams-ci-flux-mariadb:latest
+      options: --user root
     steps:
       - uses: actions/checkout@v7
       - name: Ensure git safe directory
@@ -293,8 +303,9 @@ jobs:
           python -m unittest discover -s tests/AMSWorkflow -p "test_*.py" -v
   mariadb-tests:
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-flux-mariadb:latest
-
+    container:
+      image: ghcr.io/llnl/ams-ci-flux-mariadb:latest
+      options: --user root
     steps:
       - uses: actions/checkout@v7
       - name: Ensure git safe directory
