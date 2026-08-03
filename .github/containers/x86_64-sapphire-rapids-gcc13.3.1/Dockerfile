@@ -4,7 +4,7 @@ MAINTAINER Loic Pottier <pottier1@llnl.gov>
 RUN \
     yum install -y dnf && \
     dnf group install -y "Development Tools" && \
-    dnf install -y git wget sudo gcc-toolset-13 environment-modules cmake perl-devel libevent-devel openssl-devel openmpi openmpi-devel libcurl-devel && \
+    dnf install -y git jq wget sudo gcc-toolset-13 environment-modules cmake perl-devel libevent-devel openssl-devel openmpi openmpi-devel libcurl-devel && \
     dnf upgrade -y && \
     dnf clean all && \
     source /etc/profile && \

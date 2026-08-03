@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
-      - name: Build WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Build ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
           source /home/ams/load-env.sh
@@ -33,24 +33,35 @@ jobs:
           cmake \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_INSTALL_PREFIX=./install \
-            -DWITH_CALIPER=${{ matrix.with_caliper }} \
-            -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
+            -DENABLE_CALIPER=${{ matrix.with_caliper }} \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_CUDA=Off \
-            -DWITH_MPI=${{ matrix.with_mpi }} \
-            -DWITH_TESTS=On \
+            -DENABLE_CUDA=Off \
+            -DENABLE_MPI=${{ matrix.with_mpi }} \
+            -DENABLE_TESTS=On \
+            -DENABLE_AMS_DEBUG=On \
+            -DENABLE_WORKFLOW=Off \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=Off \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
+            -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make -j$(nproc)
-      - name: Run Tests WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Run Tests ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         run: |
           source /home/ams/load-env.sh
           cd build
+          # needed otherwise MPI tests will fail when running as root
+          if [[ ${{ matrix.with_mpi }} == "ON" ]]; then
+            echo "Setting OMP flag to run as root"
+            export OMPI_ALLOW_RUN_AS_ROOT=1
+            export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+          fi
           env CTEST_OUTPUT_ON_FAILURE=1 make test
 
-      - name: Install AMS WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Install AMS ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         run: |
           source /home/ams/load-env.sh
           cd build
@@ -71,7 +82,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
-      - name: Build WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Build ENABLE_CUDA=On ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
           . /home/ams/venv/bin/activate
@@ -90,16 +101,16 @@ jobs:
             -DAMS_ENABLE_DEBUG=On \
             -DENABLE_WORKFLOW=Off \
             -DENABLE_CUDA=On \
-            -DTORCH_CUDA_ARCH_LIST="9.0" \
             -DTorch_DIR=$AMS_TORCH_PATH \
             -Dcaliper_DIR=$AMS_CALIPER_PATH \
             -DAMS_FMT_DIR=$AMS_FMT_DIR \
             -DHDF5_DIR=$AMS_HDF5_PATH \
             -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
             -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
+            -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make -j$(nproc)
-      - name: Install AMS WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Install AMS ENABLE_CUDA=On ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         run: |
           . /home/ams/venv/bin/activate
           cd build
@@ -131,17 +142,21 @@ jobs:
             -DBUILD_SHARED_LIBS=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_PREFIX=$AMS_INSTALL_PATH \
-            -DWITH_RMQ=On \
-            -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
-            -DWITH_CALIPER=On \
-            -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_CUDA=Off \
-            -DWITH_MPI=On \
-            -DWITH_TESTS=On \
+            -DENABLE_RMQ=On \
+            -DENABLE_CALIPER=On \
+            -DENABLE_CUDA=Off \
+            -DENABLE_MPI=On \
+            -DENABLE_TESTS=On \
+            -DENABLE_AMS_DEBUG=On \
+            -DENABLE_WORKFLOW=Off \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=Off \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
+            -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make -j$(nproc)
             make -j$(nproc) install
@@ -177,13 +192,12 @@ jobs:
             -DCMAKE_INSTALL_PREFIX=$AMS_INSTALL_PATH \
             -DENABLE_CALIPER=On \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_CUDA=On \
+            -DENABLE_CUDA=On \
             -DENABLE_RMQ=Off \
             -DENABLE_MPI=Off \
             -DENABLE_TESTS=On \
             -DAMS_ENABLE_DEBUG=On \
             -DENABLE_WORKFLOW=Off \
-            -DTORCH_CUDA_ARCH_LIST="9.0" \
             -DTorch_DIR=$AMS_TORCH_PATH \
             -Dcaliper_DIR=$AMS_CALIPER_PATH \
             -DAMS_FMT_DIR=$AMS_FMT_DIR \
@@ -195,14 +209,13 @@ jobs:
             make -j$(nproc) install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
             ls ${AMS_INSTALL_PATH}
-      - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
+      - name: Build BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
           . /home/ams/venv/bin/activate
           mkdir -p build_bnm_opt/
           cd build_bnm_opt/
           cmake \
-            -DTORCH_CUDA_ARCH_LIST="9.0" \
             -DAMS_DIR=${AMS_INSTALL_PATH}/lib/cmake/AMS \
             -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ \
             $GITHUB_WORKSPACE/examples/bnm_opt/
@@ -254,18 +267,22 @@ jobs:
           cmake \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
-            -DWITH_CALIPER=On \
-            -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
             -DCMAKE_INSTALL_PREFIX=./install \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_CUDA=Off \
-            -DWITH_MPI=On \
-            -DWITH_TORCH=On \
-            -DWITH_TESTS=On \
+            -DENABLE_CALIPER=On \
+            -DENABLE_CUDA=Off \
+            -DENABLE_MPI=Off \
+            -DENABLE_TORCH=On \
+            -DENABLE_TESTS=On \
+            -DENABLE_AMS_DEBUG=On \
+            -DENABLE_WORKFLOW=On \
+            -DENABLE_RMQ=On \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=On \
-            -DWITH_RMQ=On \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
             -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make

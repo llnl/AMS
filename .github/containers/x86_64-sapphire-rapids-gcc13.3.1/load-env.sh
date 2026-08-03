@@ -2,10 +2,15 @@
 
 source /etc/profile
 module load gcc/13.3.1 mpi/openmpi-x86_64 
-source ${HOME}/spack/share/spack/setup-env.sh
-spack env activate -p ${HOME}/ams-spack-env
+source /home/ams/spack/share/spack/setup-env.sh
 
-export SPACK_ROOT=${HOME}/spack/
+# To avoid re-downloading packages info when running as root
+spack repo add /home/ams/repo/local/spack_repo/llnl_ams
+spack repo add /home/ams/.spack/package_repos/fncqgg4/repos/spack_repo/builtin
+
+spack env activate -p /home/ams/ams-spack-env
+
+export SPACK_ROOT=/home/ams/spack/
 
 export AMS_TORCH_PATH="$(spack location -i py-torch)/lib/python3.13/site-packages/torch/share/cmake/Torch/"
 export AMS_CALIPER_PATH=$(spack location -i caliper)/share/cmake/caliper/
