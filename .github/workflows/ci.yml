@@ -218,9 +218,6 @@ jobs:
           cmake \
             -DAMS_DIR=${AMS_INSTALL_PATH}/lib/cmake/AMS \
             -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH} \
-            -DTorch_DIR=$AMS_TORCH_PATH \
-            -DHDF5_DIR=$AMS_HDF5_PATH \
-            -Dfmt_DIR=$AMS_FMT_DIR \
             $GITHUB_WORKSPACE/examples/bnm_opt/
           make -j$(nproc) VERBOSE=1
 
