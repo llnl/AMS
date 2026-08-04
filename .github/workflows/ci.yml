@@ -26,7 +26,31 @@ jobs:
       - name: Build ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
-          source /home/ams/load-env.sh
+
+          source /etc/profile
+          module load gcc/13.3.1 mpi/openmpi-x86_64 
+          source /home/ams/spack/share/spack/setup-env.sh
+
+          spack -d env activate -p /home/ams/ams-spack-env
+
+          spack env status
+
+          export SPACK_ROOT=/home/ams/spack/
+
+          export AMS_TORCH_PATH="$(spack location -i py-torch)/lib/python3.13/site-packages/torch/share/cmake/Torch/"
+          export AMS_CALIPER_PATH=$(spack location -i caliper)/share/cmake/caliper/
+          export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake/
+          export AMS_HDF5_PATH=$(spack location -i hdf5)/cmake/
+          export AMS_NLOHMANN_JSON_DIR=$(spack location -i nlohmann-json)/share/cmake/nlohmann_json/
+          export AMS_FMT_DIR=$(spack location -i fmt)/lib64/cmake/fmt/
+          export AMS_TL_EXPECTED_DIR=$(spack location -i tl-expected)/share/cmake/tl-expected/
+          export AMS_MFEM_PATH=$(spack location -i mfem)
+
+          echo "Done loading all Spack packages"
+
+          export CMAKE_PREFIX_PATH=$(spack location -i protobuf)/lib64/cmake/protobuf/:${CMAKE_PREFIX_PATH}
+          export LD_LIBRARY_PATH=$(spack location -i flux-core)/lib:$LD_LIBRARY_PATH
+
           rm -rf build/
           mkdir build
           cd build
@@ -248,7 +272,33 @@ jobs:
       - name: Build Torch=On RMQ=On AMS
         shell: bash -l {0}
         run: |
-          source /home/ams/load-env.sh
+
+          source /etc/profile
+          module load gcc/13.3.1 mpi/openmpi-x86_64 
+          source /home/ams/spack/share/spack/setup-env.sh
+
+          spack -d env activate -p /home/ams/ams-spack-env
+
+          spack env status
+
+          export SPACK_ROOT=/home/ams/spack/
+
+          export AMS_TORCH_PATH="$(spack location -i py-torch)/lib/python3.13/site-packages/torch/share/cmake/Torch/"
+          export AMS_CALIPER_PATH=$(spack location -i caliper)/share/cmake/caliper/
+          export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake/
+          export AMS_HDF5_PATH=$(spack location -i hdf5)/cmake/
+          export AMS_NLOHMANN_JSON_DIR=$(spack location -i nlohmann-json)/share/cmake/nlohmann_json/
+          export AMS_FMT_DIR=$(spack location -i fmt)/lib64/cmake/fmt/
+          export AMS_TL_EXPECTED_DIR=$(spack location -i tl-expected)/share/cmake/tl-expected/
+          export AMS_MFEM_PATH=$(spack location -i mfem)
+
+          echo "Done loading all Spack packages"
+
+          export CMAKE_PREFIX_PATH=$(spack location -i protobuf)/lib64/cmake/protobuf/:${CMAKE_PREFIX_PATH}
+          export LD_LIBRARY_PATH=$(spack location -i flux-core)/lib:$LD_LIBRARY_PATH
+
+          python3 -m venv ci-venv
+          source ci-venv/bin/activate
           rm -rf build/
           mkdir build
           cd build
@@ -272,9 +322,8 @@ jobs:
             -DENABLE_CALIPER=On \
             -DENABLE_CUDA=Off \
             -DENABLE_MPI=Off \
-            -DENABLE_TORCH=On \
             -DENABLE_TESTS=On \
-            -DENABLE_AMS_DEBUG=On \
+            -DAMS_ENABLE_DEBUG=On \
             -DENABLE_WORKFLOW=On \
             -DENABLE_RMQ=On \
             -DTorch_DIR=$AMS_TORCH_PATH \
@@ -286,9 +335,10 @@ jobs:
             -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make
-      - name: Run tests Torch=On RMQ=On AMSlib RabbitMQ egress
+      - name: Run tests RMQ=On AMSlib RabbitMQ egress
         run: |
           source /home/ams/load-env.sh
+          source ci-venv/bin/activate
           cd build
           # We overwrite the rmq.json created by CMake
           ctest --output-on-failure ./
