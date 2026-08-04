@@ -219,11 +219,8 @@ jobs:
             -DAMS_DIR=${AMS_INSTALL_PATH}/lib/cmake/AMS \
             -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH} \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -Dcaliper_DIR=$AMS_CALIPER_PATH \
-            -DAMS_FMT_DIR=$AMS_FMT_DIR \
             -DHDF5_DIR=$AMS_HDF5_PATH \
-            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
-            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
+            -Dfmt_DIR=$AMS_FMT_DIR \
             $GITHUB_WORKSPACE/examples/bnm_opt/
           make -j$(nproc) VERBOSE=1
 
