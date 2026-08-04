@@ -35,6 +35,9 @@ build_and_test() {
   # We need custom Virtual env on Tuo because we use Spack python external
   export host=$(hostname)
   export host=${host//[0-9]/}
+  if [[ "$host" == "tioga" ]]; then
+    host="tuolumne"
+  fi
   python3 ${CI_PROJECT_DIR}/scripts/make-spack-venv.py -e /usr/workspace/AMS/ams-spack-environments/1.1/${host}/ -o venv-${host}
   source venv-${host}
 
@@ -72,8 +75,8 @@ build_and_test() {
     -Dnlohmann_json_DIR="$AMS_NLOHMANN_JSON_DIR" \
     -Dtl-expected_DIR="$AMS_TL_EXPECTED_DIR" \
     -Damqpcpp_DIR="$AMS_AMQPCPP_PATH" \
-    -DCMAKE_C_COMPILER="${C_COMPILER}" \
-    -DCMAKE_CXX_COMPILER="${CXX_COMPILER" \
+    -DCMAKE_C_COMPILER="$C_COMPILER" \
+    -DCMAKE_CXX_COMPILER="$CXX_COMPILER" \
     ${CI_PROJECT_DIR} || { echo "CMake failed"; exit 1; }
 
   make -j || { echo "Building failed"; exit 1; }
