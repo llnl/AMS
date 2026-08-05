@@ -13,7 +13,7 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Install deps (APT)
@@ -71,18 +71,19 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DWITH_RMQ=On \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
+          cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=On \
             -DTorch_DIR=$(python -c 'import torch; print(torch.__path__[0])')/share/cmake/Torch \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_C_COMPILER=clang-18 \
             -DCMAKE_CXX_COMPILER=clang++-18 \
-            -DWITH_CALIPER=On \
-            -DWITH_RMQ=On \
-            -DWITH_TESTS=On \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_CUDA=Off \
-            -DWITH_MPI=On ..
+            -DENABLE_CALIPER=On \
+            -DENABLE_RMQ=On \
+            -DENABLE_RMQ=On \
+            -DENABLE_TESTS=On \
+            -DENABLE_AMS_DEBUG=On \
+            -DENABLE_CUDA=Off \
+            -DENABLE_HIP=Off \
+            -DENABLE_MPI=On ..
       - uses: cpp-linter/cpp-linter-action@v2
         id: linter
         continue-on-error: true
@@ -90,7 +91,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           version: 18
-          ignore: .github | .gitlab | scripts | build | .git
+          ignore: .github | .gitlab | scripts | build | .git | blt
           database: build
           extra-args: "-D__AMS_ENABLE_CALIPER__ -D__AMS_ENABLE_HDF5__ -D__AMS_ENABLE_MPI__ -D__AMS_ENABLE_RMQ__"
           style: file

@@ -30,10 +30,12 @@ jobs:
           source /etc/profile
           module load gcc/13.3.1 mpi/openmpi-x86_64 
           source /home/ams/spack/share/spack/setup-env.sh
-
+          echo "==========="
+          spack find
+          echo "=====TEST======"
+          /home/ams/spack/opt/spack/linux-sapphirerapids/python-venv-1.0-l24hj4ezwtg6uhsgzrpomqly22wuytdw/bin/python3 -Ec 'import sysconfig; print(sysconfig.get_path('"'"'platlib'"'"'))'
+          echo "=====TEST======"
           spack -d env activate -p /home/ams/ams-spack-env
-
-          spack env status
 
           export SPACK_ROOT=/home/ams/spack/
 
