@@ -67,6 +67,7 @@ export AMS_CALIPER_PATH=$(echo $AMS_CALIPER_PATH/share/cmake/caliper)
 export AMS_NLOHMANN_JSON_DIR=$(echo $AMS_NLOHMANN_JSON_DIR/share/cmake/nlohmann_json/)
 export AMS_FMT_DIR=$(echo $AMS_FMT_DIR/lib*/cmake/fmt/)
 export AMS_TL_EXPECTED_DIR=$(echo $AMS_TL_EXPECTED_DIR/share/cmake/tl-expected/)
+export AMS_HDF5_PATH=$(echo $AMS_HDF5_PATH/cmake/)
 
 echo "(for cmake) AMS_TORCH_PATH        = $AMS_TORCH_PATH"
 echo "(for cmake) AMS_AMQPCPP_PATH      = $AMS_AMQPCPP_PATH"

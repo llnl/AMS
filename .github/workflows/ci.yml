@@ -27,7 +27,7 @@ jobs:
         shell: bash -l {0}
         run: |
           source /etc/profile
-          module load gcc/13.3.1 mpi/openmpi-x86_64 
+          module load gcc/13.3.1 mpi/openmpi-x86_64
 
           rm -rf build/
           mkdir build
@@ -54,7 +54,7 @@ jobs:
       - name: Run Tests ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         run: |
           source /etc/profile
-          module load gcc/13.3.1 mpi/openmpi-x86_64 
+          module load gcc/13.3.1 mpi/openmpi-x86_64
 
           cd build
           # needed otherwise MPI tests will fail when running as root
@@ -68,7 +68,7 @@ jobs:
       - name: Install AMS ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         run: |
           source /etc/profile
-          module load gcc/13.3.1 mpi/openmpi-x86_64 
+          module load gcc/13.3.1 mpi/openmpi-x86_64
 
           cd build
           make -j$(nproc) install
@@ -140,7 +140,7 @@ jobs:
         shell: bash -l {0}
         run: |
           source /etc/profile
-          module load gcc/13.3.1 mpi/openmpi-x86_64 
+          module load gcc/13.3.1 mpi/openmpi-x86_64
 
           rm -rf build/
           mkdir -p build
@@ -257,7 +257,7 @@ jobs:
         shell: bash -l {0}
         run: |
           source /etc/profile
-          module load gcc/13.3.1 mpi/openmpi-x86_64 
+          module load gcc/13.3.1 mpi/openmpi-x86_64
 
           python3 -m venv ci-venv
           source ci-venv/bin/activate
@@ -299,7 +299,9 @@ jobs:
             make
       - name: Run tests RMQ=On AMSlib RabbitMQ egress
         run: |
-          source /home/ams/load-env.sh
+          source /etc/profile
+          module load gcc/13.3.1 mpi/openmpi-x86_64
+
           source ci-venv/bin/activate
           cd build
           # We overwrite the rmq.json created by CMake
