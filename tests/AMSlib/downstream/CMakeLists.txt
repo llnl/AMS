@@ -18,9 +18,10 @@ if (CMAKE_BUILD_TYPE)
        -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE})
 endif()
 
-foreach (_hint fmt_DIR Torch_DIR HDF5_DIR hdf5_DIR ZLIB_DIR caliper_DIR
+foreach (_hint fmt_DIR Torch_DIR HDF5_DIR ZLIB_DIR caliper_DIR
                 amqpcpp_DIR OpenSSL_ROOT_DIR CUDAToolkit_DIR HIP_DIR)
   if (DEFINED ${_hint} AND NOT "${${_hint}}" STREQUAL "")
+    message(STATUS "Adding hints: ${_hint}=${${_hint}}")
     list(APPEND AMS_DOWNSTREAM_CONFIGURE_ARGS
          -D${_hint}:PATH=${${_hint}})
   endif()

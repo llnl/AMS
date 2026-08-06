@@ -66,6 +66,12 @@ endif()
 
 target_link_libraries(AMS PRIVATE stdc++fs torch)
 
+# torch adds -Wl,--as-needed to the link line which leads to issue with libstdc++ when building against AMS in static mode
+# TorchConfig.cmake wraps libtorch_cpu.so in -Wl,--no-as-needed and then re-enables --as-needed without restoring the prior state
+if(NOT BUILD_SHARED_LIBS)
+  target_link_libraries(AMS INTERFACE "-Wl,--no-as-needed")
+endif()
+
 if (ENABLE_RMQ OR ENABLE_HIP)
   # needed by HIP because of --no-allow-shlib-undefined
   target_link_libraries(AMS PRIVATE Threads::Threads)
