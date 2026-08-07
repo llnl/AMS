@@ -35,9 +35,7 @@ build_and_test() {
   # We need custom Virtual env on Tuo because we use Spack python external
   export host=$(hostname)
   export host=${host//[0-9]/}
-  if [[ "$host" == "tioga" ]]; then
-    host="tuolumne"
-  fi
+
   python3 ${CI_PROJECT_DIR}/scripts/make-spack-venv.py -e /usr/workspace/AMS/ams-spack-environments/1.1/${host}/ -o venv-${host}
   source venv-${host}
 

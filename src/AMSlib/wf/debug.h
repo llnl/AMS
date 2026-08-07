@@ -43,7 +43,7 @@ void memUsage(double& vm_usage, double& resident_set);
 #define THROW(exception, msg) \
   AMS_FATAL(Throw, "{} {} {}", __FILE__, std::to_string(__LINE__).c_str(), msg)
 
-#ifdef LIBAMS_VERBOSE
+#if defined(__AMS_DEBUG__)
 
 #define AMS_CWARNING(id, condition, ...) \
   AMSPRINT(id, condition, ams::LogLevel::Warning, __VA_ARGS__)
@@ -87,7 +87,8 @@ void memUsage(double& vm_usage, double& resident_set);
 
 // clang-format on
 
-#else  // LIBAMS_VERBOSE is disabled
+#else  // __AMS_DEBUG__ is disabled
+
 #define AMS_CWARNING(id, condition, ...)
 
 #define AMS_WARNING(id, ...)
@@ -100,8 +101,9 @@ void memUsage(double& vm_usage, double& resident_set);
 
 #define AMS_DBG(id, ...)
 
+#define REPORT_MEM_USAGE(id, phase, ...)
 
-#endif  // LIBAMS_VERBOSE
+#endif  // __AMS_DEBUG__
 //
 
 #if defined(__AMS_ENABLE_HIP__)

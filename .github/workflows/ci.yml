@@ -40,7 +40,7 @@ jobs:
             -DENABLE_CUDA=Off \
             -DENABLE_MPI=${{ matrix.with_mpi }} \
             -DENABLE_TESTS=On \
-            -DENABLE_AMS_DEBUG=On \
+            -DAMS_ENABLE_DEBUG=On \
             -DENABLE_WORKFLOW=Off \
             -DTorch_DIR=$AMS_TORCH_PATH \
             -Dcaliper_DIR=$AMS_CALIPER_PATH \
@@ -156,7 +156,7 @@ jobs:
             -DENABLE_CUDA=Off \
             -DENABLE_MPI=On \
             -DENABLE_TESTS=On \
-            -DENABLE_AMS_DEBUG=On \
+            -DAMS_ENABLE_DEBUG=Off \
             -DENABLE_WORKFLOW=Off \
             -DTorch_DIR=$AMS_TORCH_PATH \
             -Dcaliper_DIR=$AMS_CALIPER_PATH \
