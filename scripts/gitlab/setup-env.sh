@@ -29,9 +29,6 @@ source /usr/workspace/AMS/ams-spack-environments/${SPACK_VER}/spack/share/spack/
 
 ## activate the spack environment
 echo "Activating Spack Environment"
-if [[ "$host" == "tioga" ]]; then
-    host="tuolumne"
-fi
 spack env activate /usr/workspace/AMS/ams-spack-environments/${SPACK_VER}/$host
 
 ## export the paths (currently cmake needs these)

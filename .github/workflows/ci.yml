@@ -62,6 +62,8 @@ jobs:
             echo "Setting OMP flag to run as root"
             export OMPI_ALLOW_RUN_AS_ROOT=1
             export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+            # needed by blt_mpi_smoke on GitHub CI
+            export OMPI_MCA_rmaps_base_oversubscribe=1
           fi
           env CTEST_OUTPUT_ON_FAILURE=1 make test
 
