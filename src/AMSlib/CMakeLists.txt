@@ -72,11 +72,10 @@ if(NOT BUILD_SHARED_LIBS)
   target_link_libraries(AMS INTERFACE "-Wl,--no-as-needed")
 endif()
 
-if (ENABLE_RMQ OR ENABLE_HIP)
-  # needed by HIP because of --no-allow-shlib-undefined
-  target_link_libraries(AMS PRIVATE Threads::Threads)
+# needed by Clang/amdclang because of --no-allow-shlib-undefined
+if (BUILD_SHARED_LIBS)
+  target_link_libraries(AMS INTERFACE "-Wl,--allow-shlib-undefined")
 endif()
-
 
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS-config.h.in" "${PROJECT_BINARY_DIR}/include/AMS-config.h")
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS.h" "${PROJECT_BINARY_DIR}/include/AMS.h" COPYONLY)
