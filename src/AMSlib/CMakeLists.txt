@@ -76,6 +76,7 @@ endif()
 if (BUILD_SHARED_LIBS)
   target_link_libraries(AMS INTERFACE "-Wl,--allow-shlib-undefined")
 endif()
+target_link_libraries(AMS INTERFACE Threads::Threads)
 
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS-config.h.in" "${PROJECT_BINARY_DIR}/include/AMS-config.h")
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS.h" "${PROJECT_BINARY_DIR}/include/AMS.h" COPYONLY)
