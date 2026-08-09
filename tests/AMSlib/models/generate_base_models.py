@@ -155,7 +155,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    out_dir: Path = args.out_dir.resolve()
+    out_dir: Path = args.out_dir.absolute()
     models_dir = out_dir
     models_dir.mkdir(parents=True, exist_ok=True)
 
@@ -178,7 +178,7 @@ def main() -> None:
                 continue
 
             filename = f"{precision}_{dev}.pt"
-            path = (models_dir / filename).resolve()
+            path = (models_dir / filename).absolute()
             device = torch.device("cpu")
             if (dev == "gpu") and torch.cuda.is_available():
                 device = torch.device("cuda")
@@ -203,7 +203,7 @@ def main() -> None:
     # ---------------------------------------
     # Failing model: file does not exist
     # ---------------------------------------
-    missing_path = (models_dir / "missing_model.pt").resolve()
+    missing_path = (models_dir / "missing_model.pt").absolute()
     failing_models.append(
         (str(missing_path), "FileDoesNotExist", "Non-existent file path should yield FileDoesNotExist")
     )
@@ -212,7 +212,7 @@ def main() -> None:
     # Failing model: invalid TorchScript file
     # (file exists but not a TS archive) -> TorchInternal
     # ---------------------------------------
-    invalid_ts_path = (models_dir / "invalid_torch_file.pt").resolve()
+    invalid_ts_path = (models_dir / "invalid_torch_file.pt").absolute()
     invalid_ts_path.write_text("this is not a torchscript model\n")
     failing_models.append(
         (str(invalid_ts_path), "TorchInternal", "Existing file that is not a valid TorchScript model")
@@ -222,7 +222,7 @@ def main() -> None:
     # ---------------------------------------
     # Failing model: valid TS but no get_ams_info -> InvalidModel
     # ---------------------------------------
-    no_info_model_path = (models_dir / "no_ams_info.pt").resolve()
+    no_info_model_path = (models_dir / "no_ams_info.pt").absolute()
     no_info_model = NoAMSInfoModel()
     scripted_no_info = torch.jit.script(no_info_model)
     scripted_no_info.save(str(no_info_model_path))
@@ -234,7 +234,7 @@ def main() -> None:
     # ---------------------------------------
     # Failing model: ams_device is not a device -> InvalidModel
     # ---------------------------------------
-    bad_dev_model_path = (models_dir / "bad_device_ams_info.pt").resolve()
+    bad_dev_model_path = (models_dir / "bad_device_ams_info.pt").absolute()
     bad_dev_model = BadDeviceAMSModel()
     scripted_bad_dev = torch.jit.script(bad_dev_model)
     scripted_bad_dev.save(str(bad_dev_model_path))

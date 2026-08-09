@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "AMS.h"
+#include "ml/surrogate.hpp"
 #include "wf/basedb.hpp"
 #include "wf/debug.h"
 #include "wf/logger.hpp"
@@ -407,6 +408,7 @@ void AMSFinalize()
   std::call_once(_amsFinalizeFlag, [&]() {
     AMS_DBG(AMS, "Finalization of AMS")
     _amsWrap.reset();
+    ::SurrogateModel::clearCache();
   });
 }
 

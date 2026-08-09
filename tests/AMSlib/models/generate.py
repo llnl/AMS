@@ -144,7 +144,7 @@ def main():
                 # Generate the file name
                 file_name = f"{precision}_{a_device}_{uq}.pt"
                 file_path = f"{args.directory}/{file_name}"
-                tests.append((str(Path(file_path).resolve()), precision, a_device, uq))
+                tests.append((str(Path(file_path).absolute()), precision, a_device, uq))
 
                 # Save the scripted model
                 scripted_model.save(file_path)
