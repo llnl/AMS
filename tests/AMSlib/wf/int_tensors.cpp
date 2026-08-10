@@ -10,12 +10,39 @@
 #include <cstdint>
 #include <vector>
 
+#ifdef __AMS_ENABLE_CUDA__
+#include <cuda_runtime.h>
+#elif defined(__AMS_ENABLE_HIP__)
+#include <hip/hip_runtime.h>
+#endif
+
 #include "AMS.h"
 #include "AMSTensor.hpp"
 #include "wf/resource_manager.hpp"
 #include "wf/utils.hpp"
 
 using namespace ams;
+
+// Compiled HIP/CUDA support does not guarantee a usable device on the test node.
+static bool amsDeviceAvailable()
+{
+#if defined(__AMS_ENABLE_CUDA__)
+  int count = 0;
+  return cudaGetDeviceCount(&count) == cudaSuccess && count > 0;
+#elif defined(__AMS_ENABLE_HIP__)
+  int count = 0;
+  return hipGetDeviceCount(&count) == hipSuccess && count > 0;
+#else
+  return false;
+#endif
+}
+
+static void skipUnavailableDevice(AMSResourceType device)
+{
+  if (device == AMSResourceType::AMS_DEVICE && !amsDeviceAvailable()) {
+    CATCH_SKIP("GPU device not available");
+  }
+}
 
 CATCH_TEST_CASE("AMSTensor: int32_t tensor creation and basic properties",
                 "[ams][tensor][int32]")
@@ -24,13 +51,7 @@ CATCH_TEST_CASE("AMSTensor: int32_t tensor creation and basic properties",
 
   const auto device =
       GENERATE(AMSResourceType::AMS_HOST, AMSResourceType::AMS_DEVICE);
-
-  // Skip GPU tests if CUDA is not available
-  if (device == AMSResourceType::AMS_DEVICE) {
-#if !defined(__AMS_ENABLE_CUDA__) && !defined(__AMS_ENABLE_HIP__)
-    CATCH_SKIP("GPU device not available");
-#endif
-  }
+  skipUnavailableDevice(device);
 
   CATCH_SECTION("Create 1D int32_t tensor")
   {
@@ -83,12 +104,7 @@ CATCH_TEST_CASE("AMSTensor: int64_t tensor creation and basic properties",
 
   const auto device =
       GENERATE(AMSResourceType::AMS_HOST, AMSResourceType::AMS_DEVICE);
-
-  if (device == AMSResourceType::AMS_DEVICE) {
-#if !defined(__AMS_ENABLE_CUDA__) && !defined(__AMS_ENABLE_HIP__)
-    CATCH_SKIP("GPU device not available");
-#endif
-  }
+  skipUnavailableDevice(device);
 
   CATCH_SECTION("Create 1D int64_t tensor")
   {
