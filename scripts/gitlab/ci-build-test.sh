@@ -19,11 +19,10 @@ build_and_test() {
 
   echo "*******************************************************************************************"
   echo "Build configuration" \
-    "WITH_HDF5 ${WITH_HDF5}" \
-    "WITH_MPI ${WITH_MPI}" \
-    "WITH_WORKFLOW ${WITH_WORKFLOW}" \
-    "WITH_CUDA ${WITH_CUDA}" \
-    "WITH_HIP ${WITH_HIP}"
+    "WITH_MPI=${WITH_MPI}" \
+    "WITH_WORKFLOW=${WITH_WORKFLOW}" \
+    "WITH_CUDA=${WITH_CUDA}" \
+    "WITH_HIP=${WITH_HIP}"
   echo "*******************************************************************************************"
 
   build_dir="/tmp/ams/$(uuidgen)"
@@ -37,7 +36,7 @@ build_and_test() {
   export host=${host//[0-9]/}
 
   python3 ${CI_PROJECT_DIR}/scripts/make-spack-venv.py -e /usr/workspace/AMS/ams-spack-environments/1.1/${host}/ -o venv-${host}
-  source venv-${host}
+  source venv-${host}/bin/activate
 
   if [[ "$SYS_TYPE" == "toss_4_x86_64_ib_cray" ]]; then
     C_COMPILER=amdclang

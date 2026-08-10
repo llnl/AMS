@@ -24,6 +24,6 @@ inline int runCatchSession(int argc, char** argv, bool finalizeAMS = true)
   const int normalizedRC = (rc == 0 || rc == 4) ? EXIT_SUCCESS : rc;
   std::_Exit(normalizedRC);
 }
-}
+}  // namespace ams::test
 
 #endif  // AMS_TEST_CATCH_MAIN_HPP
