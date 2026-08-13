@@ -23,10 +23,8 @@ if(NOT H5PY_CHECK_RESULT EQUAL 0)
     )
 endif()
 
-if (WITH_AMS_LIB)
-  add_subdirectory(AMSlib)
-endif()
+add_subdirectory(AMSlib)
 
-if (WITH_WORKFLOW)
+if (ENABLE_WORKFLOW)
   add_subdirectory(AMSWorkflow)
 endif()

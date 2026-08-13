@@ -63,8 +63,10 @@ private:
   torch::jit::script::Module module;
 
 protected:
-  static std::unordered_map<std::string, std::shared_ptr<SurrogateModel>>
-      instances;
+  using InstanceMap =
+      std::unordered_map<std::string, std::shared_ptr<SurrogateModel>>;
+
+  static InstanceMap& instances();
 
   SurrogateModel(std::string& model_path);
 
@@ -73,10 +75,13 @@ public:
   // public interface
   // -------------------------------------------------------------------------
 
+  static void clearCache();
+
   static std::shared_ptr<SurrogateModel> getInstance(std::string& model_path)
   {
-    auto model = SurrogateModel::instances.find(std::string(model_path));
-    if (model != instances.end()) {
+    auto& Models = SurrogateModel::instances();
+    auto model = Models.find(std::string(model_path));
+    if (model != Models.end()) {
       // Model Found
       auto torch_model = model->second;
 
@@ -90,14 +95,11 @@ public:
     AMS_DBG(Surrogate, "Generating new model under '{}'", model_path);
     std::shared_ptr<SurrogateModel> torch_model =
         std::shared_ptr<SurrogateModel>(new SurrogateModel(model_path));
-    instances.insert(std::make_pair(std::string(model_path), torch_model));
+    Models.insert(std::make_pair(std::string(model_path), torch_model));
     return torch_model;
   };
 
-  ~SurrogateModel()
-  {
-    AMS_DBG(Surrogate, "Destroying surrogate model at '{}'", _model_path);
-  }
+  ~SurrogateModel() = default;
 
   std::tuple<torch::Tensor, torch::Tensor> _evaluate(torch::Tensor& inputs,
                                                      const float threshold);

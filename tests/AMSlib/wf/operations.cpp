@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "../ams_catch_main.hpp"
 #include "wf/workflow.hpp"
 
 using torch::indexing::Slice;
@@ -206,15 +207,5 @@ CATCH_TEST_CASE("Workflow: MLDomainToApplication round-trip",
 
 int main(int argc, char** argv)
 {
-  Catch::Session session;
-
-  if (int rc = session.applyCommandLine(argc, argv))
-    return rc;  // bad CLI -> propagate
-
-  int rc = session.run();  // run tests
-  std::cout << "RC:" << rc << "\n";
-
-  // Treat "warnings only" (e.g., due to skipped tests) as success for CTest.
-  // Catch2 commonly uses 4 for warnings; adjust if your config differs.
-  return (rc == 0 || rc == 4) ? 0 : rc;
+  return ams::test::runCatchSession(argc, argv);
 }

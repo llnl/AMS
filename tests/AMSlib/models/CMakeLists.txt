@@ -35,7 +35,7 @@ set(GENERATED_CPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/homogeneous_graph_bad_shape.pt
 )
 
-if (WITH_CUDA OR WITH_HIP)
+if (ENABLE_CUDA OR ENABLE_HIP)
   set(GENERATED_GPU_MODELS
     ${CMAKE_CURRENT_BINARY_DIR}/double_gpu_duq_max.pt
     ${CMAKE_CURRENT_BINARY_DIR}/double_gpu_duq_mean.pt

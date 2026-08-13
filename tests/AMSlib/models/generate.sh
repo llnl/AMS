@@ -13,11 +13,11 @@ root_dir=$(dirname $0)
 mkdir -p $directory
 echo $device
 
-python ${root_dir}/generate.py ${directory}
+python3 ${root_dir}/generate.py ${directory}
 
-python ${root_dir}/generate_base_models.py --out-dir ${directory}
+python3 ${root_dir}/generate_base_models.py --out-dir ${directory}
 
-python ${root_dir}/generate_linear_model.py ${directory} 8 9
+python3 ${root_dir}/generate_linear_model.py ${directory} 8 9
 
-python ${root_dir}/generate_graph_models.py --out-dir ${directory}
+python3 ${root_dir}/generate_graph_models.py --out-dir ${directory}
 

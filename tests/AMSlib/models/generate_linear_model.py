@@ -152,7 +152,7 @@ def main(args):
                 file_path = f"{args.directory}/linear_{file_name}"
                 print(f"Model saved to {file_path}")
                 ams_model.save(file_path)
-                tests.append((str(Path(file_path).resolve()), precision, a_device, uq))
+                tests.append((str(Path(file_path).absolute()), precision, a_device, uq))
     generate_header(args.directory, tests)
 
 

@@ -23,5 +23,6 @@ add_subdirectory(torch)
 add_subdirectory(db)
 add_subdirectory(wf)
 add_subdirectory(ams_interface)
+add_subdirectory(downstream)
 #add_subdirectory(perf_regression)
 

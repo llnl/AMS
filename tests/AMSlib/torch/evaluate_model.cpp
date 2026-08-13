@@ -1,9 +1,12 @@
 #include <torch/torch.h>
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_adapters.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -91,4 +94,18 @@ CATCH_TEST_CASE(
       verify(input, out, pred, 1.0);
     }
   }
+}
+
+
+int main(int argc, char** argv)
+{
+  Catch::Session session;
+  if (int rc = session.applyCommandLine(argc, argv)) return rc;
+
+  int rc = session.run();
+  SurrogateModel::clearCache();
+
+  std::fflush(stdout);
+  std::fflush(stderr);
+  std::_Exit(rc == 0 ? EXIT_SUCCESS : rc);
 }

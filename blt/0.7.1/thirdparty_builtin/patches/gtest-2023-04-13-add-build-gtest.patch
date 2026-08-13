@@ -1,0 +1,12 @@
+diff --git a/thirdparty_builtin/googletest-1.16.0/CMakeLists.txt b/thirdparty_builtin/googletest-1.16.0/CMakeLists.txt
+index 15c4f0f..b97d290 100644
+--- a/thirdparty_builtin/googletest-1.16.0/CMakeLists.txt
++++ b/thirdparty_builtin/googletest-1.16.0/CMakeLists.txt
+@@ -31,6 +31,6 @@ endif()
+ 
+ if(BUILD_GMOCK)
+   add_subdirectory( googlemock )
+-else()
++elseif(BUILD_GTEST)
+   add_subdirectory( googletest )
+ endif()

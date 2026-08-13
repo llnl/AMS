@@ -47,6 +47,18 @@ static std::string getAMSResourceTypeAsString(AMSResourceType res)
 }
 
 
+SurrogateModel::InstanceMap& SurrogateModel::instances()
+{
+  // Torch owns process-global state; avoid destroying cached modules during
+  // C++ static teardown after Torch/C10 globals may already be gone.
+  static auto* Instances = new InstanceMap();
+  return *Instances;
+}
+
+
+void SurrogateModel::clearCache() { instances().clear(); }
+
+
 SurrogateModel::SurrogateModel(std::string& model_path)
     : _model_path(model_path)
 {
@@ -221,7 +233,3 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::evaluate(
   }
   return std::make_tuple(std::move(OTensor), std::move(Predicate));
 }
-
-
-std::unordered_map<std::string, std::shared_ptr<SurrogateModel>>
-    SurrogateModel::instances;

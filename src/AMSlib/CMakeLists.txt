@@ -8,13 +8,12 @@ set(AMS_LIB_SRC wf/debug.cpp wf/logger.cpp wf/utils.cpp wf/SmallVector.cpp ml/su
 
   list(APPEND AMS_LIB_SRC wf/hdf5db.cpp)
 
-if (WITH_RMQ)
+if (ENABLE_RMQ)
   list(APPEND AMS_LIB_SRC wf/rmqdb.cpp)
 endif()
 
-add_library(AMS ${AMS_LIB_SRC})
-
-get_target_property(AMS_TYPE AMS TYPE)
+blt_add_library(NAME AMS SOURCES ${AMS_LIB_SRC})
+add_library(AMS::AMS ALIAS AMS)
 
 # ------------------------------------------------------------------------------
 # setup the lib first
@@ -28,34 +27,35 @@ target_include_directories(AMS PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(AMS PUBLIC fmt::fmt tl::expected)
+target_link_libraries(AMS PRIVATE fmt::fmt nlohmann_json::nlohmann_json ${AMS_APP_LIBRARIES}
+                                  $<BUILD_INTERFACE:tl::expected>)
 
-if (WITH_CUDA)
+if (BUILD_SHARED_LIBS AND AMS_DEFER_STATIC_TPL_RESOLUTION AND UNIX AND NOT APPLE)
+  target_link_options(AMS PRIVATE "-Wl,--unresolved-symbols=ignore-all")
+endif()
+
+if (ENABLE_CUDA)
   target_link_libraries(AMS PRIVATE CUDA::cudart)
-elseif (WITH_HIP)
+elseif (ENABLE_HIP)
   target_link_libraries(AMS PRIVATE hip::host)
 endif()
 
-target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:${AMS_HDF5_TARGET}> PRIVATE $<INSTALL_INTERFACE:${AMS_HDF5_TARGET}>)
+remove_static_from_libs(TO LINK_AMS_HDF5_TARGETS FROM ${AMS_HDF5_LINK_TARGETS})
+target_link_libraries(AMS PRIVATE ${LINK_AMS_HDF5_TARGETS})
 
-if (WITH_CALIPER)
-  target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:caliper> PRIVATE $<INSTALL_INTERFACE:caliper>)
+if (ENABLE_CALIPER)
+  target_link_libraries(AMS PRIVATE caliper)
 endif()
 
-if (WITH_MPI)
-  target_link_libraries(AMS PUBLIC $<BUILD_INTERFACE:MPI::MPI_CXX> PRIVATE $<INSTALL_INTERFACE:MPI::MPI_CXX>)
+if (ENABLE_MPI)
+  target_link_libraries(AMS PRIVATE MPI::MPI_CXX)
 endif()
 
-if (WITH_RMQ)
-  target_link_libraries(AMS PUBLIC  $<BUILD_INTERFACE:amqpcpp> PRIVATE $<INSTALL_INTERFACE:amqpcpp>)
+if (ENABLE_RMQ)
+  target_link_libraries(AMS PRIVATE amqpcpp)
 
   if (OPENSSL_FOUND)
-    target_link_libraries(AMS PUBLIC
-                               $<BUILD_INTERFACE:OpenSSL::SSL>
-                               $<BUILD_INTERFACE:OpenSSL::Crypto>
-                               PRIVATE
-                               $<INSTALL_INTERFACE:OpenSSL::SSL>
-                               $<INSTALL_INTERFACE:OpenSSL::Crypto>)
+    target_link_libraries(AMS PRIVATE OpenSSL::SSL OpenSSL::Crypto)
   endif()
   # NOTE: We set here the event/event pthreads as public. As there is no easy way
   # to do a find package(libevent) and RMQ is not exposing that properly.
@@ -64,10 +64,19 @@ if (WITH_RMQ)
   target_link_libraries(AMS PUBLIC ${LIBEVENT_LIBRARY} ${LIBEVENT_THREAD})
 endif()
 
-target_link_libraries(AMS PUBLIC
-    		$<BUILD_INTERFACE:stdc++fs torch> PRIVATE
-    		$<INSTALL_INTERFACE:stdc++fs torch>)
+target_link_libraries(AMS PRIVATE stdc++fs torch)
 
+# torch adds -Wl,--as-needed to the link line which leads to issue with libstdc++ when building against AMS in static mode
+# TorchConfig.cmake wraps libtorch_cpu.so in -Wl,--no-as-needed and then re-enables --as-needed without restoring the prior state
+if(NOT BUILD_SHARED_LIBS)
+  target_link_libraries(AMS INTERFACE "-Wl,--no-as-needed")
+endif()
+
+# needed by Clang/amdclang because of --no-allow-shlib-undefined
+if (BUILD_SHARED_LIBS)
+  target_link_libraries(AMS INTERFACE "-Wl,--allow-shlib-undefined")
+endif()
+target_link_libraries(AMS INTERFACE Threads::Threads)
 
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS-config.h.in" "${PROJECT_BINARY_DIR}/include/AMS-config.h")
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/include/AMS.h" "${PROJECT_BINARY_DIR}/include/AMS.h" COPYONLY)
@@ -95,6 +104,11 @@ install(TARGETS AMS
 )
 
 # Export the AMS targets for use by external projects
+export(EXPORT AMSTargets
+    NAMESPACE AMS::
+    FILE "${CMAKE_CURRENT_BINARY_DIR}/AMSTargets.cmake"
+)
+
 install(EXPORT AMSTargets
     NAMESPACE AMS::                              # Prefix target names with AMS::
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/AMS" # Install location for CMake config
@@ -108,7 +122,7 @@ install(FILES
     ${PROJECT_BINARY_DIR}/include/AMSTypes.hpp
     ${PROJECT_BINARY_DIR}/include/ArrayRef.hpp
     ${PROJECT_BINARY_DIR}/include/SmallVector.hpp
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/"    # Headers installed into AMS subdir
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/"
 )
 
 
@@ -132,4 +146,3 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/AMSConfigVersion.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/AMS"
 )
-

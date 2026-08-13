@@ -10,6 +10,7 @@
 #include <catch2/reporters/catch_reporter_event_listener.hpp>
 #include <catch2/reporters/catch_reporter_registrars.hpp>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <ostream>
 #include <sstream>
@@ -384,5 +385,8 @@ int main(int argc, char** argv)
   // Catch2 commonly uses 4 for warnings; adjust if your config differs.
   AMSFinalize();
   std::filesystem::remove_all(db_dir);
-  return (rc == 0 || rc == 4) ? 0 : rc;
+  std::fflush(stdout);
+  std::fflush(stderr);
+  // Skip late HIP/Torch global finalizers after explicit AMS cleanup.
+  std::_Exit((rc == 0 || rc == 4) ? EXIT_SUCCESS : rc);
 }

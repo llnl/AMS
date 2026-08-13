@@ -10,7 +10,9 @@ jobs:
   build-run-tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-almalinux8:latest
+    container:
+      image: ghcr.io/llnl/ams-ci-almalinux8:latest
+      options: --user root
 
     strategy:
       matrix:
@@ -18,67 +20,80 @@ jobs:
         with_mpi: [ON, OFF]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
-      - name: Build WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Build ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          source /etc/profile
+          module load gcc/13.3.1 mpi/openmpi-x86_64
+
           rm -rf build/
           mkdir build
           cd build
-          export AMS_MFEM_PATH=$(spack location -i mfem)
-          export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
-          export AMS_UMPIRE_PATH=$(spack location -i umpire)
-          export AMS_HDF5_PATH=$(spack location -i hdf5)
           cmake \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_INSTALL_PREFIX=./install \
-            -DWITH_CALIPER=${{ matrix.with_caliper }} \
-            -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
+            -DENABLE_CALIPER=${{ matrix.with_caliper }} \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_CUDA=Off \
-            -DWITH_MPI=${{ matrix.with_mpi }} \
-            -DWITH_TESTS=On \
+            -DENABLE_CUDA=Off \
+            -DENABLE_MPI=${{ matrix.with_mpi }} \
+            -DENABLE_TESTS=On \
+            -DAMS_ENABLE_DEBUG=On \
+            -DENABLE_WORKFLOW=Off \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=Off \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
+            -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make -j$(nproc)
-      - name: Run Tests WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Run Tests ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         run: |
+          source /etc/profile
+          module load gcc/13.3.1 mpi/openmpi-x86_64
+
           cd build
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          # needed otherwise MPI tests will fail when running as root
+          if [[ ${{ matrix.with_mpi }} == "ON" ]]; then
+            echo "Setting OMP flag to run as root"
+            export OMPI_ALLOW_RUN_AS_ROOT=1
+            export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+            # needed by blt_mpi_smoke on GitHub CI
+            export OMPI_MCA_rmaps_base_oversubscribe=1
+          fi
           env CTEST_OUTPUT_ON_FAILURE=1 make test
 
-      - name: Install AMS WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Install AMS ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         run: |
+          source /etc/profile
+          module load gcc/13.3.1 mpi/openmpi-x86_64
+
           cd build
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
           make -j$(nproc) install
 
   build-cuda-tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-cuda12.9.1:latest
+    container:
+      image: ghcr.io/llnl/ams-ci-cuda12.9.1:latest
+      options: --user root
 
     strategy:
       matrix:
         with_caliper: [ON, OFF]
         with_mpi: [ON, OFF]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
-      - name: Build WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Build ENABLE_CUDA=On ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         shell: bash -l {0}
         run: |
-          . /venv/bin/activate
+          . /home/ams/venv/bin/activate
           rm -rf build/
           mkdir build
           cd build
@@ -87,101 +102,94 @@ jobs:
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=On \
             -DCMAKE_INSTALL_PREFIX=${AMS_INSTALL_PATH} \
-            -DWITH_CALIPER=${{ matrix.with_caliper }} \
+            -DENABLE_CALIPER=${{ matrix.with_caliper }} \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_MPI=${{ matrix.with_mpi }} \
-            -DWITH_TESTS=On \
+            -DENABLE_MPI=${{ matrix.with_mpi }} \
+            -DENABLE_TESTS=On \
+            -DAMS_ENABLE_DEBUG=On \
+            -DENABLE_WORKFLOW=Off \
+            -DENABLE_CUDA=On \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -DAMS_HDF5_DIR=/usr/local/cmake/ \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=Off \
-            -DWITH_CUDA=On \
-            -DTORCH_CUDA_ARCH_LIST="9.0" \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
+            -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make -j$(nproc)
-      - name: Install AMS WITH_CUDA=On WITH_CALIPER=${{ matrix.with_caliper }} WITH_MPI=${{ matrix.with_mpi }}
+      - name: Install AMS ENABLE_CUDA=On ENABLE_CALIPER=${{ matrix.with_caliper }} ENABLE_MPI=${{ matrix.with_mpi }}
         run: |
+          . /home/ams/venv/bin/activate
           cd build
-          . /venv/bin/activate
           make -j$(nproc) install
 
   install-link-cpu-tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-almalinux8:latest
+    container:
+      image: ghcr.io/llnl/ams-ci-almalinux8:latest
+      options: --user root
 
     strategy:
       matrix:
         with_shared: [ON, OFF]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Build SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          source /etc/profile
+          module load gcc/13.3.1 mpi/openmpi-x86_64
+
           rm -rf build/
           mkdir -p build
           cd build
-          export AMS_INSTALL_PATH=$(pwd)/install
-          echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
-          export AMS_MFEM_PATH=$(spack location -i mfem)
-          export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
-          export AMS_UMPIRE_PATH=$(spack location -i umpire)
-          export AMS_HDF5_PATH=$(spack location -i hdf5)
-          export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
+          
           cmake \
             -DBUILD_SHARED_LIBS=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_PREFIX=$AMS_INSTALL_PATH \
-            -DWITH_RMQ=On \
-            -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
-            -DWITH_CALIPER=On \
-            -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_CUDA=Off \
-            -DWITH_MPI=On \
-            -DWITH_TESTS=On \
+            -DENABLE_RMQ=On \
+            -DENABLE_CALIPER=On \
+            -DENABLE_CUDA=Off \
+            -DENABLE_MPI=On \
+            -DENABLE_TESTS=On \
+            -DAMS_ENABLE_DEBUG=Off \
+            -DENABLE_WORKFLOW=Off \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=Off \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
+            -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make -j$(nproc)
             make -j$(nproc) install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
-      # - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
-      #   shell: bash -l {0}
-      #   run: |
-      #     module load gcc/11.2.1
-      #     source /spack/share/spack/setup-env.sh
-      #     spack env activate -p /ams-spack-env
-      #     mkdir build_idealgas/
-      #     cd build_idealgas/
-      #     export AMS_MFEM_PATH=$(spack location -i mfem)
-      #     echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}"
-      #     cmake -DWITH_CUDA=Off -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
-      #     make -j$(nproc) VERBOSE=1
 
   install-link-cuda-tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-cuda12.9.1:latest
-
+    container:
+      image: ghcr.io/llnl/ams-ci-cuda12.9.1:latest
+      options: --user root
     strategy:
       matrix:
         with_shared: [ON, OFF]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Build SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          . /venv/bin/activate
+          . /home/ams/venv/bin/activate
           rm -rf build/
           mkdir -p build
           cd build
@@ -192,42 +200,34 @@ jobs:
             -DBUILD_SHARED_LIBS=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=${{ matrix.with_shared }} \
             -DCMAKE_INSTALL_PREFIX=$AMS_INSTALL_PATH \
-            -DWITH_CALIPER=On \
+            -DENABLE_CALIPER=On \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_CUDA=On \
-            -DTORCH_CUDA_ARCH_LIST="9.0" \
-            -DWITH_MPI=On \
-            -DWITH_TESTS=On \
-            -DAMS_HDF5_DIR=/usr/local/cmake/ \
+            -DENABLE_CUDA=On \
+            -DENABLE_RMQ=Off \
+            -DENABLE_MPI=Off \
+            -DENABLE_TESTS=On \
+            -DAMS_ENABLE_DEBUG=On \
+            -DENABLE_WORKFLOW=Off \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=Off \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
             $GITHUB_WORKSPACE
             make -j$(nproc)
             make -j$(nproc) install
             echo "AMS_INSTALL_PATH=${AMS_INSTALL_PATH}" >> $GITHUB_ENV
             ls ${AMS_INSTALL_PATH}
-      # - name: Install IdealGas SharedLibray=${{ matrix.with_shared }}
-      #   shell: bash -l {0}
-      #   run: |
-      #     module load gcc/11.2.1
-      #     source /spack/share/spack/setup-env.sh
-      #     spack env activate -p /ams-spack-env
-      #     mkdir build_idealgas/
-      #     cd build_idealgas/
-      #     export AMS_MFEM_PATH=$(spack location -i mfem)
-      #     cmake -DCMAKE_CUDA_ARCHITECTURES=70 -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ -DAMS_DIR=${AMS_INSTALL_PATH}/lib64/cmake/AMS -DMFEM_DIR=${AMS_MFEM_PATH} $GITHUB_WORKSPACE/examples/ideal_gas/
-      #     make -j$(nproc) VERBOSE=1
-      - name: Install BOptions SharedLibray=${{ matrix.with_shared }}
+      - name: Build BOptions SharedLibray=${{ matrix.with_shared }}
         shell: bash -l {0}
         run: |
-          . /venv/bin/activate
+          . /home/ams/venv/bin/activate
           mkdir -p build_bnm_opt/
           cd build_bnm_opt/
           cmake \
-            -DTORCH_CUDA_ARCH_LIST="9.0" \
             -DAMS_DIR=${AMS_INSTALL_PATH}/lib/cmake/AMS \
-            -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH}/ \
+            -DCMAKE_PREFIX_PATH=${AMS_INSTALL_PATH} \
             $GITHUB_WORKSPACE/examples/bnm_opt/
           make -j$(nproc) VERBOSE=1
 
@@ -245,30 +245,27 @@ jobs:
 
     container:
       image: ghcr.io/llnl/ams-ci-almalinux8:latest
+      options: --user root
       env:
         RABBITMQ_USER: ams
         RABBITMQ_PASS: ams
         RABBITMQ_HOST: rabbitmq
         RABBITMQ_PORT: 5672
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
-      - name: Build Torch=On RMQ=On AMS
+      - name: Build RMQ=On AMS
         shell: bash -l {0}
         run: |
-          module load gcc/11.2.1
-          export SPACK_ROOT=/spack/
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
+          source /etc/profile
+          module load gcc/13.3.1 mpi/openmpi-x86_64
+
+          python3 -m venv ci-venv
+          source ci-venv/bin/activate
           rm -rf build/
           mkdir build
           cd build
-          export AMS_MFEM_PATH=$(spack location -i mfem)
-          export AMS_TORCH_PATH=$(spack location -i py-torch)/lib/python3.10/site-packages/torch/share/cmake/Torch
-          export AMS_UMPIRE_PATH=$(spack location -i umpire)
-          export AMS_HDF5_PATH=$(spack location -i hdf5)
-          export AMS_AMQPCPP_PATH=$(spack location -i amqp-cpp)/cmake
           echo """{
                 \"rabbitmq-user\": \"${RABBITMQ_USER}\",
                 \"rabbitmq-password\": \"${RABBITMQ_PASS}\",
@@ -284,27 +281,31 @@ jobs:
           cmake \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
-            -DWITH_CALIPER=On \
-            -DAMS_HDF5_DIR=$AMS_HDF5_PATH \
             -DCMAKE_INSTALL_PREFIX=./install \
             -DCMAKE_BUILD_TYPE=Release \
-            -DWITH_CUDA=Off \
-            -DWITH_MPI=On \
-            -DWITH_TORCH=On \
-            -DWITH_TESTS=On \
+            -DENABLE_CALIPER=On \
+            -DENABLE_CUDA=Off \
+            -DENABLE_MPI=Off \
+            -DENABLE_TESTS=On \
+            -DAMS_ENABLE_DEBUG=On \
+            -DENABLE_WORKFLOW=On \
+            -DENABLE_RMQ=On \
             -DTorch_DIR=$AMS_TORCH_PATH \
-            -DWITH_AMS_DEBUG=On \
-            -DWITH_WORKFLOW=On \
-            -DWITH_RMQ=On \
+            -Dcaliper_DIR=$AMS_CALIPER_PATH \
+            -DAMS_FMT_DIR=$AMS_FMT_DIR \
+            -DHDF5_DIR=$AMS_HDF5_PATH \
+            -Dnlohmann_json_DIR=$AMS_NLOHMANN_JSON_DIR \
+            -Dtl-expected_DIR=$AMS_TL_EXPECTED_DIR \
             -Damqpcpp_DIR=$AMS_AMQPCPP_PATH \
             $GITHUB_WORKSPACE
             make
-      - name: Run tests Torch=On RMQ=On AMSlib RabbitMQ egress
+      - name: Run tests RMQ=On AMSlib RabbitMQ egress
         run: |
+          source /etc/profile
+          module load gcc/13.3.1 mpi/openmpi-x86_64
+
+          source ci-venv/bin/activate
           cd build
-          export SPACK_ROOT=/spack/
-          source /spack/share/spack/setup-env.sh
-          spack env activate -p /ams-spack-env
           # We overwrite the rmq.json created by CMake
           ctest --output-on-failure ./
         env:
@@ -312,12 +313,14 @@ jobs:
           RABBITMQ_PASS: ams
           RABBITMQ_HOST: rabbitmq
           RABBITMQ_PORT: 5672
+
   sqlite-tests:
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-flux-mariadb:latest
-
+    container:
+      image: ghcr.io/llnl/ams-ci-flux-mariadb:latest
+      options: --user root
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Install AMS package (editable)
@@ -325,18 +328,19 @@ jobs:
         run: |
           source /venv/bin/activate
           pip install -e ./
-
       - name: Run AMS unittests (SQlite)
         shell: bash -l {0}
         run: |
           source /venv/bin/activate
           python -m unittest discover -s tests/AMSWorkflow -p "test_*.py" -v
+
   mariadb-tests:
     runs-on: ubuntu-latest
-    container: ghcr.io/llnl/ams-ci-flux-mariadb:latest
-
+    container:
+      image: ghcr.io/llnl/ams-ci-flux-mariadb:latest
+      options: --user root
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Ensure git safe directory
         run: git config --global --add safe.directory '*'
       - name: Start MariaDB

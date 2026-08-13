@@ -1,78 +1,21 @@
 @PACKAGE_INIT@
 
-# Expose configuration options with AMS_ prefix
-set(AMS_WITH_MPI @WITH_MPI@)
-set(AMS_WITH_CUDA @WITH_CUDA@)
-set(AMS_WITH_CALIPER @WITH_CALIPER@)
-set(AMS_WITH_HDF5 @WITH_HDF5@)
-set(AMS_WITH_RMQ @WITH_RMQ@)
 include(CMakeFindDependencyMacro)
+# AMS::AMS exports Threads::Threads, so consumers need the imported target.
+find_dependency(Threads REQUIRED)
 
-find_dependency(fmt)
-find_dependency(tl-expected)
+set(AMS_ENABLE_MPI @ENABLE_MPI@)
+set(AMS_ENABLE_CUDA @ENABLE_CUDA@)
+set(AMS_ENABLE_HIP @ENABLE_HIP@)
+set(AMS_ENABLE_CALIPER @ENABLE_CALIPER@)
+set(AMS_ENABLE_WORKFLOW @ENABLE_WORKFLOW@)
+set(AMS_ENABLE_RMQ @ENABLE_RMQ@)
+set(AMS_ENABLE_PERFFLOWASPECT @ENABLE_PERFFLOWASPECT@)
+set(AMS_BUILD_SHARED_LIBS @BUILD_SHARED_LIBS@)
+set(AMS_DEFER_STATIC_TPL_RESOLUTION @AMS_DEFER_STATIC_TPL_RESOLUTION@)
+set(AMS_HDF5_MODE "@AMS_HDF5_MODE@")
 
-if (NOT TARGET Torch)
-  set(AMS_TORCH_DIR @Torch_DIR@)
-  if (NOT Torch_DIR)
-    set(Torch_DIR ${AMS_TORCH_DIR})
-  endif()
-  find_dependency(Torch REQUIRED HINTS ${Torch_DIR})
-endif()
-
-#Add usage hints for downstream projects
-if(AMS_WITH_MPI)
-  if (NOT TARGET MPI)
-   find_dependency(MPI REQUIRED)
-  endif()
-endif()
-
-if(AMS_WITH_CUDA)
-  if (NOT TARGET CUDA::cudart)
-    find_dependency(CUDAToolkit REQUIRED)
-  endif()
-endif()
-
-set(AMS_HDF5_DIR @AMS_HDF5_DIR@)
-set(AMS_HDF5_LIB_TYPE @AMS_HDF5_LIB_TYPE@)
-if (NOT TARGET hdf5-shared OR NOT TARGET hdf5-static)
-  if (NOT HDF5_DIR)
-    set(HDF5_DIR ${AMS_HDF5_DIR})
-  endif()
-
-  if (${AMS_HDF5_LIB_TYPE} STREQUAL "static")
-    find_dependency(HDF5 COMPONENTS C static HINTS @AMS_HDF5_DIR@ @AMS_HDF5_DIR@/share/cmake)
-  else()
-    find_dependency(HDF5 COMPONENTS C shared HINTS @AMS_HDF5_DIR@ @AMS_HDF5_DIR@/share/cmake)
-  endif()
-endif()
-
-if (AMS_WITH_CALIPER)
-  if (NOT TARGET caliper)
-    set(CALIPER_AMS_DIR @caliper_DIR@)
-    # check if we specify another caliper directory
-    if (NOT caliper_DIR)
-      set(caliper_DIR ${CALIPER_AMS_DIR})
-    endif()
-    find_dependency(caliper HINTS ${caliper_DIR})
-  endif()
-endif()
-
-if (AMS_WITH_RMQ)
-  set(AMS_RMQ_DIR @amqpcpp_DIR@)
-  if (NOT amqpcpp_DIR)
-    set(amqpcpp_DIR ${AMS_RMQ_DIR})
-  endif()
-  set(AMS_OPENSSL_FOUND_ROOT @AMS_OPENSSL_FOUND_ROOT@)
-  if (NOT OPENSSL_ROOT_DIR)
-    set(OPENSSL_ROOT_DIR ${AMS_OPENSSL_FOUND_ROOT})
-  endif()
-  find_dependency(amqpcpp REQUIRED HINTS ${amqpcpp_DIR})
-  # find dependency does not correctly discover OpenSSL, not sure why.
-  find_dependency(OpenSSL)
-  if (NOT OPENSSL_FOUND)
-    find_dependency(OpenSSL HINTS ${AMS_OPENSSL_FOUND_ROOT})
-  endif()
-endif()
+@AMS_PACKAGE_DEPENDENCY_BLOCK@
 
 include("${CMAKE_CURRENT_LIST_DIR}/AMSTargets.cmake")
 check_required_components("@PROJECT_NAME@")
