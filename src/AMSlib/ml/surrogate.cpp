@@ -179,6 +179,16 @@ std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_evaluate(
       out.toTuple()->elements()[0].toTensor().set_requires_grad(false).detach();
   at::Tensor uncertainty =
       out.toTuple()->elements()[1].toTensor().set_requires_grad(false).detach();
+  
+  // Handle per-output uncertainty by taking the maximum across output dimensions
+  // If uncertainty has more than 1 dimension and the last dimension > 1,
+  // reduce it to per-sample uncertainty by taking max across outputs
+  if (uncertainty.dim() > 1 && uncertainty.sizes()[uncertainty.dim() - 1] > 1) {
+    AMS_DBG(Surrogate,
+            "UQ model returned per-output uncertainty {}, reducing to per-sample by taking max",
+            shapeToString(uncertainty));
+    uncertainty = std::get<0>(uncertainty.max(/*dim=*/-1, /*keepdim=*/true));
+  }
 
   auto predicate = uncertainty < threshold;
   return std::make_tuple(std::move(prediction), std::move(predicate));
