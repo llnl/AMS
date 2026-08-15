@@ -71,6 +71,7 @@ build_and_test() {
     -DHDF5_DIR="$AMS_HDF5_PATH" \
     -Dnlohmann_json_DIR="$AMS_NLOHMANN_JSON_DIR" \
     -Dtl-expected_DIR="$AMS_TL_EXPECTED_DIR" \
+    -DAMS_CATCH2_DIR="$AMS_CATCH2_DIR" \
     -Damqpcpp_DIR="$AMS_AMQPCPP_PATH" \
     -DCMAKE_C_COMPILER="$C_COMPILER" \
     -DCMAKE_CXX_COMPILER="$CXX_COMPILER" \
