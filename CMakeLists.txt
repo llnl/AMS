@@ -52,6 +52,8 @@ set(AMS_THIRDPARTY_DIR "${PROJECT_SOURCE_DIR}/thirdparty" CACHE PATH
     "Path to AMS-local third-party dependencies")
 set(AMS_FMT_DIR "" CACHE PATH
     "Path to a directory containing fmt-config.cmake or fmtConfig.cmake")
+set(AMS_CATCH2_DIR "" CACHE PATH
+    "Path to a directory containing Catch2Config.cmake or catch2-config.cmake")
 set(HDF5_WITH_INTEL_RUNTIME "" CACHE FILEPATH
     "Optional Intel runtime library to link when using static HDF5")
 

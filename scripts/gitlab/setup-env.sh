@@ -41,6 +41,7 @@ export AMS_NLOHMANN_JSON_DIR=`spack location -i  nlohmann-json`
 export AMS_ZLIB_PATH=`spack location -i zlib-ng`
 export AMS_FMT_DIR=`spack location -i fmt`
 export AMS_TL_EXPECTED_DIR=`spack location -i tl-expected`
+export AMS_CATCH2_DIR=`spack location -i catch2`
 
 export AMS_CUDA_ARCH=${CUDA_ARCH}
 export AMS_HIP_ARCH=${ROCM_ARCH}
@@ -57,6 +58,7 @@ echo "AMS_ADIAK_PATH               = $AMS_ADIAK_PATH"
 echo "AMS_NLOHMANN_JSON_DIR        = $AMS_NLOHMANN_JSON_DIR"
 echo "AMS_FMT_DIR                  = $AMS_FMT_DIR"
 echo "AMS_TL_EXPECTED_DIR          = $AMS_TL_EXPECTED_DIR"
+echo "AMS_CATCH2_DIR               = $AMS_CATCH2_DIR"
 
 export AMS_TORCH_PATH=$(echo $AMS_TORCH_PATH/lib*/python3.*/site-packages/torch/share/cmake/Torch)
 export AMS_AMQPCPP_PATH=$(echo $AMS_AMQPCPP_PATH/cmake)
@@ -64,6 +66,7 @@ export AMS_CALIPER_PATH=$(echo $AMS_CALIPER_PATH/share/cmake/caliper)
 export AMS_NLOHMANN_JSON_DIR=$(echo $AMS_NLOHMANN_JSON_DIR/share/cmake/nlohmann_json/)
 export AMS_FMT_DIR=$(echo $AMS_FMT_DIR/lib*/cmake/fmt/)
 export AMS_TL_EXPECTED_DIR=$(echo $AMS_TL_EXPECTED_DIR/share/cmake/tl-expected/)
+export AMS_CATCH2_DIR=$(echo $AMS_CATCH2_DIR/lib*/cmake/Catch2/)
 export AMS_HDF5_PATH=$(echo $AMS_HDF5_PATH/cmake/)
 
 echo "(for cmake) AMS_TORCH_PATH        = $AMS_TORCH_PATH"
@@ -72,6 +75,7 @@ echo "(for cmake) AMS_CALIPER_PATH      = $AMS_CALIPER_PATH"
 echo "(for cmake) AMS_NLOHMANN_JSON_DIR = $AMS_NLOHMANN_JSON_DIR"
 echo "(for cmake) AMS_FMT_DIR           = $AMS_FMT_DIR"
 echo "(for cmake) AMS_TL_EXPECTED_DIR   = $AMS_TL_EXPECTED_DIR"
+echo "(for cmake) AMS_CATCH2_DIR        = $AMS_CATCH2_DIR"
 
 
 
