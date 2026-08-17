@@ -39,7 +39,6 @@ if (NOT _ams_catch2_ctest_adapter)
 endif()
 
 set(AMS_TEST_ROOT "${CMAKE_CURRENT_BINARY_DIR}")
-message(INFO "AMS_TEST_ROOT is ${AMS_TEST_ROOT}")
 add_subdirectory(models)
 add_subdirectory(torch)
 add_subdirectory(db)

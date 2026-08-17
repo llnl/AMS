@@ -44,10 +44,15 @@ option(ENABLE_WORKFLOW "Install python drivers used by the outer workflow" OFF)
 option(ENABLE_RMQ "Use RabbitMQ as a database back end" OFF)
 option(ENABLE_PERFFLOWASPECT "Use PerfFlowAspect for profiling" OFF)
 option(AMS_ENABLE_DEBUG "Enable verbose AMS messages" OFF)
+option(AMS_INSTALL_FLUX_PYTHON
+       "Install AMS Workflow Python package with the flux-python optional dependency"
+       OFF)
 option(AMS_DEFER_STATIC_TPL_RESOLUTION
        "Defer selected static TPL resolution to downstream final links when building shared AMS"
        OFF)
 
+set(AMS_PIP_INSTALL_ARGS "" CACHE STRING
+    "Additional arguments passed to pip install when ENABLE_WORKFLOW is On")
 set(AMS_THIRDPARTY_DIR "${PROJECT_SOURCE_DIR}/thirdparty" CACHE PATH
     "Path to AMS-local third-party dependencies")
 set(AMS_FMT_DIR "" CACHE PATH

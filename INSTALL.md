@@ -47,8 +47,10 @@ hint variables below.
 | `ENABLE_RMQ` | `OFF` | Enable the RabbitMQ database backend. |
 | `ENABLE_PERFFLOWASPECT` | `OFF` | Enable PerfFlowAspect profiling. |
 | `AMS_ENABLE_DEBUG` | `OFF` | Enable verbose AMS debug messages. |
+| `AMS_INSTALL_FLUX_PYTHON` | `OFF` | Install the Python workflow package with the `flux-python` optional dependency when `ENABLE_WORKFLOW=On`. |
 | `BUILD_SHARED_LIBS` | CMake default | Build shared libraries when `ON`; static when `OFF`. |
 | `AMS_DEFER_STATIC_TPL_RESOLUTION` | `OFF` | Defer selected static TPL resolution to downstream final links when building shared AMS. |
+| `AMS_PIP_INSTALL_ARGS` | empty | Extra arguments passed to `pip install` when `ENABLE_WORKFLOW=On`. |
 
 When building shared libraries, use
 `-DBUILD_SHARED_LIBS=On -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=On`. For a static
@@ -96,6 +98,70 @@ source scripts/gitlab/setup-env.sh
 The script loads the appropriate compiler, MPI, and ROCm modules, activates the
 AMS Spack environment, and exports dependency locations used by CMake.
 
+### LC Workflow Python Environments
+
+On LC systems, do not create AMS Workflow environments with plain
+`python3 -m venv`. The AMS Spack environments use a Python external and LC
+Flux provides the compatible `flux` Python bindings for the active Flux
+installation. Create the venv through the repository helper so it links both
+Spack Python packages and a venv-local shim for system Flux Python:
+
+```bash
+host=$(hostname)
+host=${host//[0-9]/}
+python3 scripts/make-spack-venv.py \
+  --env "/usr/workspace/AMS/ams-spack-environments/1.1/${host}/" \
+  --output "venv-${host}" \
+  --with-system-flux-python
+source "venv-${host}/bin/activate"
+```
+
+The helper writes system Flux metadata into the venv and warns on activation if the
+active `flux version` differs from the recorded one. The shim exposes Flux
+without putting unrelated LC Python packages ahead of AMS Spack packages.
+Recreate the venv after system Flux changes. For LC workflow CMake builds, pass
+`-DAMS_PIP_INSTALL_ARGS="--no-build-isolation"` so pip uses the prepared venv
+instead of an isolated build environment. Do not enable
+`AMS_INSTALL_FLUX_PYTHON` for this path; Flux Python is supplied by the
+prepared system-backed venv, not by pip.
+
+Design choices for system Flux Python:
+
+- AMS does not install `flux-python` as a default Python dependency on LC.
+  The Python bindings must match the active LC `flux` command and runtime,
+  which can change independently of the AMS Spack environment.
+- `scripts/make-spack-venv.py --with-system-flux-python` discovers the active
+  Flux binding with the venv Python first, then falls back to `flux python`
+  when Flux keeps its bindings outside the default Python import path.
+- The helper writes `system-flux-python.pth` in the venv `site-packages` directory.
+  This file points at a venv-local `system_flux_python` shim, not at the whole LC
+  Python `site-packages` tree, so packages such as LC's system `numpy` do not
+  shadow the AMS Spack Python packages.
+- The helper writes `system-flux-python.json` beside the `.pth` file. This records
+  `which flux`, `flux version`, the venv Python version, the `flux python`
+  version, the original `flux.__file__`, the original system Flux Python path, and
+  the shim path.
+- The activation hook compares the current `flux version` against the recorded
+  metadata and warns when they differ. Treat that warning as a signal to
+  recreate the venv with `--with-system-flux-python`.
+
+### Non-System Flux Workflow Installs
+
+When building AMS Workflow in an environment that does not provide compatible
+system Flux Python bindings, enable the workflow Flux extra:
+
+```bash
+cmake -S . -B build \
+  -DENABLE_WORKFLOW=On \
+  -DAMS_INSTALL_FLUX_PYTHON=On
+```
+
+With this flag, the `PyAMS` target runs pip against the generated package tree
+as `pip install <build-dir>[flux]`, which installs the `flux-python` optional
+dependency declared by `pyproject.toml`. Use this for container or non-LC
+builds that rely on pip-managed Flux Python. Leave it off when using
+`scripts/make-spack-venv.py --with-system-flux-python`.
+
 ## Convenience Configure Script
 
 `scripts/ams-configure.sh` assembles a standard CMake command and maps LC
@@ -106,6 +172,7 @@ scripts/ams-configure.sh
 scripts/ams-configure.sh --mpi --rmq
 scripts/ams-configure.sh --hip --mpi --caliper
 scripts/ams-configure.sh --mpi --tests
+scripts/ams-configure.sh --workflow --install-flux-python
 scripts/ams-configure.sh --mpi --rmq --dry-run
 ```
 
@@ -137,6 +204,7 @@ cmake -S . -B build \
   -DENABLE_CALIPER=On \
   -DENABLE_RMQ=On \
   -DENABLE_WORKFLOW=On \
+  -DAMS_PIP_INSTALL_ARGS="--no-build-isolation" \
   -DAMS_ENABLE_DEBUG=On \
   -DTorch_DIR="$AMS_TORCH_PATH" \
   -DHDF5_DIR="$AMS_HDF5_PATH" \

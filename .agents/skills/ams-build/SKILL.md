@@ -68,12 +68,29 @@ host=$(hostname)
 host=${host//[0-9]/}
 python3 scripts/make-spack-venv.py \
   --env "/usr/workspace/AMS/ams-spack-environments/1.1/${host}/" \
-  --output "venv-${host}"
+  --output "venv-${host}" \
+  --with-system-flux-python
 source "venv-${host}/bin/activate"
 ```
 
 Use this venv before installing or running Python workflow pieces, for example
 with `pip install -e .` or with builds that enable `-DENABLE_WORKFLOW=On`.
+The helper links the active system Flux Python bindings through a venv-local shim,
+records `flux version`, `which flux`, the Python version, `flux.__file__`, and
+the shim path, and warns on activation when the active Flux version differs.
+Recreate the venv after system Flux changes.
+
+For LC workflow CMake builds, pass this so pip uses the prepared venv instead
+of an isolated build environment:
+
+```bash
+-DAMS_PIP_INSTALL_ARGS="--no-build-isolation"
+```
+
+Leave `AMS_INSTALL_FLUX_PYTHON=Off` for this path. The prepared venv supplies
+system Flux Python. For container or non-LC builds that need pip-managed Flux
+Python, enable `-DAMS_INSTALL_FLUX_PYTHON=On` with `-DENABLE_WORKFLOW=On`; the
+workflow install target uses the `flux-python` optional dependency.
 
 ## Current dependencies and options
 
@@ -94,6 +111,8 @@ Current CMake options:
 | `ENABLE_WORKFLOW` | Install Python workflow drivers. |
 | `ENABLE_TESTS` | Build Catch2 tests. |
 | `AMS_ENABLE_DEBUG` | Enable verbose debug messages. |
+| `AMS_INSTALL_FLUX_PYTHON` | Install the Python workflow package with `flux-python` when `ENABLE_WORKFLOW=On`. |
+| `AMS_PIP_INSTALL_ARGS` | Extra arguments passed to `pip install` when `ENABLE_WORKFLOW=On`. |
 
 `ENABLE_CUDA` and `ENABLE_HIP` are mutually exclusive.
 
@@ -190,6 +209,7 @@ scripts/ams-configure.sh
 scripts/ams-configure.sh --mpi --rmq
 scripts/ams-configure.sh --hip --mpi --caliper
 scripts/ams-configure.sh --mpi --tests
+scripts/ams-configure.sh --workflow --install-flux-python
 scripts/ams-configure.sh --mpi --rmq --dry-run
 ```
 

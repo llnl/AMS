@@ -33,6 +33,7 @@ ENABLE_CALIPER="Off"
 ENABLE_RMQ="Off"
 ENABLE_PERFFLOWASPECT="Off"
 ENABLE_WORKFLOW="Off"
+INSTALL_FLUX_PYTHON="Off"
 ENABLE_DEBUG="Off"
 ENABLE_TESTS="Off"
 CUDA_ARCH=""            # override; else AMS_CUDA_ARCH after setup-env
@@ -49,6 +50,7 @@ Feature flags (compose freely):
   --rmq                 RabbitMQ back end     (-DENABLE_RMQ=On)
   --perfflowaspect      PerfFlowAspect        (-DENABLE_PERFFLOWASPECT=On)
   --workflow            Python drivers        (-DENABLE_WORKFLOW=On)
+  --install-flux-python install flux-python    (-DAMS_INSTALL_FLUX_PYTHON=On)
   --debug               verbose logging       (-DAMS_ENABLE_DEBUG=On)
   --tests               build tests           (-DENABLE_TESTS=On)
 
@@ -81,6 +83,7 @@ while [[ $# -gt 0 ]]; do
     --rmq|--rabbitmq) ENABLE_RMQ="On";;
     --perfflowaspect|--pfa) ENABLE_PERFFLOWASPECT="On";;
     --workflow) ENABLE_WORKFLOW="On";;
+    --install-flux-python) INSTALL_FLUX_PYTHON="On";;
     --debug) ENABLE_DEBUG="On";;
     --tests) ENABLE_TESTS="On";;
     --src) SRC="$2"; shift;;
@@ -169,6 +172,7 @@ CMAKE_ARGS=(
   -DENABLE_RMQ="$ENABLE_RMQ"
   -DENABLE_PERFFLOWASPECT="$ENABLE_PERFFLOWASPECT"
   -DENABLE_WORKFLOW="$ENABLE_WORKFLOW"
+  -DAMS_INSTALL_FLUX_PYTHON="$INSTALL_FLUX_PYTHON"
   -DAMS_ENABLE_DEBUG="$ENABLE_DEBUG"
   -DENABLE_TESTS="$ENABLE_TESTS"
   "${DEP_ARGS[@]}"
