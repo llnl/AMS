@@ -675,16 +675,8 @@ void callAMS(ams::AMSWorkflow* executor,
              const ams::AMSHomogeneousGraph& graph_input,
              ams::AMSHomogeneousGraphFields& outputs)
 {
-  // Try graph surrogate execution first
-  bool surrogate_used = tryGraphSurrogate(executor, graph_input, outputs);
-
-  // If surrogate succeeded, we're done
-  if (surrogate_used) {
-    return;
-  }
-
-  // Otherwise, fallback to original physics computation
-  callApplication(Physics, graph_input, outputs);
+  // Delegate to public evaluate method (mirrors tensor pattern)
+  executor->evaluate(Physics, graph_input, outputs);
 }
 
 void callAMS(ams::AMSWorkflow* executor,
@@ -692,14 +684,6 @@ void callAMS(ams::AMSWorkflow* executor,
              const ams::AMSHeterogeneousGraph& graph_input,
              ams::AMSHeterogeneousGraphFields& outputs)
 {
-  // Try graph surrogate execution first
-  bool surrogate_used = tryGraphSurrogate(executor, graph_input, outputs);
-
-  // If surrogate succeeded, we're done
-  if (surrogate_used) {
-    return;
-  }
-
-  // Otherwise, fallback to original physics computation
-  callApplication(Physics, graph_input, outputs);
+  // Delegate to public evaluate method (mirrors tensor pattern)
+  executor->evaluate(Physics, graph_input, outputs);
 }

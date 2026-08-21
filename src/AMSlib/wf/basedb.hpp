@@ -33,6 +33,15 @@
 
 namespace fs = std::experimental::filesystem;
 
+// Forward declarations for graph types
+namespace ams
+{
+struct AMSHomogeneousGraph;
+struct AMSHomogeneousGraphFields;
+struct AMSHeterogeneousGraph;
+struct AMSHeterogeneousGraphFields;
+}  // namespace ams
+
 #ifdef __AMS_ENABLE_HDF5__
 #include <H5Ipublic.h>
 #include <hdf5.h>
@@ -124,6 +133,32 @@ public:
   virtual void store(ArrayRef<torch::Tensor> Inputs,
                      ArrayRef<torch::Tensor> Outputs) = 0;
 
+  /**
+   * @brief Store graph data with outputs/targets for training.
+   * Default implementation throws - only backends that support graphs override this.
+   * @param[in] graph The homogeneous graph containing input features
+   * @param[in] outputs The graph fields containing output/target data
+   */
+  virtual void store(const ams::AMSHomogeneousGraph& graph,
+                     const ams::AMSHomogeneousGraphFields& outputs)
+  {
+    THROW(std::runtime_error,
+          (this->type() + " database does not support graph storage").c_str());
+  }
+
+  /**
+   * @brief Store heterogeneous graph data with outputs/targets for training.
+   * Default implementation throws - only backends that support graphs override this.
+   * @param[in] graph The heterogeneous graph containing input features
+   * @param[in] outputs The graph fields containing output/target data
+   */
+  virtual void store(const ams::AMSHeterogeneousGraph& graph,
+                     const ams::AMSHeterogeneousGraphFields& outputs)
+  {
+    THROW(std::runtime_error,
+          (this->type() + " database does not support heterogeneous graph storage")
+              .c_str());
+  }
 
   uint64_t getId() const { return id; }
 
@@ -1760,37 +1795,10 @@ public:
   * @param[in] rId a unique Id for each process taking part in a distributed
   * execution (rank-id)
   */
+  // Declared here, implemented in basedb.cpp to avoid including jsondb.hpp in header
   std::shared_ptr<BaseDB> createDB(std::string& domainName,
                                    AMSDBType dbType,
-                                   uint64_t rId = 0)
-  {
-
-    AMS_DBG(DBManager, "Instantiating data base");
-
-    if ((dbType == AMSDBType::AMS_HDF5) && !fs_interface.isConnected()) {
-      THROW(std::runtime_error,
-            "File System is not configured, Please specify output directory");
-    } else if (dbType == AMSDBType::AMS_RMQ && !rmq_interface.isConnected()) {
-      THROW(std::runtime_error, "Rabbit MQ data base is not configured");
-    }
-
-    switch (dbType) {
-#ifdef __AMS_ENABLE_HDF5__
-      case AMSDBType::AMS_HDF5:
-        return std::make_shared<hdf5DB>(fs_interface.path(), domainName, rId);
-#endif
-#ifdef __AMS_ENABLE_RMQ__
-      case AMSDBType::AMS_RMQ:
-        return std::make_shared<RabbitMQDB>(rmq_interface,
-                                            domainName,
-                                            rId,
-                                            updateSurrogate);
-#endif
-      default:
-        return nullptr;
-    }
-    return nullptr;
-  }
+                                   uint64_t rId = 0);
 
   /**
   * @brief get a data base object referred by this string.
