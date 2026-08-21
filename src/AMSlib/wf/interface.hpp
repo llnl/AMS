@@ -8,12 +8,11 @@ namespace ams
 class AMSWorkflow;
 }
 
-void callAMS(ams::AMSWorkflow *executor,
+void callAMS(ams::AMSWorkflow* executor,
              ams::DomainLambda Physics,
-             const ams::SmallVector<ams::AMSTensor> &ins,
-             ams::SmallVector<ams::AMSTensor> &inouts,
-             ams::SmallVector<ams::AMSTensor> &outs);
-
+             const ams::SmallVector<ams::AMSTensor>& ins,
+             ams::SmallVector<ams::AMSTensor>& inouts,
+             ams::SmallVector<ams::AMSTensor>& outs);
 
 #if defined(__AMS_ENABLE_TORCH__)
 
@@ -30,4 +29,27 @@ void callApplication(ams::DomainLambda CallBack,
 */
 ams::SmallVector<ams::AMSTensor> torchToAMSTensors(
     ams::MutableArrayRef<torch::Tensor> tensorVector);
+
+// ============================================================================
+// Graph-based callApplication overloads
+// ============================================================================
+
+void callAMS(ams::AMSWorkflow* executor,
+             ams::HomogeneousGraphDomainFn Physics,
+             const ams::AMSHomogeneousGraph& graph_input,
+             ams::AMSHomogeneousGraphFields& outputs);
+
+void callAMS(ams::AMSWorkflow* executor,
+             ams::HeterogeneousGraphDomainFn Physics,
+             const ams::AMSHeterogeneousGraph& graph_input,
+             ams::AMSHeterogeneousGraphFields& outputs);
+
+void callApplication(ams::HomogeneousGraphDomainFn CallBack,
+                     const ams::AMSHomogeneousGraph& graph,
+                     ams::AMSHomogeneousGraphFields& outputs);
+
+void callApplication(ams::HeterogeneousGraphDomainFn CallBack,
+                     const ams::AMSHeterogeneousGraph& graph,
+                     ams::AMSHeterogeneousGraphFields& outputs);
+
 #endif
