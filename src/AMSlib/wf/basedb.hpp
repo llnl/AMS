@@ -1553,8 +1553,10 @@ public:
     flush(100, 100);
     _publishingManager->stop();
     auto size = MessagesBuffer::getInstance().size();
-    if (size != 0)
+    if (size != 0) {
       AMS_DBG(RMQInterface, "Rank {} did not ack {} messages", _rId, size)
+      return;
+    }
   }
 
   ~RMQInterface()
