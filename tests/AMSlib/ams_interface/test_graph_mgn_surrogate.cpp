@@ -26,22 +26,22 @@
 //
 // This C++ test does not know the diffusion formula and does not try to judge
 // model quality. Its job is deployment parity: load the exact TorchScript model
-// and graph tensors from the generated fixture directory, run them through AMS,
+// and graph tensors from the committed fixture directory, run them through AMS,
 // and verify that the AMS output field node:delta_u matches the Python
 // TorchScript reference output.
 //
-// Said differently: Python proves "the model learned something"; this test
-// proves "AMS runs the exported model the same way Python does."
+// Said differently: the opt-in Python training workflow proves "the model
+// learned something"; this default test proves "AMS runs the checked-in model
+// the same way Python did when its references were generated."
 
 using namespace ams;
 using json = nlohmann::json;
 
 using Dim = AMSTensor::IntDimType;
 
-// The MGN diffusion workflow writes fixtures into the build tree at CTest
-// runtime. CMake compiles that build-tree directory into this focused parity
-// test so the test can be launched like any other Catch executable while still
-// keeping generated tensors out of the source tree.
+// Normal testing reads a checked-in TorchScript model and self-contained JSON
+// manifest. The expensive training/export workflow remains available as an
+// opt-in CTest path for deliberate artifact regeneration.
 #ifndef AMS_MGN_DIFFUSION_FIXTURE_DIR
 #define AMS_MGN_DIFFUSION_FIXTURE_DIR ""
 #endif
@@ -49,7 +49,7 @@ using Dim = AMSTensor::IntDimType;
 namespace
 {
 
-constexpr int kFixtureFormatVersion = 1;
+constexpr int kFixtureFormatVersion = 2;
 constexpr std::int64_t kNodeFeatureDim = 4;
 constexpr std::int64_t kEdgeFeatureDim = 4;
 constexpr std::int64_t kGlobalFeatureDim = 1;
@@ -62,10 +62,9 @@ constexpr const char* kDomainName = "test_mgn_graph_diffusion_surrogate";
 
 // Glossary for readers new to this path:
 //
-// manifest: fixtures.json, the table of contents for generated fixture files.
-// fixture directory: build-tree directory containing fixtures.json, the
-//   TorchScript model, and raw tensor binaries.
-// raw tensor binary: contiguous bytes for one tensor; shape/dtype live in JSON.
+// manifest: fixtures.json, the self-contained graph inputs and references.
+// fixture directory: source-tree directory containing fixtures.json and the
+//   checked-in TorchScript model.
 // AMSHomogeneousGraph: AMS C++ container for node_features, edge_index,
 //   edge_features, and optional global_features.
 // node:delta_u: TorchScript output key. AMS parses this into the node field
@@ -75,11 +74,8 @@ constexpr const char* kDomainName = "test_mgn_graph_diffusion_surrogate";
 // parity: equality of AMS/LibTorch inference and Python TorchScript inference.
 
 struct TensorMetadata {
-  std::filesystem::path path;
   std::string dtype;
   std::vector<std::int64_t> shape;
-  std::string endianness;
-  std::uintmax_t byte_size;
 };
 
 static std::vector<Dim> contiguousStrides(const std::vector<Dim>& shape)
@@ -100,7 +96,7 @@ template <typename T>
 static AMSTensor makeTensor(std::vector<Dim> shape,
                             const std::vector<T>& values)
 {
-  // Convert ordinary C++ vectors read from fixture binaries into owned
+  // Convert ordinary C++ vectors read from fixture JSON into owned
   // AMSTensors. From this point on, the graph looks like application-provided
   // AMS input rather than test-specific storage.
   std::vector<Dim> strides = contiguousStrides(shape);
@@ -115,32 +111,6 @@ static Dim toDim(std::int64_t value)
   CATCH_REQUIRE(value >= 0);
   CATCH_REQUIRE(value <= std::numeric_limits<Dim>::max());
   return static_cast<Dim>(value);
-}
-
-static bool hostIsLittleEndian()
-{
-  // Fixture binaries are written little-endian. AMS currently reads them by
-  // copying bytes directly into native scalar arrays, so running this test on a
-  // big-endian host should fail explicitly instead of silently byte-swapping
-  // wrong values.
-  const std::uint16_t value = 1;
-  return *reinterpret_cast<const std::uint8_t*>(&value) == 1;
-}
-
-static std::uintmax_t dtypeByteWidth(const std::string& dtype)
-{
-  // The generator only writes float32 tensors for real-valued graph data and
-  // int64 tensors for edge_index. Supporting more dtypes would require extending
-  // both the manifest contract and the AMSTensor construction below.
-  if (dtype == "float32") {
-    return sizeof(float);
-  }
-  if (dtype == "int64") {
-    return sizeof(std::int64_t);
-  }
-  CATCH_FAIL(
-      "Unsupported MGN graph diffusion tensor dtype in manifest: " << dtype);
-  return 0;
 }
 
 static std::uintmax_t shapeElementCount(const std::vector<std::int64_t>& shape)
@@ -158,18 +128,14 @@ static TensorMetadata parseTensorMetadata(const json& tensor)
   // Pull the small per-tensor manifest record into a typed C++ struct. This is
   // intentionally separate from validation so missing fields, unsupported
   // dtypes, and wrong shapes fail at the most helpful point in the test.
-  CATCH_REQUIRE(tensor.contains("path"));
   CATCH_REQUIRE(tensor.contains("dtype"));
   CATCH_REQUIRE(tensor.contains("shape"));
-  CATCH_REQUIRE(tensor.contains("endianness"));
-  CATCH_REQUIRE(tensor.contains("byte_size"));
+  CATCH_REQUIRE(tensor.contains("values"));
+  CATCH_REQUIRE(tensor.at("values").is_array());
 
   TensorMetadata metadata;
-  metadata.path = tensor.at("path").get<std::string>();
   metadata.dtype = tensor.at("dtype").get<std::string>();
   metadata.shape = tensor.at("shape").get<std::vector<std::int64_t>>();
-  metadata.endianness = tensor.at("endianness").get<std::string>();
-  metadata.byte_size = tensor.at("byte_size").get<std::uintmax_t>();
   return metadata;
 }
 
@@ -178,34 +144,14 @@ static void validateTensorMetadata(
     const std::string& expected_dtype,
     const std::vector<std::int64_t>& expected_shape)
 {
-  // Validate the manifest before allocating AMSTensors.
-  //
-  // The binary files deliberately contain no headers: no magic number, no shape,
-  // no dtype tag. That keeps them easy for C++ to read without Python or NumPy,
-  // but it means fixtures.json is the source of truth. If the manifest says a
-  // tensor is [N, 4] float32, this check makes sure the file metadata agrees
-  // with exactly the tensor shape this test is about to construct.
-  CATCH_REQUIRE_FALSE(metadata.path.empty());
-  CATCH_REQUIRE_FALSE(metadata.path.is_absolute());
-  for (const auto& part : metadata.path) {
-    CATCH_REQUIRE(part.string() != "..");
-  }
+  // Validate the self-contained manifest before allocating AMSTensors. Shape
+  // and dtype remain explicit even though values are ordinary JSON numbers.
   CATCH_REQUIRE(metadata.dtype == expected_dtype);
   CATCH_REQUIRE(metadata.shape == expected_shape);
-
-  // The generator writes little-endian bytes. The host-endianness check makes
-  // the limitation visible if this test ever runs on a different architecture.
-  CATCH_REQUIRE(metadata.endianness == "little");
-  CATCH_REQUIRE(hostIsLittleEndian());
-
-  const std::uintmax_t expected_size =
-      dtypeByteWidth(metadata.dtype) * shapeElementCount(metadata.shape);
-  CATCH_REQUIRE(metadata.byte_size == expected_size);
 }
 
 template <typename T>
-static std::vector<T> readTensorBinary(
-    const std::filesystem::path& manifest_dir,
+static std::vector<T> readTensorValues(
     const json& tensor,
     const std::string& expected_dtype,
     const std::vector<std::int64_t>& expected_shape)
@@ -213,46 +159,24 @@ static std::vector<T> readTensorBinary(
   TensorMetadata metadata = parseTensorMetadata(tensor);
   validateTensorMetadata(metadata, expected_dtype, expected_shape);
 
-  // All tensor paths are relative to fixtures.json. That keeps the generated
-  // fixture directory relocatable: moving the build directory as a unit does not
-  // invalidate absolute paths baked into the manifest.
-  const std::filesystem::path tensor_path = manifest_dir / metadata.path;
-  CATCH_REQUIRE(std::filesystem::exists(tensor_path));
-  CATCH_REQUIRE(std::filesystem::is_regular_file(tensor_path));
-  CATCH_REQUIRE(std::filesystem::file_size(tensor_path) == metadata.byte_size);
-
   const std::uintmax_t element_count = shapeElementCount(metadata.shape);
   CATCH_REQUIRE(element_count <= std::numeric_limits<std::size_t>::max());
-  std::vector<T> values(static_cast<std::size_t>(element_count));
-
-  std::ifstream input(tensor_path, std::ios::binary);
-  CATCH_REQUIRE(input);
-  if (metadata.byte_size > 0) {
-    CATCH_REQUIRE(metadata.byte_size <=
-                  static_cast<std::uintmax_t>(
-                      std::numeric_limits<std::streamsize>::max()));
-    input.read(reinterpret_cast<char*>(values.data()),
-               static_cast<std::streamsize>(metadata.byte_size));
-    // gcount verifies we actually read the promised number of bytes. Combined
-    // with file_size above, this catches truncated or stale fixture files before
-    // they can become misleading numerical comparisons.
-    CATCH_REQUIRE(static_cast<std::uintmax_t>(input.gcount()) ==
-                  metadata.byte_size);
-  }
+  CATCH_REQUIRE(tensor.at("values").size() ==
+                static_cast<std::size_t>(element_count));
+  std::vector<T> values = tensor.at("values").get<std::vector<T>>();
   return values;
 }
 
 static json loadManifest(const std::filesystem::path& fixture_dir)
 {
-  // fixtures.json is generated by the Python fixtures mode. If this file is
-  // missing, the C++ test cannot make progress because it does not know which
-  // model or tensors to load.
+  // fixtures.json is generated deliberately and checked into the source tree.
+  // If it is missing, the default parity test has no graph inputs or references.
   const std::filesystem::path manifest_path = fixture_dir / "fixtures.json";
   if (!std::filesystem::exists(manifest_path)) {
     CATCH_FAIL("Missing MGN graph diffusion fixtures at "
                << manifest_path
-               << ". Run `ctest -R MGN_DIFFUSION_FIXTURES` or the full "
-                  "`ctest -R MGN_DIFFUSION` chain.");
+               << ". Regenerate and commit mgn_graph_diffusion.pt and "
+                  "fixtures.json.");
   }
 
   std::ifstream input(manifest_path);
@@ -260,14 +184,13 @@ static json loadManifest(const std::filesystem::path& fixture_dir)
   json manifest = json::parse(input);
 
   // Keep the manifest version check close to parsing so future fixture format
-  // changes fail loudly instead of being interpreted as the current raw-binary
-  // contract.
+  // changes fail loudly instead of being interpreted as the current embedded
+  // tensor contract.
   CATCH_REQUIRE(manifest.contains("format_version"));
-  CATCH_REQUIRE(manifest.contains("endianness"));
   CATCH_REQUIRE(manifest.at("format_version").get<int>() ==
                 kFixtureFormatVersion);
-  CATCH_REQUIRE(manifest.at("endianness").get<std::string>() == "little");
   CATCH_REQUIRE(manifest.contains("model"));
+  CATCH_REQUIRE(manifest.contains("metadata"));
   CATCH_REQUIRE(manifest.contains("cases"));
   CATCH_REQUIRE(manifest.contains("comparison"));
   CATCH_REQUIRE(manifest.at("cases").is_array());
@@ -278,8 +201,8 @@ static std::filesystem::path resolveManifestRelativePath(
     const std::filesystem::path& manifest_dir,
     const json& object)
 {
-  // Model and tensor paths in the manifest are relative by design. Avoiding
-  // absolute paths makes fixtures reusable if the whole build directory moves.
+  // The model path is relative by design so the two checked-in fixture files
+  // remain relocatable as a unit.
   const std::filesystem::path relative_path =
       object.at("path").get<std::string>();
   CATCH_REQUIRE_FALSE(relative_path.empty());
@@ -290,10 +213,9 @@ static std::filesystem::path resolveManifestRelativePath(
   return manifest_dir / relative_path;
 }
 
-static AMSHomogeneousGraph makeGraph(const std::filesystem::path& manifest_dir,
-                                     const json& graph_case)
+static AMSHomogeneousGraph makeGraph(const json& graph_case)
 {
-  // Runtime fixture binaries become the same AMSTensor-backed homogeneous graph
+  // Runtime fixture values become the same AMSTensor-backed homogeneous graph
   // that an application would pass to AMS:
   //
   //   node_features   [N, 4]  -> x, y, u, kappa
@@ -302,8 +224,7 @@ static AMSHomogeneousGraph makeGraph(const std::filesystem::path& manifest_dir,
   //   global_features [1]     -> dt
   //
   // Keeping this conversion here, instead of compiling arrays into the test,
-  // makes the test closer to a real AMS deployment path: model and tensors are
-  // runtime files.
+  // makes the test exercise the private fixture schema at runtime.
   const std::int64_t num_nodes = graph_case.at("num_nodes").get<std::int64_t>();
   const std::int64_t num_edges = graph_case.at("num_edges").get<std::int64_t>();
   const std::int64_t node_dim =
@@ -324,22 +245,14 @@ static AMSHomogeneousGraph makeGraph(const std::filesystem::path& manifest_dir,
 
   // edge_index is the only integer tensor. It must remain int64 because the
   // TorchScript model canonicalizes and indexes with 64-bit node ids.
-  auto node_features = readTensorBinary<float>(manifest_dir,
-                                               tensors.at("node_features"),
-                                               "float32",
-                                               {num_nodes, node_dim});
-  auto edge_index = readTensorBinary<std::int64_t>(manifest_dir,
-                                                   tensors.at("edge_index"),
-                                                   "int64",
-                                                   {2, num_edges});
-  auto edge_features = readTensorBinary<float>(manifest_dir,
-                                               tensors.at("edge_features"),
-                                               "float32",
-                                               {num_edges, edge_dim});
-  auto global_features = readTensorBinary<float>(manifest_dir,
-                                                 tensors.at("global_features"),
-                                                 "float32",
-                                                 {global_dim});
+  auto node_features = readTensorValues<float>(
+      tensors.at("node_features"), "float32", {num_nodes, node_dim});
+  auto edge_index = readTensorValues<std::int64_t>(
+      tensors.at("edge_index"), "int64", {2, num_edges});
+  auto edge_features = readTensorValues<float>(
+      tensors.at("edge_features"), "float32", {num_edges, edge_dim});
+  auto global_features = readTensorValues<float>(
+      tensors.at("global_features"), "float32", {global_dim});
 
   return AMSHomogeneousGraph(
       makeTensor<float>({toDim(num_nodes), toDim(node_dim)}, node_features),
@@ -348,9 +261,7 @@ static AMSHomogeneousGraph makeGraph(const std::filesystem::path& manifest_dir,
       makeTensor<float>({toDim(global_dim)}, global_features));
 }
 
-static std::vector<float> loadReferenceDeltaU(
-    const std::filesystem::path& manifest_dir,
-    const json& graph_case)
+static std::vector<float> loadReferenceDeltaU(const json& graph_case)
 {
   // Reference output is one scalar delta_u per node. It was produced in Python
   // by reloading the exported TorchScript model, so it is the closest available
@@ -359,11 +270,10 @@ static std::vector<float> loadReferenceDeltaU(
   const std::int64_t output_dim =
       graph_case.at("reference_output_dim").get<std::int64_t>();
   CATCH_REQUIRE(output_dim == kReferenceOutputDim);
-  return readTensorBinary<float>(manifest_dir,
-                                 graph_case.at("tensors").at("reference_delta_"
-                                                             "u"),
-                                 "float32",
-                                 {num_nodes, output_dim});
+  return readTensorValues<float>(
+      graph_case.at("tensors").at("reference_delta_u"),
+      "float32",
+      {num_nodes, output_dim});
 }
 
 static void verifyDeltaU(const json& graph_case,
@@ -404,9 +314,9 @@ static void verifyDeltaU(const json& graph_case,
 CATCH_TEST_CASE("AMSExecute homogeneous graph MGN diffusion surrogate",
                 "[wf][graph][surrogate][mgn]")
 {
-  // CMake sets AMS_MGN_DIFFUSION_FIXTURE_DIR to the generated build-tree
-  // fixture directory. The manifest inside that directory tells us where the
-  // model and per-case tensor files live.
+  // CMake sets AMS_MGN_DIFFUSION_FIXTURE_DIR to the committed source-tree
+  // fixture directory. The manifest embeds graph cases and names the adjacent
+  // TorchScript model.
   const std::filesystem::path fixture_dir = AMS_MGN_DIFFUSION_FIXTURE_DIR;
   CATCH_REQUIRE_FALSE(fixture_dir.empty());
 
@@ -415,7 +325,7 @@ CATCH_TEST_CASE("AMSExecute homogeneous graph MGN diffusion surrogate",
 
   // The model path also comes from the manifest rather than being hard-coded in
   // the test. That keeps the C++ loader tied to the same artifact table of
-  // contents as the tensor files.
+  // contents as the embedded tensor references.
   const std::filesystem::path model_path =
       resolveManifestRelativePath(manifest_dir, manifest.at("model"));
   CATCH_REQUIRE(std::filesystem::exists(model_path));
@@ -467,11 +377,11 @@ CATCH_TEST_CASE("AMSExecute homogeneous graph MGN diffusion surrogate",
     CATCH_DYNAMIC_SECTION("fixture "
                           << graph_case.at("name").get<std::string>())
     {
-      // Load one graph case from runtime files, then run it through AMS. Each
-      // case has its own N, E, input tensors, and reference output.
-      AMSHomogeneousGraph graph = makeGraph(manifest_dir, graph_case);
+      // Load one graph case from JSON, then run it through AMS. Each case has
+      // its own N, E, input tensors, and reference output.
+      AMSHomogeneousGraph graph = makeGraph(graph_case);
       std::vector<float> reference_delta_u =
-          loadReferenceDeltaU(manifest_dir, graph_case);
+          loadReferenceDeltaU(graph_case);
 
       bool callback_invoked = false;
       // If the surrogate path fails, AMS would call the domain fallback. For

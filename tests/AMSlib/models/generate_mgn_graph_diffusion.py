@@ -56,10 +56,9 @@ import argparse
 import copy
 import json
 import os
-import struct
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 try:
     import torch
@@ -104,8 +103,7 @@ CHECKPOINT_NAME = "mgn_graph_diffusion_checkpoint.pt"
 MODEL_NAME = "mgn_graph_diffusion.pt"
 FIXTURE_MANIFEST_NAME = "fixtures.json"
 TRAINING_METRICS_NAME = "training_metrics.json"
-FIXTURE_FORMAT_VERSION = 1
-FIXTURE_ENDIANNESS = "little"
+FIXTURE_FORMAT_VERSION = 2
 COMPARISON_RTOL = 2.0e-5
 COMPARISON_ATOL = 2.0e-5
 
@@ -415,7 +413,69 @@ def assert_close(name: str, actual: Tensor, expected: Tensor, atol: float = 1.0e
         raise RuntimeError(f"{name} mismatch: max abs diff={max_diff}")
 
 
-def run_feasibility(out_dir: Path) -> None:
+def validate_committed_fixture_manifest(fixture_dir: Path) -> None:
+    """Ensure checked-in fixtures still describe this generator's contract."""
+
+    manifest_path = fixture_dir / FIXTURE_MANIFEST_NAME
+    if not manifest_path.is_file():
+        raise RuntimeError(
+            f"Missing committed MGN graph diffusion manifest {manifest_path}. "
+            "Regenerate and commit mgn_graph_diffusion.pt and fixtures.json."
+        )
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    def require_equal(name: str, actual: object, expected: object) -> None:
+        if actual != expected:
+            raise RuntimeError(
+                f"Committed MGN fixture {name} is stale: "
+                f"expected {expected!r}, found {actual!r}. Regenerate the fixtures."
+            )
+
+    model_record = manifest.get("model")
+    if not isinstance(model_record, dict):
+        raise RuntimeError("Committed MGN fixture model must be a JSON object. Regenerate the fixtures.")
+    require_equal("format_version", manifest.get("format_version"), FIXTURE_FORMAT_VERSION)
+    require_equal("model.path", model_record.get("path"), MODEL_NAME)
+
+    metadata = manifest.get("metadata", {})
+    if not isinstance(metadata, dict):
+        raise RuntimeError("Committed MGN fixture metadata must be a JSON object. Regenerate the fixtures.")
+    expected_metadata = {
+        "model_config": model_config(),
+        "model_seed": MODEL_SEED,
+        "train_data_seed": TRAIN_DATA_SEED,
+        "val_data_seed": VAL_DATA_SEED,
+        "feasibility_seeds": list(FEASIBILITY_SEEDS),
+        "fixture_graph_sizes": list(FIXTURE_GRAPH_SIZES),
+        "fixture_seeds": list(FIXTURE_SEEDS),
+    }
+    for key, expected in expected_metadata.items():
+        require_equal(f"metadata.{key}", metadata.get(key), expected)
+
+    cases = manifest.get("cases")
+    if not isinstance(cases, list):
+        raise RuntimeError("Committed MGN fixture cases must be a JSON array. Regenerate the fixtures.")
+    require_equal("case count", len(cases), len(FIXTURE_GRAPH_SIZES))
+    for index, (case, num_nodes, seed) in enumerate(zip(cases, FIXTURE_GRAPH_SIZES, FIXTURE_SEEDS)):
+        if not isinstance(case, dict):
+            raise RuntimeError(f"Committed MGN fixture cases[{index}] must be a JSON object. Regenerate the fixtures.")
+        expected_case = {
+            "name": f"mgn_diffusion_n{num_nodes}",
+            "seed": seed,
+            "num_nodes": num_nodes,
+            "node_feature_dim": NODE_FEATURE_DIM,
+            "edge_feature_dim": EDGE_FEATURE_DIM,
+            "global_feature_dim": GLOBAL_FEATURE_DIM,
+            "reference_output_dim": REFERENCE_OUTPUT_DIM,
+        }
+        for key, expected in expected_case.items():
+            require_equal(f"cases[{index}].{key}", case.get(key), expected)
+
+    print(f"[info] Committed fixture metadata matches: {manifest_path}")
+
+
+def run_feasibility(out_dir: Path, fixture_dir: Optional[Path] = None) -> None:
     # Mode 1: feasibility.
     #
     # Before training anything, prove that this model is deployable in the form
@@ -429,6 +489,8 @@ def run_feasibility(out_dir: Path) -> None:
     # If these disagree, training would only hide a deployment problem. This
     # mode intentionally does not write fixtures or a trained checkpoint.
     out_dir.mkdir(parents=True, exist_ok=True)
+    if fixture_dir is not None:
+        validate_committed_fixture_manifest(fixture_dir)
     print("[info] MGN graph diffusion feasibility gate")
     print(f"[info] model_seed={MODEL_SEED}, fixture_sizes={FIXTURE_GRAPH_SIZES}, config={model_config()}")
 
@@ -498,7 +560,7 @@ def run_train(out_dir: Path) -> None:
     # know the exact target_delta_u, so training is ordinary supervised learning:
     # predict delta_u, measure mean-squared error, and update the network
     # weights. This mode writes learned weights and metrics only. It does not
-    # export the AMS model or write C++ fixture tensors.
+    # export the AMS model or write the self-contained fixture manifest.
     out_dir.mkdir(parents=True, exist_ok=True)
     print("[info] MGN graph diffusion training")
     print(f"[info] model_seed={MODEL_SEED}, train_data_seed={TRAIN_DATA_SEED}, val_data_seed={VAL_DATA_SEED}")
@@ -582,6 +644,7 @@ def run_train(out_dir: Path) -> None:
         "model_seed": MODEL_SEED,
         "train_data_seed": TRAIN_DATA_SEED,
         "val_data_seed": VAL_DATA_SEED,
+        "feasibility_seeds": list(FEASIBILITY_SEEDS),
         "fixture_graph_sizes": list(FIXTURE_GRAPH_SIZES),
         "fixture_seeds": list(FIXTURE_SEEDS),
         "train_steps": TRAIN_STEPS,
@@ -622,40 +685,22 @@ def load_checkpoint(path: Path) -> Dict[str, object]:
         return torch.load(path, map_location="cpu")
 
 
-def write_tensor_binary(out_dir: Path, relative_path: str, tensor: Tensor, dtype: str) -> Dict[str, object]:
-    """Write one fixture tensor and return the matching manifest entry.
-
-    The C++ test deliberately avoids NumPy, pickle, or torch file readers for
-    graph inputs. Those formats would make the C++ side depend on Python data
-    tooling. Instead each tensor is raw contiguous row-major little-endian bytes,
-    and fixtures.json records the dtype, shape, endianness, and byte count
-    needed to validate it before use.
-    """
-
-    rel_path = Path(relative_path)
-    if rel_path.is_absolute() or ".." in rel_path.parts:
-        raise ValueError(f"Fixture tensor path must stay relative: {relative_path}")
+def tensor_manifest(tensor: Tensor, dtype: str) -> Dict[str, object]:
+    """Return a self-contained row-major JSON record for one fixture tensor."""
 
     if dtype == "float32":
         packed_tensor = tensor.detach().cpu().to(dtype=torch.float32).contiguous()
         values = [float(x) for x in packed_tensor.view(-1).tolist()]
-        data = struct.pack("<" + "f" * len(values), *values) if values else b""
     elif dtype == "int64":
         packed_tensor = tensor.detach().cpu().to(dtype=torch.int64).contiguous()
         values = [int(x) for x in packed_tensor.view(-1).tolist()]
-        data = struct.pack("<" + "q" * len(values), *values) if values else b""
     else:
         raise ValueError(f"Unsupported fixture tensor dtype: {dtype}")
 
-    tensor_path = out_dir / rel_path
-    tensor_path.parent.mkdir(parents=True, exist_ok=True)
-    tensor_path.write_bytes(data)
     return {
-        "path": rel_path.as_posix(),
         "dtype": dtype,
         "shape": [int(dim) for dim in packed_tensor.shape],
-        "endianness": FIXTURE_ENDIANNESS,
-        "byte_size": len(data),
+        "values": values,
     }
 
 
@@ -698,26 +743,15 @@ def run_fixtures(out_dir: Path) -> None:
             graph = graph_to_model_input(graph)
             output = reloaded(graph)["node:delta_u"].detach().cpu().contiguous()
             name = f"mgn_diffusion_n{num_nodes}"
-            case_dir = name
-            # Each tensor file is accompanied by manifest metadata. C++ uses the
-            # metadata to validate shape/type/size before constructing
-            # AMSTensor objects.
+            # The manifest embeds flattened row-major tensor values alongside
+            # dtype and shape, keeping the checked-in fixture set to one JSON
+            # file plus the TorchScript model.
             tensors = {
-                "node_features": write_tensor_binary(
-                    out_dir, f"{case_dir}/node_features.bin", graph["node_features"], "float32"
-                ),
-                "edge_index": write_tensor_binary(
-                    out_dir, f"{case_dir}/edge_index.bin", graph["edge_index"], "int64"
-                ),
-                "edge_features": write_tensor_binary(
-                    out_dir, f"{case_dir}/edge_features.bin", graph["edge_features"], "float32"
-                ),
-                "global_features": write_tensor_binary(
-                    out_dir, f"{case_dir}/global_features.bin", graph["global_features"], "float32"
-                ),
-                "reference_delta_u": write_tensor_binary(
-                    out_dir, f"{case_dir}/reference_delta_u.bin", output, "float32"
-                ),
+                "node_features": tensor_manifest(graph["node_features"], "float32"),
+                "edge_index": tensor_manifest(graph["edge_index"], "int64"),
+                "edge_features": tensor_manifest(graph["edge_features"], "float32"),
+                "global_features": tensor_manifest(graph["global_features"], "float32"),
+                "reference_delta_u": tensor_manifest(output, "float32"),
             }
             case = {
                 "name": name,
@@ -736,16 +770,13 @@ def run_fixtures(out_dir: Path) -> None:
             )
             cases.append(case)
 
-    # The manifest is the table of contents for the fixture directory. Paths are
-    # relative to fixtures.json so the generated build-tree directory can be
-    # moved as a unit.
+    # The manifest is self-contained except for the relative TorchScript path,
+    # so model and JSON can be moved or committed as a two-file fixture set.
     manifest = {
         "format_version": FIXTURE_FORMAT_VERSION,
-        "endianness": FIXTURE_ENDIANNESS,
         "model": {
             "path": MODEL_NAME,
         },
-        "training_metrics_path": TRAINING_METRICS_NAME,
         "metadata": metadata,
         "comparison": {
             "rtol": COMPARISON_RTOL,
@@ -762,6 +793,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path, required=True, help="Output directory for MGN graph diffusion artifacts")
     parser.add_argument(
+        "--fixture-dir",
+        type=Path,
+        help="Optional committed fixture directory to validate during feasibility mode",
+    )
+    parser.add_argument(
         "--mode",
         choices=("feasibility", "train", "fixtures", "all"),
         required=True,
@@ -770,7 +806,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.mode in ("feasibility", "all"):
-        run_feasibility(args.out_dir)
+        run_feasibility(args.out_dir, args.fixture_dir)
     if args.mode in ("train", "all"):
         run_train(args.out_dir)
     if args.mode in ("fixtures", "all"):

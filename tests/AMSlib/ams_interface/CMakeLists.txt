@@ -44,21 +44,20 @@ ADD_AMS_UNIT_TEST(AMS_GRAPH_FALLBACK ams_graph_fallback)
 BUILD_UNIT_TEST(ams_graph_surrogate test_graph_surrogate.cpp Catch2::Catch2 ../ams_catch_main.cpp)
 ADD_AMS_UNIT_TEST(AMS_GRAPH_SURROGATE ams_graph_surrogate)
 
-BUILD_UNIT_TEST(ams_graph_mgn_surrogate test_graph_mgn_surrogate.cpp)
+BUILD_UNIT_TEST(ams_graph_mgn_surrogate test_graph_mgn_surrogate.cpp Catch2::Catch2 ../ams_catch_main.cpp)
 target_link_libraries(ams_graph_mgn_surrogate PRIVATE nlohmann_json::nlohmann_json)
 target_compile_definitions(ams_graph_mgn_surrogate
   PRIVATE
-    AMS_MGN_DIFFUSION_FIXTURE_DIR="${AMS_TEST_ROOT}/models/mgn_graph_diffusion"
+    AMS_MGN_DIFFUSION_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../models/mgn_graph_diffusion"
 )
 
-# Final runtime check for the MGN diffusion workflow: fixtures mode must have
-# produced the TorchScript model and binary graph cases before AMS parity runs.
+# Normal parity testing consumes the checked-in TorchScript model and
+# self-contained JSON fixtures; training/export is an independent opt-in path.
 add_test(
   NAME MGN_DIFFUSION_AMS_PARITY
   COMMAND $<TARGET_FILE:ams_graph_mgn_surrogate> -s --reporter console
 )
 set_tests_properties(MGN_DIFFUSION_AMS_PARITY PROPERTIES
-  DEPENDS MGN_DIFFUSION_FIXTURES
   LABELS "AMS_INTERFACE;MGN_DIFFUSION"
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 )
