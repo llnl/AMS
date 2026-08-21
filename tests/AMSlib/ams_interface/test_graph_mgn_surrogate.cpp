@@ -173,10 +173,12 @@ static json loadManifest(const std::filesystem::path& fixture_dir)
   // If it is missing, the default parity test has no graph inputs or references.
   const std::filesystem::path manifest_path = fixture_dir / "fixtures.json";
   if (!std::filesystem::exists(manifest_path)) {
-    CATCH_FAIL("Missing MGN graph diffusion fixtures at "
-               << manifest_path
-               << ". Regenerate and commit mgn_graph_diffusion.pt and "
-                  "fixtures.json.");
+    CATCH_FAIL("Missing MGN graph diffusion fixtures at " << manifest_path
+                                                          << ". Regenerate and "
+                                                             "commit "
+                                                             "mgn_graph_"
+                                                             "diffusion.pt and "
+                                                             "fixtures.json.");
   }
 
   std::ifstream input(manifest_path);
@@ -245,14 +247,18 @@ static AMSHomogeneousGraph makeGraph(const json& graph_case)
 
   // edge_index is the only integer tensor. It must remain int64 because the
   // TorchScript model canonicalizes and indexes with 64-bit node ids.
-  auto node_features = readTensorValues<float>(
-      tensors.at("node_features"), "float32", {num_nodes, node_dim});
-  auto edge_index = readTensorValues<std::int64_t>(
-      tensors.at("edge_index"), "int64", {2, num_edges});
-  auto edge_features = readTensorValues<float>(
-      tensors.at("edge_features"), "float32", {num_edges, edge_dim});
-  auto global_features = readTensorValues<float>(
-      tensors.at("global_features"), "float32", {global_dim});
+  auto node_features = readTensorValues<float>(tensors.at("node_features"),
+                                               "float32",
+                                               {num_nodes, node_dim});
+  auto edge_index = readTensorValues<std::int64_t>(tensors.at("edge_index"),
+                                                   "int64",
+                                                   {2, num_edges});
+  auto edge_features = readTensorValues<float>(tensors.at("edge_features"),
+                                               "float32",
+                                               {num_edges, edge_dim});
+  auto global_features = readTensorValues<float>(tensors.at("global_features"),
+                                                 "float32",
+                                                 {global_dim});
 
   return AMSHomogeneousGraph(
       makeTensor<float>({toDim(num_nodes), toDim(node_dim)}, node_features),
@@ -270,10 +276,10 @@ static std::vector<float> loadReferenceDeltaU(const json& graph_case)
   const std::int64_t output_dim =
       graph_case.at("reference_output_dim").get<std::int64_t>();
   CATCH_REQUIRE(output_dim == kReferenceOutputDim);
-  return readTensorValues<float>(
-      graph_case.at("tensors").at("reference_delta_u"),
-      "float32",
-      {num_nodes, output_dim});
+  return readTensorValues<float>(graph_case.at("tensors").at("reference_delta_"
+                                                             "u"),
+                                 "float32",
+                                 {num_nodes, output_dim});
 }
 
 static void verifyDeltaU(const json& graph_case,
@@ -380,8 +386,7 @@ CATCH_TEST_CASE("AMSExecute homogeneous graph MGN diffusion surrogate",
       // Load one graph case from JSON, then run it through AMS. Each case has
       // its own N, E, input tensors, and reference output.
       AMSHomogeneousGraph graph = makeGraph(graph_case);
-      std::vector<float> reference_delta_u =
-          loadReferenceDeltaU(graph_case);
+      std::vector<float> reference_delta_u = loadReferenceDeltaU(graph_case);
 
       bool callback_invoked = false;
       // If the surrogate path fails, AMS would call the domain fallback. For
