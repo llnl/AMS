@@ -32,20 +32,31 @@ build_and_test() {
 
   cleanup
 
-  # We need custom Virtual env on Tuo because we use Spack python external
+  # We need custom Virtual env on LC machines because we use Spack python external
   export host=$(hostname)
   export host=${host//[0-9]/}
 
-  python3 ${CI_PROJECT_DIR}/scripts/make-spack-venv.py -e /usr/workspace/AMS/ams-spack-environments/1.1/${host}/ -o venv-${host}
+  venv_args=(
+    --env /usr/workspace/AMS/ams-spack-environments/1.1/${host}/
+    --with-system-flux-python
+    --output venv-${host}
+  )
+
+  python3 ${CI_PROJECT_DIR}/scripts/make-spack-venv.py "${venv_args[@]}"
   source venv-${host}/bin/activate
 
   if [[ "$SYS_TYPE" == "toss_4_x86_64_ib_cray" ]]; then
     C_COMPILER=amdclang
     CXX_COMPILER=amdclang++
-    # We cannot set CC and CXX as it will conflict with flux-python package..
   elif [[ "$SYS_TYPE" == "toss_4_x86_64_ib" ]]; then
     C_COMPILER=gcc
     CXX_COMPILER=g++
+  fi
+
+  if [[ "${WITH_WORKFLOW}" == "On" ]]; then
+    AMS_WORKFLOW_PIP_ARGS="--no-build-isolation"
+  else
+    AMS_WORKFLOW_PIP_ARGS=""
   fi
 
   mkdir build
@@ -59,6 +70,7 @@ build_and_test() {
     -DCMAKE_INSTALL_PREFIX=./install \
     -DENABLE_RMQ=Off \
     -DENABLE_WORKFLOW=${WITH_WORKFLOW} \
+    -DAMS_PIP_INSTALL_ARGS="${AMS_WORKFLOW_PIP_ARGS}" \
     -DENABLE_TESTS=On \
     -DCUDA_ARCH=${AMS_CUDA_ARCH} \
     -DENABLE_CUDA=${WITH_CUDA} \

@@ -1,0 +1,4 @@
+interface:
+  display_name: "AMS Build"
+  short_description: "Skill to build the AMS library"
+  default_prompt: "Use $ams-build to build AMS"

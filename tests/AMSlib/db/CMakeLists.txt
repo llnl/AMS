@@ -26,7 +26,7 @@ function(BUILD_UNIT_TEST exe source)
   endif()
 
   if (ENABLE_CALIPER)
-    message(STATUS "Building witth caliper ${exe}")
+    message(STATUS "Building with caliper ${exe}")
     target_link_libraries(${exe} PRIVATE caliper)
   endif()
 

@@ -282,7 +282,7 @@ jobs:
           export AMS_RMQ_CONFIG=$(cat ./rmq.json)
           cmake \
             -DBUILD_SHARED_LIBS=On \
-            -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
+            -DCMAKE_PREFIX_PATH=. \
             -DCMAKE_INSTALL_PREFIX=./install \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_CALIPER=On \
@@ -291,6 +291,7 @@ jobs:
             -DENABLE_TESTS=On \
             -DAMS_ENABLE_DEBUG=On \
             -DENABLE_WORKFLOW=On \
+            -DAMS_INSTALL_FLUX_PYTHON=On \
             -DENABLE_RMQ=On \
             -DTorch_DIR=$AMS_TORCH_PATH \
             -Dcaliper_DIR=$AMS_CALIPER_PATH \

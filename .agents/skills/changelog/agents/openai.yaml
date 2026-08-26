@@ -1,0 +1,4 @@
+interface:
+  display_name: "Changelog"
+  short_description: "Skill to build and maintain a CHANGELOG file"
+  default_prompt: "Use $changelog to build and/or update the CHANGELOG of a repository"
