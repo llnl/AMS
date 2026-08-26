@@ -232,3 +232,12 @@ if (ENABLE_TRAINING_TESTS)
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
   )
 endif()
+
+# Disable MGN diffusion tests if PyTorch is not available
+if(NOT Torch_FOUND)
+  set_tests_properties(MGN_DIFFUSION_FEASIBILITY PROPERTIES DISABLED TRUE)
+  if(ENABLE_TRAINING_TESTS)
+    set_tests_properties(MGN_DIFFUSION_TRAIN PROPERTIES DISABLED TRUE)
+    set_tests_properties(MGN_DIFFUSION_FIXTURES PROPERTIES DISABLED TRUE)
+  endif()
+endif()
