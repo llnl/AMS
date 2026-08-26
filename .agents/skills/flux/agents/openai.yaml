@@ -1,0 +1,4 @@
+interface:
+  display_name: "Flux Resource Manager"
+  short_description: "Skill to use the Flux resource manager"
+  default_prompt: "Use $flux to let the agents interact with Flux"

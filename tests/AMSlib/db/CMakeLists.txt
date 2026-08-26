@@ -15,7 +15,7 @@ function(BUILD_UNIT_TEST exe source)
   target_link_libraries(${exe} PRIVATE ${AMS_HDF5_LINK_TARGETS})
 
   if (ENABLE_CALIPER)
-    message(STATUS "Building witth caliper ${exe}")
+    message(STATUS "Building with caliper ${exe}")
     target_link_libraries(${exe} PRIVATE caliper)
   endif()
 

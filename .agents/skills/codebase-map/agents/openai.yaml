@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codebase Map"
+  short_description: "Skill to build and maintain a knowledge base of a code repository"
+  default_prompt: "Use $codebase-map to build and/or update the code knowledge database"
