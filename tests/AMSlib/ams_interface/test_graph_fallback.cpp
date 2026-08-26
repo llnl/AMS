@@ -124,9 +124,21 @@ CATCH_TEST_CASE("AMSHomogeneousGraph validates construction",
   AMSInit();
 
   CATCH_REQUIRE_NOTHROW(makeValidGraph());
+  {
+    AMSHomogeneousGraph graph(makeNodeFeatures(),
+                              makeEdgeIndex32(),
+                              makeEdgeFeatures());
+    CATCH_REQUIRE(graph.global_features.shape().size() == 1);
+    CATCH_REQUIRE(graph.global_features.shape()[0] == 0);
+  }
   CATCH_REQUIRE_NOTHROW(AMSHomogeneousGraph(makeNodeFeatures(),
-                                            makeEdgeIndex32(),
-                                            makeEdgeFeatures()));
+                                            makeEdgeIndex64(),
+                                            makeEdgeFeatures(),
+                                            makeTensor<float>({0})));
+  CATCH_REQUIRE_NOTHROW(AMSHomogeneousGraph(makeNodeFeatures(),
+                                            makeEdgeIndex64(),
+                                            makeEdgeFeatures(),
+                                            makeGlobalFeatures()));
 
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeTensor<int64_t>({3, 2}),
                                               makeEdgeIndex64(),
@@ -159,6 +171,11 @@ CATCH_TEST_CASE("AMSHomogeneousGraph validates construction",
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
                                               makeEdgeIndex64(),
                                               makeTensor<int64_t>({2, 1})),
+                          std::runtime_error);
+  CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
+                                              makeEdgeIndex64(),
+                                              makeEdgeFeatures(),
+                                              makeTensor<float>({1, 2})),
                           std::runtime_error);
   CATCH_REQUIRE_THROWS_AS(AMSHomogeneousGraph(makeNodeFeatures(),
                                               makeEdgeIndex64(),
