@@ -103,7 +103,8 @@ class AMSWorkflow
                       const ams::AMSHomogeneousGraphFields& outputs)
   {
     if (!DB) {
-      AMS_WARNING(Workflow, "Cannot store graph data: database not initialized");
+      AMS_WARNING(Workflow,
+                  "Cannot store graph data: database not initialized");
       return;
     }
 
@@ -121,7 +122,8 @@ class AMSWorkflow
                       const ams::AMSHeterogeneousGraphFields& outputs)
   {
     if (!DB) {
-      AMS_WARNING(Workflow, "Cannot store graph data: database not initialized");
+      AMS_WARNING(Workflow,
+                  "Cannot store graph data: database not initialized");
       return;
     }
 

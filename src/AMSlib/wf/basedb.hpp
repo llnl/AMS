@@ -156,7 +156,8 @@ public:
                      const ams::AMSHeterogeneousGraphFields& outputs)
   {
     THROW(std::runtime_error,
-          (this->type() + " database does not support heterogeneous graph storage")
+          (this->type() + " database does not support heterogeneous graph "
+                          "storage")
               .c_str());
   }
 

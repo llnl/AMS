@@ -8,10 +8,9 @@
 #ifndef __AMS_JSON_DB__
 #define __AMS_JSON_DB__
 
-#include <nlohmann/json.hpp>
-
 #include <experimental/filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 

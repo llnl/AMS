@@ -6,7 +6,6 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
-
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -73,7 +72,7 @@ CATCH_TEST_CASE(
   auto edge_idx = makeTensor<int64_t>({2, E});
   int64_t* ei = edge_idx.data<int64_t>();
   for (int64_t e = 0; e < E; e++) {
-    ei[e] = e;              // source in first half
+    ei[e] = e;                // source in first half
     ei[E + e] = (e + 1) % N;  // destination in second half
   }
 
@@ -100,20 +99,20 @@ CATCH_TEST_CASE(
 
   // Physics callback that returns float64 delta_u
   int callback_count = 0;
-  HomogeneousGraphDomainFn physics =
-      [&](const AMSHomogeneousGraph& g, AMSHomogeneousGraphFields& o) {
-        callback_count++;
+  HomogeneousGraphDomainFn physics = [&](const AMSHomogeneousGraph& g,
+                                         AMSHomogeneousGraphFields& o) {
+    callback_count++;
 
-        // Return float64 delta_u [N, 1] (MFEM precision)
-        const int64_t num_nodes = g.node_features.shape()[0];
-        auto delta = makeTensor<double>({num_nodes, 1});
-        double* data = delta.data<double>();
-        for (int64_t i = 0; i < num_nodes; i++) {
-          data[i] = static_cast<double>(i) * 0.123;
-        }
+    // Return float64 delta_u [N, 1] (MFEM precision)
+    const int64_t num_nodes = g.node_features.shape()[0];
+    auto delta = makeTensor<double>({num_nodes, 1});
+    double* data = delta.data<double>();
+    for (int64_t i = 0; i < num_nodes; i++) {
+      data[i] = static_cast<double>(i) * 0.123;
+    }
 
-        o.node_fields.insert("delta_u", std::move(delta));
-      };
+    o.node_fields.insert("delta_u", std::move(delta));
+  };
 
   // Execute with forced physics + storage
   AMSExecute(executor, physics, graph, outputs);
@@ -172,8 +171,9 @@ CATCH_TEST_CASE(
                 "int64");
   CATCH_REQUIRE(case0["tensors"]["edge_features"]["dtype"].get<std::string>() ==
                 "float32");
-  CATCH_REQUIRE(case0["tensors"]["global_features"]["dtype"].get<std::string>() ==
-                "float32");
+  CATCH_REQUIRE(
+      case0["tensors"]["global_features"]["dtype"].get<std::string>() ==
+      "float32");
 
   // Verify float64 delta_u (CRITICAL for MFEM precision)
   std::string delta_key = "delta_u";
@@ -204,11 +204,11 @@ CATCH_TEST_CASE(
 // A2 Tests: Complete Storage Test Coverage
 // ============================================================================
 
-CATCH_TEST_CASE("store_data=false returns physics output with zero recorded cases",
-                "[wf][graph][storage]")
+CATCH_TEST_CASE(
+    "store_data=false returns physics output with zero recorded cases",
+    "[wf][graph][storage]")
 {
-  fs::path test_dir =
-      fs::temp_directory_path() / "ams_graph_no_storage_test";
+  fs::path test_dir = fs::temp_directory_path() / "ams_graph_no_storage_test";
   fs::remove_all(test_dir);
   fs::create_directories(test_dir);
 
@@ -228,16 +228,24 @@ CATCH_TEST_CASE("store_data=false returns physics output with zero recorded case
 
   // Fill with identifiable values
   float* nf = node_feat.data<float>();
-  for (int i = 0; i < 10; i++) nf[i] = static_cast<float>(i) + 100.0f;
+  for (int i = 0; i < 10; i++)
+    nf[i] = static_cast<float>(i) + 100.0f;
 
   // Fill edge index (4 edges for 5 nodes)
   int64_t* ei = edge_idx.data<int64_t>();
-  ei[0] = 0; ei[1] = 1; ei[2] = 2; ei[3] = 3;  // sources
-  ei[4] = 1; ei[5] = 2; ei[6] = 3; ei[7] = 4;  // destinations
+  ei[0] = 0;
+  ei[1] = 1;
+  ei[2] = 2;
+  ei[3] = 3;  // sources
+  ei[4] = 1;
+  ei[5] = 2;
+  ei[6] = 3;
+  ei[7] = 4;  // destinations
 
   // Fill edge features
   float* ef = edge_feat.data<float>();
-  for (int i = 0; i < 4; i++) ef[i] = static_cast<float>(i) * 0.5f;
+  for (int i = 0; i < 4; i++)
+    ef[i] = static_cast<float>(i) * 0.5f;
 
   // Fill global features
   float* gf = global_feat.data<float>();
@@ -252,15 +260,16 @@ CATCH_TEST_CASE("store_data=false returns physics output with zero recorded case
   AMSHomogeneousGraphFields outputs;
 
   int callback_count = 0;
-  HomogeneousGraphDomainFn physics =
-      [&](const AMSHomogeneousGraph& g, AMSHomogeneousGraphFields& o) {
-        callback_count++;
-        const int64_t N = g.node_features.shape()[0];
-        auto delta = makeTensor<double>({N, 1});
-        double* data = delta.data<double>();
-        for (int64_t i = 0; i < N; i++) data[i] = static_cast<double>(i) + 200.0;
-        o.node_fields.insert("delta_u", std::move(delta));
-      };
+  HomogeneousGraphDomainFn physics = [&](const AMSHomogeneousGraph& g,
+                                         AMSHomogeneousGraphFields& o) {
+    callback_count++;
+    const int64_t N = g.node_features.shape()[0];
+    auto delta = makeTensor<double>({N, 1});
+    double* data = delta.data<double>();
+    for (int64_t i = 0; i < N; i++)
+      data[i] = static_cast<double>(i) + 200.0;
+    o.node_fields.insert("delta_u", std::move(delta));
+  };
 
   AMSExecute(executor, physics, graph, outputs);
 
@@ -290,8 +299,7 @@ CATCH_TEST_CASE("store_data=false returns physics output with zero recorded case
 CATCH_TEST_CASE("Multiple calls accumulate cases with distinguishable values",
                 "[wf][graph][storage]")
 {
-  fs::path test_dir =
-      fs::temp_directory_path() / "ams_graph_accumulation_test";
+  fs::path test_dir = fs::temp_directory_path() / "ams_graph_accumulation_test";
   fs::remove_all(test_dir);
   fs::create_directories(test_dir);
 
@@ -320,8 +328,12 @@ CATCH_TEST_CASE("Multiple calls accumulate cases with distinguishable values",
 
     // Fill edge index with valid connectivity (3 edges for 4 nodes)
     int64_t* ei = edge_idx.data<int64_t>();
-    ei[0] = 0; ei[1] = 1; ei[2] = 2;  // sources
-    ei[3] = 1; ei[4] = 2; ei[5] = 3;  // destinations
+    ei[0] = 0;
+    ei[1] = 1;
+    ei[2] = 2;  // sources
+    ei[3] = 1;
+    ei[4] = 2;
+    ei[5] = 3;  // destinations
 
     // Fill edge features
     float* ef = edge_feat.data<float>();
@@ -395,8 +407,8 @@ CATCH_TEST_CASE("Multiple calls accumulate cases with distinguishable values",
 CATCH_TEST_CASE("Heterogeneous graph typed storage",
                 "[.][wf][graph][storage][heterogeneous][future]")
 {
-  fs::path test_dir =
-      fs::temp_directory_path() / "ams_graph_heterogeneous_test";
+  fs::path test_dir = fs::temp_directory_path() / "ams_graph_heterogeneous_"
+                                                  "test";
   fs::remove_all(test_dir);
   fs::create_directories(test_dir);
 
@@ -414,14 +426,16 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
   auto& fluid_store = graph.getOrCreateNodeStore("fluid");
   auto fluid_feat = makeTensor<float>({5, 3});
   float* ff = fluid_feat.data<float>();
-  for (int i = 0; i < 15; i++) ff[i] = static_cast<float>(i) * 0.1f;
+  for (int i = 0; i < 15; i++)
+    ff[i] = static_cast<float>(i) * 0.1f;
   insertTensor(fluid_store, "features", std::move(fluid_feat));
 
   // Node type "solid": 3 nodes, 2 features
   auto& solid_store = graph.getOrCreateNodeStore("solid");
   auto solid_feat = makeTensor<float>({3, 2});
   float* sf = solid_feat.data<float>();
-  for (int i = 0; i < 6; i++) sf[i] = static_cast<float>(i) * 0.2f;
+  for (int i = 0; i < 6; i++)
+    sf[i] = static_cast<float>(i) * 0.2f;
   insertTensor(solid_store, "features", std::move(solid_feat));
 
   // Edge type: fluid->solid (4 edges)
@@ -429,8 +443,14 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
   auto& edge_store = graph.getOrCreateEdgeStore(edge_type);
   auto edge_idx = makeTensor<int64_t>({2, 4});
   int64_t* ei = edge_idx.data<int64_t>();
-  ei[0] = 0; ei[1] = 1; ei[2] = 2; ei[3] = 3;  // fluid nodes (sources)
-  ei[4] = 0; ei[5] = 1; ei[6] = 1; ei[7] = 2;  // solid nodes (destinations)
+  ei[0] = 0;
+  ei[1] = 1;
+  ei[2] = 2;
+  ei[3] = 3;  // fluid nodes (sources)
+  ei[4] = 0;
+  ei[5] = 1;
+  ei[6] = 1;
+  ei[7] = 2;  // solid nodes (destinations)
   insertTensor(edge_store, "edge_index", std::move(edge_idx));
 
   // Global features
@@ -443,24 +463,26 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
   AMSHeterogeneousGraphFields outputs;
 
   int callback_count = 0;
-  HeterogeneousGraphDomainFn physics =
-      [&](const AMSHeterogeneousGraph& g, AMSHeterogeneousGraphFields& o) {
-        callback_count++;
+  HeterogeneousGraphDomainFn physics = [&](const AMSHeterogeneousGraph& g,
+                                           AMSHeterogeneousGraphFields& o) {
+    callback_count++;
 
-        // Output for fluid nodes
-        auto& fluid_out = o.getOrCreateNodeStore("fluid");
-        auto fluid_delta = makeTensor<double>({5, 1});
-        double* fd = fluid_delta.data<double>();
-        for (int i = 0; i < 5; i++) fd[i] = static_cast<double>(i) + 10.0;
-        fluid_out.insert("delta_u", std::move(fluid_delta));
+    // Output for fluid nodes
+    auto& fluid_out = o.getOrCreateNodeStore("fluid");
+    auto fluid_delta = makeTensor<double>({5, 1});
+    double* fd = fluid_delta.data<double>();
+    for (int i = 0; i < 5; i++)
+      fd[i] = static_cast<double>(i) + 10.0;
+    fluid_out.insert("delta_u", std::move(fluid_delta));
 
-        // Output for solid nodes
-        auto& solid_out = o.getOrCreateNodeStore("solid");
-        auto solid_delta = makeTensor<double>({3, 1});
-        double* sd = solid_delta.data<double>();
-        for (int i = 0; i < 3; i++) sd[i] = static_cast<double>(i) + 20.0;
-        solid_out.insert("delta_u", std::move(solid_delta));
-      };
+    // Output for solid nodes
+    auto& solid_out = o.getOrCreateNodeStore("solid");
+    auto solid_delta = makeTensor<double>({3, 1});
+    double* sd = solid_delta.data<double>();
+    for (int i = 0; i < 3; i++)
+      sd[i] = static_cast<double>(i) + 20.0;
+    solid_out.insert("delta_u", std::move(solid_delta));
+  };
 
   AMSExecute(executor, physics, graph, outputs);
 
@@ -490,8 +512,10 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
   CATCH_REQUIRE(case0["tensors"].contains("target_node_solid__delta_u"));
 
   // Verify dtypes
-  CATCH_REQUIRE(case0["tensors"]["target_node_fluid__delta_u"]["dtype"] == "float64");
-  CATCH_REQUIRE(case0["tensors"]["target_node_solid__delta_u"]["dtype"] == "float64");
+  CATCH_REQUIRE(case0["tensors"]["target_node_fluid__delta_u"]["dtype"] ==
+                "float64");
+  CATCH_REQUIRE(case0["tensors"]["target_node_solid__delta_u"]["dtype"] ==
+                "float64");
 
   // Verify shapes
   auto fluid_shape = case0["tensors"]["target_node_fluid__delta_u"]["shape"];
@@ -532,14 +556,18 @@ CATCH_TEST_CASE("Surrogate success: zero callbacks and zero stored cases",
 
   // Fill all tensors
   float* nf = node_feat.data<float>();
-  for (int i = 0; i < 6; i++) nf[i] = static_cast<float>(i);
+  for (int i = 0; i < 6; i++)
+    nf[i] = static_cast<float>(i);
 
   int64_t* ei = edge_idx.data<int64_t>();
-  ei[0] = 0; ei[1] = 1;  // sources
-  ei[2] = 1; ei[3] = 2;  // destinations
+  ei[0] = 0;
+  ei[1] = 1;  // sources
+  ei[2] = 1;
+  ei[3] = 2;  // destinations
 
   float* ef = edge_feat.data<float>();
-  ef[0] = 0.5f; ef[1] = 1.0f;
+  ef[0] = 0.5f;
+  ef[1] = 1.0f;
 
   float* gf = global_feat.data<float>();
   gf[0] = 1.0f;
@@ -552,12 +580,12 @@ CATCH_TEST_CASE("Surrogate success: zero callbacks and zero stored cases",
   AMSHomogeneousGraphFields outputs;
 
   int callback_count = 0;
-  HomogeneousGraphDomainFn physics =
-      [&](const AMSHomogeneousGraph& g, AMSHomogeneousGraphFields& o) {
-        callback_count++;
-        auto delta = makeTensor<double>({3, 1});
-        o.node_fields.insert("delta_u", std::move(delta));
-      };
+  HomogeneousGraphDomainFn physics = [&](const AMSHomogeneousGraph& g,
+                                         AMSHomogeneousGraphFields& o) {
+    callback_count++;
+    auto delta = makeTensor<double>({3, 1});
+    o.node_fields.insert("delta_u", std::move(delta));
+  };
 
   AMSExecute(executor, physics, graph, outputs);
 
@@ -596,14 +624,20 @@ CATCH_TEST_CASE("No database configured: physics output returned without crash",
 
   // Fill all tensors
   float* nf = node_feat.data<float>();
-  for (int i = 0; i < 8; i++) nf[i] = static_cast<float>(i);
+  for (int i = 0; i < 8; i++)
+    nf[i] = static_cast<float>(i);
 
   int64_t* ei = edge_idx.data<int64_t>();
-  ei[0] = 0; ei[1] = 1; ei[2] = 2;  // sources
-  ei[3] = 1; ei[4] = 2; ei[5] = 3;  // destinations
+  ei[0] = 0;
+  ei[1] = 1;
+  ei[2] = 2;  // sources
+  ei[3] = 1;
+  ei[4] = 2;
+  ei[5] = 3;  // destinations
 
   float* ef = edge_feat.data<float>();
-  for (int i = 0; i < 3; i++) ef[i] = static_cast<float>(i) * 0.3f;
+  for (int i = 0; i < 3; i++)
+    ef[i] = static_cast<float>(i) * 0.3f;
 
   float* gf = global_feat.data<float>();
   gf[0] = 1.0f;
@@ -616,15 +650,16 @@ CATCH_TEST_CASE("No database configured: physics output returned without crash",
   AMSHomogeneousGraphFields outputs;
 
   int callback_count = 0;
-  HomogeneousGraphDomainFn physics =
-      [&](const AMSHomogeneousGraph& g, AMSHomogeneousGraphFields& o) {
-        callback_count++;
-        const int64_t N = g.node_features.shape()[0];
-        auto delta = makeTensor<double>({N, 1});
-        double* data = delta.data<double>();
-        for (int64_t i = 0; i < N; i++) data[i] = static_cast<double>(i) * 2.5;
-        o.node_fields.insert("delta_u", std::move(delta));
-      };
+  HomogeneousGraphDomainFn physics = [&](const AMSHomogeneousGraph& g,
+                                         AMSHomogeneousGraphFields& o) {
+    callback_count++;
+    const int64_t N = g.node_features.shape()[0];
+    auto delta = makeTensor<double>({N, 1});
+    double* data = delta.data<double>();
+    for (int64_t i = 0; i < N; i++)
+      data[i] = static_cast<double>(i) * 2.5;
+    o.node_fields.insert("delta_u", std::move(delta));
+  };
 
   // Should not crash even without DB
   CATCH_REQUIRE_NOTHROW(AMSExecute(executor, physics, graph, outputs));
@@ -647,7 +682,8 @@ CATCH_TEST_CASE("No database configured: physics output returned without crash",
 }
 
 CATCH_TEST_CASE(
-    "Surrogate rejection: model runs but rejected, physics executes once, exact output stored",
+    "Surrogate rejection: model runs but rejected, physics executes once, "
+    "exact output stored",
     "[wf][graph][storage][surrogate]")
 {
   // This test validates the rejection path: when a surrogate model runs
@@ -678,16 +714,26 @@ CATCH_TEST_CASE(
 
   // Fill with specific values to verify exact storage
   float* nf = node_feat.data<float>();
-  for (int i = 0; i < 12; i++) nf[i] = static_cast<float>(i) * 1.5f;
+  for (int i = 0; i < 12; i++)
+    nf[i] = static_cast<float>(i) * 1.5f;
 
   // Fill edge index (5 edges for 6 nodes)
   int64_t* ei = edge_idx.data<int64_t>();
-  ei[0] = 0; ei[1] = 1; ei[2] = 2; ei[3] = 3; ei[4] = 4;  // sources
-  ei[5] = 1; ei[6] = 2; ei[7] = 3; ei[8] = 4; ei[9] = 5;  // destinations
+  ei[0] = 0;
+  ei[1] = 1;
+  ei[2] = 2;
+  ei[3] = 3;
+  ei[4] = 4;  // sources
+  ei[5] = 1;
+  ei[6] = 2;
+  ei[7] = 3;
+  ei[8] = 4;
+  ei[9] = 5;  // destinations
 
   // Fill edge features
   float* ef = edge_feat.data<float>();
-  for (int i = 0; i < 5; i++) ef[i] = static_cast<float>(i) * 0.25f;
+  for (int i = 0; i < 5; i++)
+    ef[i] = static_cast<float>(i) * 0.25f;
 
   // Fill global features
   float* gf = global_feat.data<float>();
@@ -701,15 +747,16 @@ CATCH_TEST_CASE(
   AMSHomogeneousGraphFields outputs;
 
   int callback_count = 0;
-  HomogeneousGraphDomainFn physics =
-      [&](const AMSHomogeneousGraph& g, AMSHomogeneousGraphFields& o) {
-        callback_count++;
-        const int64_t N = g.node_features.shape()[0];
-        auto delta = makeTensor<double>({N, 1});
-        double* data = delta.data<double>();
-        for (int64_t i = 0; i < N; i++) data[i] = static_cast<double>(i) * 3.7;
-        o.node_fields.insert("delta_u", std::move(delta));
-      };
+  HomogeneousGraphDomainFn physics = [&](const AMSHomogeneousGraph& g,
+                                         AMSHomogeneousGraphFields& o) {
+    callback_count++;
+    const int64_t N = g.node_features.shape()[0];
+    auto delta = makeTensor<double>({N, 1});
+    double* data = delta.data<double>();
+    for (int64_t i = 0; i < N; i++)
+      data[i] = static_cast<double>(i) * 3.7;
+    o.node_fields.insert("delta_u", std::move(delta));
+  };
 
   AMSExecute(executor, physics, graph, outputs);
 
