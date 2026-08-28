@@ -231,13 +231,25 @@ source scripts/gitlab/setup-env.sh
 
 cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=Release \
+  -DWITH_CUDA=On \
+  -DMFEM_DIR=$AMS_MFEM_PATH \
+  -DWITH_MPI=On \
+  -DWITH_TESTS=Off \
+  -DTorch_DIR=$AMS_TORCH_PATH \
+  -DAMS_CUDA_ARCH=${AMS_CUDA_ARCH} \
+  -DWITH_AMS_DEBUG=On \
   -DBUILD_SHARED_LIBS=On \
   -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=On \
+  -DENABLE_TORCH=On \
   -DTorch_DIR="$AMS_TORCH_PATH" \
   -DHDF5_DIR="$AMS_HDF5_PATH" \
   -DAMS_FMT_DIR="$AMS_FMT_DIR" \
   -Dnlohmann_json_DIR="$AMS_NLOHMANN_JSON_DIR" \
   -Dtl-expected_DIR="$AMS_TL_EXPECTED_DIR"
+  ../
+
+$ make -j6
+$ make install
 ```
 
 ### 2. HIP / ROCm Build on Tuolumne or Tioga

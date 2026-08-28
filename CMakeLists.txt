@@ -43,6 +43,7 @@ option(ENABLE_TESTS "Build AMS tests" OFF)
 option(ENABLE_WORKFLOW "Install python drivers used by the outer workflow" OFF)
 option(ENABLE_RMQ "Use RabbitMQ as a database back end" OFF)
 option(ENABLE_PERFFLOWASPECT "Use PerfFlowAspect for profiling" OFF)
+option(ENABLE_TORCH "Enable PyTorch ML inference support" ON)
 option(AMS_ENABLE_DEBUG "Enable verbose AMS messages" OFF)
 option(AMS_INSTALL_FLUX_PYTHON
        "Install AMS Workflow Python package with the flux-python optional dependency"
@@ -234,6 +235,7 @@ if (AMS_DEFER_STATIC_TPL_RESOLUTION AND NOT BUILD_SHARED_LIBS)
           "AMS_DEFER_STATIC_TPL_RESOLUTION is ignored when BUILD_SHARED_LIBS=OFF.")
 endif()
 
+# set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 include(cmake/FetchAndAddFmt.cmake)
@@ -384,13 +386,48 @@ if (ENABLE_RMQ)
   find_package(libevent REQUIRED)
 endif()
 
-find_package(Torch REQUIRED)
-# This is annoying, torch populates all my cuda flags
-# and resets them
-set(CMAKE_CUDA_FLAGS "")
-set(CMAKE_CUDA_ARCHITECTURES ON)
+# ------------------------------------------------------------------------------
+if (ENABLE_TORCH)
+  find_package(Torch REQUIRED)
+  # This is annoying, torch populates all my cuda flags
+  # and resets them
+  set(CMAKE_CUDA_FLAGS "")
+  set(CMAKE_CUDA_ARCHITECTURES ON)
+  # Torch/PyTorch propagates C-only warning flags (e.g. -Wno-duplicate-decl-specifier)
+  # via imported target interface options and HIP variables.
+  # See: https://github.com/pytorch/pytorch/pull/164552
+  # Strip them so they don't get passed to the C++ compiler.
+  foreach(_target torch torch_cpu torch_cuda torch_hip c10 c10_cuda c10_hip)
+    if(TARGET ${_target})
+      get_target_property(_opts ${_target} INTERFACE_COMPILE_OPTIONS)
+      if(_opts)
+        string(REGEX REPLACE "-Wno-duplicate-decl-specifier" "" _opts "${_opts}")
+        set_target_properties(${_target} PROPERTIES INTERFACE_COMPILE_OPTIONS "${_opts}")
+      endif()
+    endif()
+  endforeach()
+  # Also strip from HIP-specific CMake variables that torch may have polluted
+  foreach(_var CMAKE_CXX_FLAGS CMAKE_HIP_FLAGS HIP_CXX_FLAGS HIP_HIPCC_FLAGS)
+    if(DEFINED ${_var})
+      string(REPLACE "-Wno-duplicate-decl-specifier" "" ${_var} "${${_var}}")
+    endif()
+  endforeach()
+  list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_TORCH__")
+else()
+  message(STATUS "PyTorch support disabled (ENABLE_TORCH=OFF). ML inference will not be available.")
+endif()
 
-if (ENABLE_PERFFLOWASPECT)
+# ------------------------------------------------------------------------------
+if (WITH_RZ)
+  find_package(MPI REQUIRED)
+  add_subdirectory(rz)
+  list(APPEND AMS_APP_INCLUDES "${RZ_AMS_INCLUDES}" "${MPI_INCLUDE_PATH}")
+  list(APPEND AMS_APP_LIB_DIRS "${RZ_AMS_LIBDIRS}")
+  list(APPEND AMS_APP_LIBRARIES "${RZ_AMS_LIBRARIES}" "${MPI_C_LIBRARIES}")
+  list(APPEND AMS_APP_DEFINES "${RZ_AMS_DEFINES}")
+endif()
+
+if (WITH_PERFFLOWASPECT)
   find_package(perfflowaspect CONFIG REQUIRED)
   list(APPEND AMS_APP_DEFINES "__AMS_ENABLE_PERFFLOWASPECT__")
   list(APPEND AMS_APP_LIB_DIRS "${PERFFLOWASPECT_LIB_DIR}")
@@ -400,9 +437,12 @@ endif()
 if (NOT BUILD_SHARED_LIBS)
   # Pin the location hints (see ams_append_pinned_dependency above)
   ams_append_pinned_dependency("find_dependency(fmt CONFIG REQUIRED)" fmt_DIR)
-  ams_append_pinned_dependency("find_dependency(Torch REQUIRED)" Torch_DIR)
   ams_append_pinned_dependency("find_dependency(nlohmann_json REQUIRED)" nlohmann_json_DIR)
   ams_append_pinned_dependency("find_dependency(tl-expected REQUIRED)" tl-expected_DIR)
+
+  if (ENABLE_TORCH)
+    ams_append_pinned_dependency("find_dependency(Torch CONFIG REQUIRED)" Torch_DIR)
+  endif()
   if (ENABLE_MPI)
     ams_append_package_dependency("find_dependency(MPI REQUIRED COMPONENTS C CXX)")
   endif()
@@ -413,7 +453,7 @@ if (NOT BUILD_SHARED_LIBS)
     ams_append_pinned_dependency("find_dependency(HIP REQUIRED)" hip_DIR)
   endif()
   if (ENABLE_CALIPER)
-    ams_append_pinned_dependency("find_dependency(caliper REQUIRED)" caliper_DIR)
+    ams_append_pinned_dependency("find_dependency(caliper CONFIG REQUIRED)" caliper_DIR)
   endif()
   if (AMS_HDF5_MODE STREQUAL "HDF5_STATIC_TARGET")
     ams_append_pinned_dependency("find_dependency(HDF5 CONFIG REQUIRED COMPONENTS C static)" HDF5_DIR)
