@@ -40,6 +40,12 @@ option(ENABLE_CUDA "Enable CUDA support" OFF)
 option(ENABLE_HIP "Enable HIP support" OFF)
 option(ENABLE_CALIPER "Use Caliper for profiling" OFF)
 option(ENABLE_TESTS "Build AMS tests" OFF)
+option(ENABLE_TRAINING_TESTS "Enable long-running model training tests" OFF)
+
+if(ENABLE_TRAINING_TESTS AND NOT ENABLE_TESTS)
+  message(WARNING "ENABLE_TRAINING_TESTS=ON requires ENABLE_TESTS=ON to have any effect")
+endif()
+
 option(ENABLE_WORKFLOW "Install python drivers used by the outer workflow" OFF)
 option(ENABLE_RMQ "Use RabbitMQ as a database back end" OFF)
 option(ENABLE_PERFFLOWASPECT "Use PerfFlowAspect for profiling" OFF)
