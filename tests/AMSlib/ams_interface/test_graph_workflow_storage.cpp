@@ -226,8 +226,9 @@ CATCH_TEST_CASE(
 CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
                 "[wf][graph][storage]")
 {
-  fs::path test_dir = fs::temp_directory_path() / "ams_graph_empty_globals_"
-                                                  "test";
+  fs::path test_dir = fs::temp_directory_path() /
+                      "ams_graph_empty_globals_"
+                      "test";
   fs::remove_all(test_dir);
   fs::create_directories(test_dir);
 
@@ -242,11 +243,20 @@ CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
   auto edge_idx = makeTensor<int64_t>({2, 2});
   auto edge_feat = makeTensor<float>({2, 1});
 
+  float* node_data = node_feat.data<float>();
+  for (int i = 0; i < 6; ++i) {
+    node_data[i] = static_cast<float>(i);
+  }
+
   int64_t* edge_data = edge_idx.data<int64_t>();
   edge_data[0] = 0;
   edge_data[1] = 1;
   edge_data[2] = 1;
   edge_data[3] = 2;
+
+  float* edge_feature_data = edge_feat.data<float>();
+  edge_feature_data[0] = 0.5f;
+  edge_feature_data[1] = 1.0f;
 
   AMSHomogeneousGraph graph(std::move(node_feat),
                             std::move(edge_idx),
@@ -258,6 +268,10 @@ CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
   HomogeneousGraphDomainFn physics = [](const AMSHomogeneousGraph& g,
                                         AMSHomogeneousGraphFields& o) {
     auto delta = makeTensor<double>({g.node_features.shape()[0], 1});
+    double* delta_data = delta.data<double>();
+    for (int64_t i = 0; i < g.node_features.shape()[0]; ++i) {
+      delta_data[i] = static_cast<double>(i);
+    }
     o.node_fields.insert("delta_u", std::move(delta));
   };
 
