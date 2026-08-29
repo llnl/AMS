@@ -6,9 +6,14 @@
  */
 
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "AMS.h"
 #include "AMSGraph.hpp"
@@ -83,8 +88,8 @@ CATCH_TEST_CASE(
     ef[e] = static_cast<float>(e) * 0.01f;
   }
 
-  // Global features [1, 2] - float32
-  auto global_feat = makeTensor<float>({1, 2});
+  // Global features [2] - float32
+  auto global_feat = makeTensor<float>({2});
   float* gf = global_feat.data<float>();
   gf[0] = 0.01f;   // dt
   gf[1] = 0.123f;  // time_n
@@ -156,6 +161,12 @@ CATCH_TEST_CASE(
 
   // CRITICAL: Verify global_features stored
   CATCH_REQUIRE(case0["tensors"].contains("global_features"));
+  CATCH_REQUIRE(case0["global_feature_dim"].get<int64_t>() == 2);
+  CATCH_REQUIRE(case0["tensors"]["global_features"]["shape"] ==
+                nlohmann::json::array({2}));
+  CATCH_REQUIRE(
+      case0["tensors"]["global_features"]["byte_size"].get<size_t>() ==
+      2 * sizeof(float));
 
   // Verify output field stored
   // Note: Field name may be "delta_u" or "target_delta_u" - discover actual
@@ -174,6 +185,18 @@ CATCH_TEST_CASE(
   CATCH_REQUIRE(
       case0["tensors"]["global_features"]["dtype"].get<std::string>() ==
       "float32");
+
+  std::string global_path =
+      case0["tensors"]["global_features"]["path"].get<std::string>();
+  std::ifstream global_file(test_dir / global_path, std::ios::binary);
+  CATCH_REQUIRE(global_file.is_open());
+  float stored_globals[2] = {};
+  global_file.read(reinterpret_cast<char*>(stored_globals),
+                   static_cast<std::streamsize>(sizeof(stored_globals)));
+  CATCH_REQUIRE(global_file.gcount() ==
+                static_cast<std::streamsize>(sizeof(stored_globals)));
+  CATCH_REQUIRE(stored_globals[0] == 0.01f);
+  CATCH_REQUIRE(stored_globals[1] == 0.123f);
 
   // Verify float64 delta_u (CRITICAL for MFEM precision)
   std::string delta_key = "delta_u";
@@ -200,6 +223,62 @@ CATCH_TEST_CASE(
             << std::endl;
 }
 
+CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
+                "[wf][graph][storage]")
+{
+  fs::path test_dir = fs::temp_directory_path() / "ams_graph_empty_globals_"
+                                                  "test";
+  fs::remove_all(test_dir);
+  fs::create_directories(test_dir);
+
+  AMSInit();
+  AMSConfigureFSDatabase(AMSDBType::AMS_JSON, test_dir.string().c_str());
+
+  AMSCAbstrModel recorder =
+      AMSRegisterAbstractModel("empty_globals_domain", -1.0, "", true);
+  AMSExecutor executor = AMSCreateExecutor(recorder, 0, 1);
+
+  auto node_feat = makeTensor<float>({3, 2});
+  auto edge_idx = makeTensor<int64_t>({2, 2});
+  auto edge_feat = makeTensor<float>({2, 1});
+
+  int64_t* edge_data = edge_idx.data<int64_t>();
+  edge_data[0] = 0;
+  edge_data[1] = 1;
+  edge_data[2] = 1;
+  edge_data[3] = 2;
+
+  AMSHomogeneousGraph graph(std::move(node_feat),
+                            std::move(edge_idx),
+                            std::move(edge_feat));
+  CATCH_REQUIRE(graph.global_features.shape().size() == 1);
+  CATCH_REQUIRE(graph.global_features.shape()[0] == 0);
+
+  AMSHomogeneousGraphFields outputs;
+  HomogeneousGraphDomainFn physics = [](const AMSHomogeneousGraph& g,
+                                        AMSHomogeneousGraphFields& o) {
+    auto delta = makeTensor<double>({g.node_features.shape()[0], 1});
+    o.node_fields.insert("delta_u", std::move(delta));
+  };
+
+  AMSExecute(executor, physics, graph, outputs);
+  AMSDestroyExecutor(executor);
+
+  std::ifstream manifest_file(test_dir / "manifest.json");
+  CATCH_REQUIRE(manifest_file.is_open());
+  nlohmann::json manifest;
+  manifest_file >> manifest;
+
+  CATCH_REQUIRE(manifest["cases"].size() == 1);
+  const auto& stored_case = manifest["cases"][0];
+  CATCH_REQUIRE(stored_case["global_feature_dim"].get<int64_t>() == 0);
+  CATCH_REQUIRE_FALSE(stored_case["tensors"].contains("global_features"));
+  CATCH_REQUIRE_FALSE(
+      fs::exists(test_dir / "step_000000" / "global_features.bin"));
+
+  fs::remove_all(test_dir);
+}
+
 // ============================================================================
 // A2 Tests: Complete Storage Test Coverage
 // ============================================================================
@@ -224,7 +303,7 @@ CATCH_TEST_CASE(
   auto node_feat = makeTensor<float>({5, 2});
   auto edge_idx = makeTensor<int64_t>({2, 4});
   auto edge_feat = makeTensor<float>({4, 1});
-  auto global_feat = makeTensor<float>({1, 2});
+  auto global_feat = makeTensor<float>({2});
 
   // Fill with identifiable values
   float* nf = node_feat.data<float>();
@@ -318,7 +397,7 @@ CATCH_TEST_CASE("Multiple calls accumulate cases with distinguishable values",
     auto node_feat = makeTensor<float>({4, 2});
     auto edge_idx = makeTensor<int64_t>({2, 3});
     auto edge_feat = makeTensor<float>({3, 1});
-    auto global_feat = makeTensor<float>({1, 1});
+    auto global_feat = makeTensor<float>({1});
 
     // Fill node features with call-specific values
     float* nf = node_feat.data<float>();
@@ -407,8 +486,9 @@ CATCH_TEST_CASE("Multiple calls accumulate cases with distinguishable values",
 CATCH_TEST_CASE("Heterogeneous graph typed storage",
                 "[.][wf][graph][storage][heterogeneous][future]")
 {
-  fs::path test_dir = fs::temp_directory_path() / "ams_graph_heterogeneous_"
-                                                  "test";
+  fs::path test_dir = fs::temp_directory_path() /
+                      "ams_graph_heterogeneous_"
+                      "test";
   fs::remove_all(test_dir);
   fs::create_directories(test_dir);
 
@@ -473,7 +553,7 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
     double* fd = fluid_delta.data<double>();
     for (int i = 0; i < 5; i++)
       fd[i] = static_cast<double>(i) + 10.0;
-    fluid_out.insert("delta_u", std::move(fluid_delta));
+    insertTensor(fluid_out, "delta_u", std::move(fluid_delta));
 
     // Output for solid nodes
     auto& solid_out = o.getOrCreateNodeStore("solid");
@@ -481,14 +561,14 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
     double* sd = solid_delta.data<double>();
     for (int i = 0; i < 3; i++)
       sd[i] = static_cast<double>(i) + 20.0;
-    solid_out.insert("delta_u", std::move(solid_delta));
+    insertTensor(solid_out, "delta_u", std::move(solid_delta));
   };
 
   AMSExecute(executor, physics, graph, outputs);
 
   CATCH_REQUIRE(callback_count == 1);
-  CATCH_REQUIRE(outputs.node_stores.find("fluid") != nullptr);
-  CATCH_REQUIRE(outputs.node_stores.find("solid") != nullptr);
+  CATCH_REQUIRE(outputs.node_stores.find("fluid") != outputs.node_stores.end());
+  CATCH_REQUIRE(outputs.node_stores.find("solid") != outputs.node_stores.end());
 
   // Note: Not destroying executor to avoid triggering AMSFinalize between tests
   // The executor will be cleaned up at program exit
@@ -552,7 +632,7 @@ CATCH_TEST_CASE("Surrogate success: zero callbacks and zero stored cases",
   auto node_feat = makeTensor<float>({3, 2});
   auto edge_idx = makeTensor<int64_t>({2, 2});
   auto edge_feat = makeTensor<float>({2, 1});
-  auto global_feat = makeTensor<float>({1, 1});
+  auto global_feat = makeTensor<float>({1});
 
   // Fill all tensors
   float* nf = node_feat.data<float>();
@@ -620,7 +700,7 @@ CATCH_TEST_CASE("No database configured: physics output returned without crash",
   auto node_feat = makeTensor<float>({4, 2});
   auto edge_idx = makeTensor<int64_t>({2, 3});
   auto edge_feat = makeTensor<float>({3, 1});
-  auto global_feat = makeTensor<float>({1, 1});
+  auto global_feat = makeTensor<float>({1});
 
   // Fill all tensors
   float* nf = node_feat.data<float>();
@@ -710,7 +790,7 @@ CATCH_TEST_CASE(
   auto node_feat = makeTensor<float>({6, 2});
   auto edge_idx = makeTensor<int64_t>({2, 5});
   auto edge_feat = makeTensor<float>({5, 1});
-  auto global_feat = makeTensor<float>({1, 1});
+  auto global_feat = makeTensor<float>({1});
 
   // Fill with specific values to verify exact storage
   float* nf = node_feat.data<float>();

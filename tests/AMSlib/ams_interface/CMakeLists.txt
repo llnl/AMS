@@ -44,6 +44,10 @@ ADD_AMS_UNIT_TEST(AMS_GRAPH_FALLBACK ams_graph_fallback)
 BUILD_UNIT_TEST(ams_graph_surrogate test_graph_surrogate.cpp Catch2::Catch2 ../ams_catch_main.cpp)
 ADD_AMS_UNIT_TEST(AMS_GRAPH_SURROGATE ams_graph_surrogate)
 
+BUILD_UNIT_TEST(ams_graph_workflow_storage test_graph_workflow_storage.cpp Catch2::Catch2 ../ams_catch_main.cpp)
+target_link_libraries(ams_graph_workflow_storage PRIVATE nlohmann_json::nlohmann_json)
+ADD_AMS_UNIT_TEST(AMS_GRAPH_WORKFLOW_STORAGE ams_graph_workflow_storage)
+
 BUILD_UNIT_TEST(ams_graph_mgn_surrogate test_graph_mgn_surrogate.cpp Catch2::Catch2 ../ams_catch_main.cpp)
 target_link_libraries(ams_graph_mgn_surrogate PRIVATE nlohmann_json::nlohmann_json)
 target_compile_definitions(ams_graph_mgn_surrogate

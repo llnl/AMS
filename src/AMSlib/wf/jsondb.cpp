@@ -404,10 +404,9 @@ void JSONDB::store(const ams::AMSHomogeneousGraph& graph,
     edge_feature_dim = ef_shape[1];
   }
 
-  if (graph.global_features.has_value() &&
-      graph.global_features.value().elements() > 0) {
-    auto gf_shape = graph.global_features.value().shape();
-    global_feature_dim = gf_shape[1];
+  if (graph.global_features.elements() > 0) {
+    auto gf_shape = graph.global_features.shape();
+    global_feature_dim = gf_shape[0];
   }
 
   // Validate edge_index
@@ -463,18 +462,15 @@ void JSONDB::store(const ams::AMSHomogeneousGraph& graph,
   }
 
   // Write global_features
-  if (global_feature_dim > 0 && graph.global_features.has_value()) {
-    if (json_mode_ == "binary") {
-      std::string rel_path = case_dir + "/global_features.bin";
-      size_t byte_size =
-          writeBinaryTensor(graph.global_features.value(), rel_path);
+  if (global_feature_dim > 0 && json_mode_ == "binary") {
+    std::string rel_path = case_dir + "/global_features.bin";
+    size_t byte_size = writeBinaryTensor(graph.global_features, rel_path);
 
-      tensors_json["global_features"] = {
-          {"path", rel_path},
-          {"dtype", dtypeToString(graph.global_features.value().dType())},
-          {"shape", std::vector<int64_t>{1, global_feature_dim}},
-          {"byte_size", byte_size}};
-    }
+    tensors_json["global_features"] = {
+        {"path", rel_path},
+        {"dtype", dtypeToString(graph.global_features.dType())},
+        {"shape", std::vector<int64_t>{global_feature_dim}},
+        {"byte_size", byte_size}};
   }
 
   // Write targets from outputs.node_fields
