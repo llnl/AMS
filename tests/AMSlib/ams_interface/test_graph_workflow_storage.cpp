@@ -557,7 +557,7 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
   AMSHeterogeneousGraphFields outputs;
 
   int callback_count = 0;
-  HeterogeneousGraphDomainFn physics = [&](const AMSHeterogeneousGraph& g,
+  HeterogeneousGraphDomainFn physics = [&](const AMSHeterogeneousGraph&,
                                            AMSHeterogeneousGraphFields& o) {
     callback_count++;
 
@@ -567,7 +567,7 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
     double* fd = fluid_delta.data<double>();
     for (int i = 0; i < 5; i++)
       fd[i] = static_cast<double>(i) + 10.0;
-    insertTensor(fluid_out, "delta_u", std::move(fluid_delta));
+    fluid_out.insert("delta_u", std::move(fluid_delta));
 
     // Output for solid nodes
     auto& solid_out = o.getOrCreateNodeStore("solid");
@@ -575,7 +575,7 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
     double* sd = solid_delta.data<double>();
     for (int i = 0; i < 3; i++)
       sd[i] = static_cast<double>(i) + 20.0;
-    insertTensor(solid_out, "delta_u", std::move(solid_delta));
+    solid_out.insert("delta_u", std::move(solid_delta));
   };
 
   AMSExecute(executor, physics, graph, outputs);
@@ -677,7 +677,7 @@ CATCH_TEST_CASE("Surrogate success: zero callbacks and zero stored cases",
   HomogeneousGraphDomainFn physics = [&](const AMSHomogeneousGraph& g,
                                          AMSHomogeneousGraphFields& o) {
     callback_count++;
-    auto delta = makeTensor<double>({3, 1});
+    auto delta = makeTensor<double>({g.node_features.shape()[0], 1});
     o.node_fields.insert("delta_u", std::move(delta));
   };
 

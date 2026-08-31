@@ -139,8 +139,9 @@ public:
    * @param[in] graph The homogeneous graph containing input features
    * @param[in] outputs The graph fields containing output/target data
    */
-  virtual void store(const ams::AMSHomogeneousGraph& graph,
-                     const ams::AMSHomogeneousGraphFields& outputs)
+  virtual void store(
+      [[maybe_unused]] const ams::AMSHomogeneousGraph& graph,
+      [[maybe_unused]] const ams::AMSHomogeneousGraphFields& outputs)
   {
     THROW(std::runtime_error,
           (this->type() + " database does not support graph storage").c_str());
@@ -152,8 +153,9 @@ public:
    * @param[in] graph The heterogeneous graph containing input features
    * @param[in] outputs The graph fields containing output/target data
    */
-  virtual void store(const ams::AMSHeterogeneousGraph& graph,
-                     const ams::AMSHeterogeneousGraphFields& outputs)
+  virtual void store(
+      [[maybe_unused]] const ams::AMSHeterogeneousGraph& graph,
+      [[maybe_unused]] const ams::AMSHeterogeneousGraphFields& outputs)
   {
     THROW(std::runtime_error,
           (this->type() + " database does not support heterogeneous graph "
@@ -1595,8 +1597,9 @@ public:
     flush(100, 100);
     _publishingManager->stop();
     auto size = MessagesBuffer::getInstance().size();
-    if (size != 0)
+    if (size != 0) {
       AMS_DBG(RMQInterface, "Rank {} did not ack {} messages", _rId, size)
+    }
   }
 
   ~RMQInterface()

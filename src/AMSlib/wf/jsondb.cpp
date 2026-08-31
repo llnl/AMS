@@ -511,8 +511,8 @@ void JSONDB::store(const ams::AMSHomogeneousGraph& graph,
           num_edges);
 }
 
-void JSONDB::store(const ams::AMSHeterogeneousGraph& graph,
-                   const ams::AMSHeterogeneousGraphFields& outputs)
+void JSONDB::store(const ams::AMSHeterogeneousGraph&,
+                   const ams::AMSHeterogeneousGraphFields&)
 {
   // Heterogeneous graph storage not yet implemented
   THROW(std::runtime_error,
