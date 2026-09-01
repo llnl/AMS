@@ -28,16 +28,18 @@ namespace db
 /**
  * @brief JSON database backend for storing both tensor and graph data.
  *
- * This class provides a JSON-based storage backend that can serialize:
- * - Flat tensors (via store(ArrayRef<Tensor>, ArrayRef<Tensor>))
- * - Homogeneous graphs (via store(AMSHomogeneousGraph, AMSHomogeneousGraphFields))
- * - Heterogeneous graphs (via store(AMSHeterogeneousGraph, AMSHeterogeneousGraphFields))
+ * This class provides a JSON-based storage backend that can serialize flat
+ * tensors and homogeneous graphs. Heterogeneous graph storage is not yet
+ * supported.
  *
  * Supports two modes:
  * - "binary": Binary tensor files + JSON manifest (default, efficient)
- * - "json": Pure JSON with base64-encoded binary data (human-readable)
+ * - "json": Self-contained JSON with base64-encoded tensor data
  *
  * Output format is compatible with PyTorch Geometric data loaders.
+ *
+ * @note Case and step directories are not rank-scoped. Concurrent MPI ranks
+ * writing to the same output directory are not currently supported.
  */
 class JSONDB final : public FileDB
 {
@@ -80,6 +82,13 @@ private:
   nlohmann::json encodeBase64Tensor(const AMSTensor& tensor);
 
   /**
+   * @brief Encode a PyTorch tensor as base64 JSON (for pure JSON mode)
+   * @param[in] tensor The PyTorch tensor to encode
+   * @return JSON object with encoded data
+   */
+  nlohmann::json encodeBase64Tensor(const torch::Tensor& tensor);
+
+  /**
    * @brief Validate edge_index tensor format
    * @param[in] edge_index Edge connectivity tensor [2, E]
    * @param[in] num_nodes Number of nodes in graph
@@ -100,13 +109,6 @@ private:
    */
   std::string torchDTypeToString(torch::Dtype dtype) const;
 
-  /**
-   * @brief Get byte size for a data type
-   * @param[in] dtype The data type enum
-   * @return Size in bytes
-   */
-  size_t dtypeSize(AMSDType dtype) const;
-
 public:
   /**
    * @brief Construct a JSON database
@@ -123,7 +125,7 @@ public:
   /**
    * @brief Destructor - finalizes manifest if not already done
    */
-  ~JSONDB();
+  ~JSONDB() override;
 
   // Delete copy/move constructors
   JSONDB(const JSONDB&) = delete;
@@ -154,9 +156,9 @@ public:
              const ams::AMSHeterogeneousGraphFields& outputs) override;
 
   /**
-   * @brief Finalize and write manifest.json
+   * @brief Finalize and write the JSON manifest
    */
-  void finalize();
+  void close() override;
 
   /**
    * @brief Set application metadata
