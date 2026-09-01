@@ -31,8 +31,6 @@
 #include "wf/resource_manager.hpp"
 #include "wf/utils.hpp"
 
-namespace fs = std::experimental::filesystem;
-
 // Forward declarations for graph types
 namespace ams
 {
@@ -213,29 +211,29 @@ public:
          uint64_t rId)
       : BaseDB(rId)
   {
-    fs::path Path(path);
+    std::experimental::filesystem::path Path(path);
     std::error_code ec;
 
-    if (!fs::exists(Path, ec)) {
+    if (!std::experimental::filesystem::exists(Path, ec)) {
       std::cerr << "[ERROR]: Path:'" << path << "' does not exist\n";
       exit(-1);
     }
 
     checkError(ec);
 
-    if (!fs::is_directory(Path, ec)) {
+    if (!std::experimental::filesystem::is_directory(Path, ec)) {
       std::cerr << "[ERROR]: Path:'" << path << "' is a file NOT a directory\n";
       exit(-1);
     }
 
-    Path = fs::absolute(Path);
+    Path = std::experimental::filesystem::absolute(Path);
     fp = Path.string();
 
     // We can now create the filename
     std::string dbfn(fn + "_");
     dbfn += std::to_string(rId) + suffix;
-    Path /= fs::path(dbfn);
-    this->fn = fs::absolute(Path).string();
+    Path /= std::experimental::filesystem::path(dbfn);
+    this->fn = std::experimental::filesystem::absolute(Path).string();
     AMS_DBG(DB, "File System DB writes to file {}", this->fn)
   }
 
@@ -1707,10 +1705,10 @@ public:
   bool connect(std::string& path)
   {
     connected = true;
-    fs::path Path(path);
+    std::experimental::filesystem::path Path(path);
     std::error_code ec;
 
-    if (!fs::exists(Path, ec)) {
+    if (!std::experimental::filesystem::exists(Path, ec)) {
       THROW(std::runtime_error,
             ("Path: :'" + path + "' does not exist").c_str());
       exit(-1);
@@ -1916,10 +1914,10 @@ public:
                           std::string& routing_key,
                           bool update_surrogate)
   {
-    fs::path Path(rmq_cert);
+    std::experimental::filesystem::path Path(rmq_cert);
     std::error_code ec;
     AMS_CWARNING(AMS,
-                 !fs::exists(Path, ec),
+                 !std::experimental::filesystem::exists(Path, ec),
                  "Certificate file '{}' for RMQ server does not exist. AMS "
                  "will "
                  "try to connect without it.",

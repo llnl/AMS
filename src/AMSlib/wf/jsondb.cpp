@@ -10,6 +10,7 @@
 #include <torch/torch.h>
 
 #include <cstring>
+#include <experimental/filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -25,6 +26,8 @@ using namespace ams;
 
 namespace
 {
+
+namespace fs = std::experimental::filesystem;
 
 // Check system endianness
 bool isLittleEndian()
@@ -337,7 +340,7 @@ void JSONDB::store(ArrayRef<torch::Tensor> Inputs,
                          {"dtype", torchDTypeToString(Inputs[i].scalar_type())},
                          {"shape", shape},
                          {"byte_size", byte_size}};
-    } else { // Pure json mode
+    } else {  // Pure json mode
       tensors_json[name] = encodeBase64Tensor(Inputs[i]);
     }
   }
@@ -361,7 +364,7 @@ void JSONDB::store(ArrayRef<torch::Tensor> Inputs,
                           torchDTypeToString(Outputs[i].scalar_type())},
                          {"shape", shape},
                          {"byte_size", byte_size}};
-    } else { // Pure json mode
+    } else {  // Pure json mode
       tensors_json[name] = encodeBase64Tensor(Outputs[i]);
     }
   }
@@ -431,7 +434,7 @@ void JSONDB::store(const ams::AMSHomogeneousGraph& graph,
         {"dtype", dtypeToString(graph.node_features.dType())},
         {"shape", std::vector<int64_t>{num_nodes, node_feature_dim}},
         {"byte_size", byte_size}};
-  } else { // Pure json mode
+  } else {  // Pure json mode
     tensors_json["node_features"] = encodeBase64Tensor(graph.node_features);
   }
 
@@ -444,7 +447,7 @@ void JSONDB::store(const ams::AMSHomogeneousGraph& graph,
                                   {"dtype", "int64"},
                                   {"shape", std::vector<int64_t>{2, num_edges}},
                                   {"byte_size", byte_size}};
-  } else { // Pure json mode
+  } else {  // Pure json mode
     tensors_json["edge_index"] = encodeBase64Tensor(graph.edge_index);
   }
 
@@ -459,7 +462,7 @@ void JSONDB::store(const ams::AMSHomogeneousGraph& graph,
           {"dtype", dtypeToString(graph.edge_features.dType())},
           {"shape", std::vector<int64_t>{num_edges, edge_feature_dim}},
           {"byte_size", byte_size}};
-    } else { // Pure json mode
+    } else {  // Pure json mode
       tensors_json["edge_features"] = encodeBase64Tensor(graph.edge_features);
     }
   }
@@ -475,7 +478,7 @@ void JSONDB::store(const ams::AMSHomogeneousGraph& graph,
           {"dtype", dtypeToString(graph.global_features.dType())},
           {"shape", std::vector<int64_t>{global_feature_dim}},
           {"byte_size", byte_size}};
-    } else { // Pure json mode
+    } else {  // Pure json mode
       tensors_json["global_features"] =
           encodeBase64Tensor(graph.global_features);
     }
@@ -501,7 +504,7 @@ void JSONDB::store(const ams::AMSHomogeneousGraph& graph,
           {"dtype", dtypeToString(delta_u->dType())},
           {"shape", std::vector<int64_t>{num_nodes, target_dim}},
           {"byte_size", byte_size}};
-    } else { // Pure json mode
+    } else {  // Pure json mode
       tensors_json["target_delta_u"] = encodeBase64Tensor(*delta_u);
     }
   }

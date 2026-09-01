@@ -8,7 +8,6 @@
 #ifndef __AMS_JSON_DB__
 #define __AMS_JSON_DB__
 
-#include <experimental/filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -17,8 +16,6 @@
 #include "AMSGraph.hpp"
 #include "AMSTensor.hpp"
 #include "wf/basedb.hpp"
-
-namespace fs = std::experimental::filesystem;
 
 namespace ams
 {
