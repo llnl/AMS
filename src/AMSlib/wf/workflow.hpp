@@ -482,9 +482,7 @@ public:
     CALIPER(CALI_MARK_END("PHYSICS MODULE");)
 
     // Store data after physics computation
-    if (DB) {
-      storeGraphData(graph_input, outputs);
-    }
+    storeGraphData(graph_input, outputs);
 
     CALIPER(CALI_MARK_END("AMSEvaluateGraph");)
   }
@@ -508,9 +506,7 @@ public:
     CALIPER(CALI_MARK_END("PHYSICS MODULE");)
 
     // Store data after physics computation
-    if (DB) {
-      storeGraphData(graph_input, outputs);
-    }
+    storeGraphData(graph_input, outputs);
 
     CALIPER(CALI_MARK_END("AMSEvaluateGraph");)
   }
