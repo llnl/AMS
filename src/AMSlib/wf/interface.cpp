@@ -491,26 +491,6 @@ void callAMS(ams::AMSWorkflow* executor,
 }
 
 // ============================================================================
-// Graph-based callApplication overloads
-// ============================================================================
-
-void callApplication(ams::HomogeneousGraphDomainFn CallBack,
-                     const ams::AMSHomogeneousGraph& graph,
-                     ams::AMSHomogeneousGraphFields& outputs)
-{
-  // Directly invoke the user's physics callback with graph-native types
-  CallBack(graph, outputs);
-}
-
-void callApplication(ams::HeterogeneousGraphDomainFn CallBack,
-                     const ams::AMSHeterogeneousGraph& graph,
-                     ams::AMSHeterogeneousGraphFields& outputs)
-{
-  // Directly invoke the user's physics callback with graph-native types
-  CallBack(graph, outputs);
-}
-
-// ============================================================================
 // Graph surrogate execution (in ams namespace for friend access)
 // ============================================================================
 
