@@ -14,7 +14,6 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -99,6 +98,35 @@ static void requireInlineTensor(const nlohmann::json& tensor,
       std::memcmp(decoded.data(), expected_data, expected_byte_size) == 0);
 }
 
+static void requireBinaryTensor(const fs::path& root,
+                                const nlohmann::json& tensor,
+                                const void* expected_data,
+                                size_t expected_byte_size,
+                                const std::string& expected_dtype,
+                                const nlohmann::json& expected_shape,
+                                const fs::path& expected_relative_path)
+{
+  CATCH_REQUIRE(tensor["dtype"] == expected_dtype);
+  CATCH_REQUIRE(tensor["shape"] == expected_shape);
+  CATCH_REQUIRE(tensor["byte_size"] == expected_byte_size);
+  CATCH_REQUIRE_FALSE(tensor.contains("encoding"));
+  CATCH_REQUIRE_FALSE(tensor.contains("data"));
+
+  const fs::path relative_path = tensor["path"].get<std::string>();
+  CATCH_REQUIRE(relative_path == expected_relative_path);
+  CATCH_REQUIRE_FALSE(relative_path.is_absolute());
+
+  std::ifstream file(root / relative_path, std::ios::binary);
+  CATCH_REQUIRE(file.is_open());
+  std::vector<uint8_t> actual(expected_byte_size);
+  file.read(reinterpret_cast<char*>(actual.data()),
+            static_cast<std::streamsize>(actual.size()));
+  CATCH_REQUIRE(file.gcount() ==
+                static_cast<std::streamsize>(expected_byte_size));
+  CATCH_REQUIRE(std::memcmp(actual.data(), expected_data, expected_byte_size) ==
+                0);
+}
+
 static bool containsBinaryFile(const fs::path& directory)
 {
   for (const auto& entry : fs::recursive_directory_iterator(directory)) {
@@ -136,13 +164,12 @@ public:
   }
 };
 
-CATCH_TEST_CASE(
-    "Homogeneous graph forced physics stores data and reveals native schema",
-    "[wf][graph][storage]")
+CATCH_TEST_CASE("Homogeneous graph stores every named output in binary mode",
+                "[wf][graph][storage]")
 {
   // Use unique temp directory
   fs::path test_dir =
-      fs::temp_directory_path() / "ams_graph_schema_discovery_test";
+      fs::temp_directory_path() / "ams_graph_named_output_storage_test";
   fs::remove_all(test_dir);
   fs::create_directories(test_dir);
 
@@ -152,10 +179,11 @@ CATCH_TEST_CASE(
 
   // Recorder configuration: threshold < 0 forces physics, store_data=true enables DB
   AMSCAbstrModel recorder =
-      AMSRegisterAbstractModel("heat_graph_schema", -1.0, "", true);
+      AMSRegisterAbstractModel("generic_graph_schema", -1.0, "", true);
   AMSExecutor executor = AMSCreateExecutor(recorder, 0, 1);
   const fs::path manifest_path = AMSGetDatabaseName(executor);
-  CATCH_REQUIRE(manifest_path.filename() == "heat_graph_schema_0_jsondb.json");
+  CATCH_REQUIRE(manifest_path.filename() ==
+                "generic_graph_schema_0_jsondb.json");
 
   // Build small test graph
   const int64_t N = 10;  // nodes
@@ -197,21 +225,41 @@ CATCH_TEST_CASE(
 
   AMSHomogeneousGraphFields outputs;
 
-  // Physics callback that returns float64 delta_u
+  // Physics callback with multiple application-defined output fields.
   int callback_count = 0;
   HomogeneousGraphDomainFn physics = [&](const AMSHomogeneousGraph& g,
                                          AMSHomogeneousGraphFields& o) {
     callback_count++;
 
-    // Return float64 delta_u [N, 1] (MFEM precision)
     const int64_t num_nodes = g.node_features.shape()[0];
-    auto delta = makeTensor<double>({num_nodes, 1});
-    double* data = delta.data<double>();
-    for (int64_t i = 0; i < num_nodes; i++) {
-      data[i] = static_cast<double>(i) * 0.123;
-    }
+    const int64_t num_edges = g.edge_index.shape()[1];
 
-    o.node_fields.insert("delta_u", std::move(delta));
+    auto pressure = makeTensor<float>({num_nodes, 2});
+    float* pressure_data = pressure.data<float>();
+    for (int64_t i = 0; i < pressure.elements(); ++i) {
+      pressure_data[i] = static_cast<float>(i) + 0.5f;
+    }
+    o.node_fields.insert("pressure/drop", std::move(pressure));
+
+    auto temperature = makeTensor<double>({num_nodes, 1});
+    double* temperature_data = temperature.data<double>();
+    for (int64_t i = 0; i < num_nodes; i++) {
+      temperature_data[i] = static_cast<double>(i) * 0.123;
+    }
+    o.node_fields.insert("temperature", std::move(temperature));
+
+    auto flux = makeTensor<float>({num_edges, 1});
+    float* flux_data = flux.data<float>();
+    for (int64_t i = 0; i < num_edges; ++i) {
+      flux_data[i] = static_cast<float>(i) * 1.5f;
+    }
+    o.edge_fields.insert("flux", std::move(flux));
+
+    auto loss = makeTensor<double>({1, 2});
+    double* loss_data = loss.data<double>();
+    loss_data[0] = 0.25;
+    loss_data[1] = 0.75;
+    o.global_fields.insert("loss", std::move(loss));
   };
 
   // Execute with forced physics + storage
@@ -219,25 +267,19 @@ CATCH_TEST_CASE(
 
   // Verify physics ran
   CATCH_REQUIRE(callback_count == 1);
-  CATCH_REQUIRE(outputs.node_fields.find("delta_u") != nullptr);
+  CATCH_REQUIRE(outputs.node_fields.contains("pressure/drop"));
+  CATCH_REQUIRE(outputs.node_fields.contains("temperature"));
+  CATCH_REQUIRE(outputs.edge_fields.contains("flux"));
+  CATCH_REQUIRE(outputs.global_fields.contains("loss"));
 
   // Destroy executor to flush manifest (but don't call AMSFinalize)
   AMSDestroyExecutor(executor);
-
-  // ========================================================================
-  // INSPECT ACTUAL JSONDB OUTPUT - source of truth for schema
-  // ========================================================================
 
   CATCH_REQUIRE(fs::exists(manifest_path));
 
   std::ifstream manifest_file(manifest_path);
   nlohmann::json manifest;
   manifest_file >> manifest;
-
-  // Document native schema structure
-  std::cout << "\n=== NATIVE JSONDB SCHEMA (A1 Discovery) ===\n";
-  std::cout << manifest.dump(2) << std::endl;
-  std::cout << "==========================================\n" << std::endl;
 
   // Verify essential structure exists
   CATCH_REQUIRE(manifest.contains("format_version"));
@@ -263,12 +305,12 @@ CATCH_TEST_CASE(
       case0["tensors"]["global_features"]["byte_size"].get<size_t>() ==
       2 * sizeof(float));
 
-  // Verify output field stored
-  // Note: Field name may be "delta_u" or "target_delta_u" - discover actual
-  bool has_delta_u = case0["tensors"].contains("delta_u") ||
-                     case0["tensors"].contains("target_delta_u") ||
-                     case0["tensors"].contains("node:delta_u");
-  CATCH_REQUIRE(has_delta_u);
+  CATCH_REQUIRE(case0.contains("outputs"));
+  CATCH_REQUIRE(case0["outputs"]["node"].size() == 2);
+  CATCH_REQUIRE(case0["outputs"]["edge"].size() == 1);
+  CATCH_REQUIRE(case0["outputs"]["global"].size() == 1);
+  CATCH_REQUIRE_FALSE(case0.contains("target_dim"));
+  CATCH_REQUIRE_FALSE(case0["tensors"].contains("target_delta_u"));
 
   // Verify dtypes preserved
   CATCH_REQUIRE(case0["tensors"]["node_features"]["dtype"].get<std::string>() ==
@@ -293,15 +335,41 @@ CATCH_TEST_CASE(
   CATCH_REQUIRE(stored_globals[0] == 0.01f);
   CATCH_REQUIRE(stored_globals[1] == 0.123f);
 
-  // Verify float64 delta_u (CRITICAL for MFEM precision)
-  std::string delta_key = "delta_u";
-  if (case0["tensors"].contains("target_delta_u")) {
-    delta_key = "target_delta_u";
-  } else if (case0["tensors"].contains("node:delta_u")) {
-    delta_key = "node:delta_u";
-  }
-  CATCH_REQUIRE(case0["tensors"][delta_key]["dtype"].get<std::string>() ==
-                "float64");
+  const auto& pressure = outputs.node_fields.at("pressure/drop");
+  requireBinaryTensor(test_dir,
+                      case0["outputs"]["node"]["pressure/drop"],
+                      pressure.raw_data(),
+                      pressure.elements() * pressure.element_size(),
+                      "float32",
+                      nlohmann::json::array({N, 2}),
+                      fs::path("step_000000/outputs/node/field_000000.bin"));
+
+  const auto& temperature = outputs.node_fields.at("temperature");
+  requireBinaryTensor(test_dir,
+                      case0["outputs"]["node"]["temperature"],
+                      temperature.raw_data(),
+                      temperature.elements() * temperature.element_size(),
+                      "float64",
+                      nlohmann::json::array({N, 1}),
+                      fs::path("step_000000/outputs/node/field_000001.bin"));
+
+  const auto& flux = outputs.edge_fields.at("flux");
+  requireBinaryTensor(test_dir,
+                      case0["outputs"]["edge"]["flux"],
+                      flux.raw_data(),
+                      flux.elements() * flux.element_size(),
+                      "float32",
+                      nlohmann::json::array({E, 1}),
+                      fs::path("step_000000/outputs/edge/field_000000.bin"));
+
+  const auto& loss = outputs.global_fields.at("loss");
+  requireBinaryTensor(test_dir,
+                      case0["outputs"]["global"]["loss"],
+                      loss.raw_data(),
+                      loss.elements() * loss.element_size(),
+                      "float64",
+                      nlohmann::json::array({1, 2}),
+                      fs::path("step_000000/outputs/global/field_000000.bin"));
 
   // Verify paths are relative to dataset root
   std::string node_path =
@@ -309,13 +377,7 @@ CATCH_TEST_CASE(
   CATCH_REQUIRE(!fs::path(node_path).is_absolute());
   CATCH_REQUIRE(fs::exists(test_dir / node_path));
 
-  // Note: Not destroying executor or calling AMSFinalize to avoid lifecycle
-  // issues between tests. Cleanup happens at process exit.
-  // fs::remove_all(test_dir);  // Keep for manual inspection
-
-  std::cout << "A1 schema discovery test PASSED. Review manifest output above "
-               "before proceeding to A2."
-            << std::endl;
+  fs::remove_all(test_dir);
 }
 
 CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
@@ -361,15 +423,8 @@ CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
   CATCH_REQUIRE(graph.global_features.shape()[0] == 0);
 
   AMSHomogeneousGraphFields outputs;
-  HomogeneousGraphDomainFn physics = [](const AMSHomogeneousGraph& g,
-                                        AMSHomogeneousGraphFields& o) {
-    auto delta = makeTensor<double>({g.node_features.shape()[0], 1});
-    double* delta_data = delta.data<double>();
-    for (int64_t i = 0; i < g.node_features.shape()[0]; ++i) {
-      delta_data[i] = static_cast<double>(i);
-    }
-    o.node_fields.insert("delta_u", std::move(delta));
-  };
+  HomogeneousGraphDomainFn physics = [](const AMSHomogeneousGraph&,
+                                        AMSHomogeneousGraphFields&) {};
 
   AMSExecute(executor, physics, graph, outputs);
   AMSDestroyExecutor(executor);
@@ -385,6 +440,10 @@ CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
   CATCH_REQUIRE_FALSE(stored_case["tensors"].contains("global_features"));
   CATCH_REQUIRE_FALSE(
       fs::exists(test_dir / "step_000000" / "global_features.bin"));
+  CATCH_REQUIRE(stored_case["outputs"]["node"].empty());
+  CATCH_REQUIRE(stored_case["outputs"]["edge"].empty());
+  CATCH_REQUIRE(stored_case["outputs"]["global"].empty());
+  CATCH_REQUIRE_FALSE(stored_case.contains("target_dim"));
 
   fs::remove_all(test_dir);
 }
@@ -484,11 +543,29 @@ CATCH_TEST_CASE("AMS pure JSON mode stores homogeneous graphs inline",
   AMSHomogeneousGraphFields outputs;
   HomogeneousGraphDomainFn physics = [](const AMSHomogeneousGraph& g,
                                         AMSHomogeneousGraphFields& o) {
-    auto delta = makeTensor<double>({g.node_features.shape()[0], 1});
-    double* delta_data = delta.data<double>();
+    auto pressure = makeTensor<float>({g.node_features.shape()[0], 2});
+    float* pressure_data = pressure.data<float>();
+    for (int64_t i = 0; i < pressure.elements(); ++i)
+      pressure_data[i] = static_cast<float>(i) + 0.25f;
+    o.node_fields.insert("pressure/drop", std::move(pressure));
+
+    auto temperature = makeTensor<double>({g.node_features.shape()[0], 1});
+    double* temperature_data = temperature.data<double>();
     for (int64_t i = 0; i < g.node_features.shape()[0]; ++i)
-      delta_data[i] = static_cast<double>(i) + 10.0;
-    o.node_fields.insert("delta_u", std::move(delta));
+      temperature_data[i] = static_cast<double>(i) + 10.0;
+    o.node_fields.insert("temperature", std::move(temperature));
+
+    auto flux = makeTensor<float>({g.edge_index.shape()[1], 1});
+    float* flux_data = flux.data<float>();
+    for (int64_t i = 0; i < g.edge_index.shape()[1]; ++i)
+      flux_data[i] = static_cast<float>(i) + 20.0f;
+    o.edge_fields.insert("flux", std::move(flux));
+
+    auto loss = makeTensor<double>({1, 2});
+    double* loss_data = loss.data<double>();
+    loss_data[0] = 30.0;
+    loss_data[1] = 31.0;
+    o.global_fields.insert("loss", std::move(loss));
   };
 
   AMSExecute(executor, physics, graph, outputs);
@@ -526,12 +603,33 @@ CATCH_TEST_CASE("AMS pure JSON mode stores homogeneous graphs inline",
                       "float64",
                       nlohmann::json::array({2}));
 
-  const auto& delta = outputs.node_fields.at("delta_u");
-  requireInlineTensor(tensors["target_delta_u"],
-                      delta.raw_data(),
-                      delta.elements() * delta.element_size(),
+  const auto& stored_outputs = manifest["cases"][0]["outputs"];
+  const auto& pressure = outputs.node_fields.at("pressure/drop");
+  requireInlineTensor(stored_outputs["node"]["pressure/drop"],
+                      pressure.raw_data(),
+                      pressure.elements() * pressure.element_size(),
+                      "float32",
+                      nlohmann::json::array({3, 2}));
+  const auto& temperature = outputs.node_fields.at("temperature");
+  requireInlineTensor(stored_outputs["node"]["temperature"],
+                      temperature.raw_data(),
+                      temperature.elements() * temperature.element_size(),
                       "float64",
                       nlohmann::json::array({3, 1}));
+  const auto& flux = outputs.edge_fields.at("flux");
+  requireInlineTensor(stored_outputs["edge"]["flux"],
+                      flux.raw_data(),
+                      flux.elements() * flux.element_size(),
+                      "float32",
+                      nlohmann::json::array({2, 1}));
+  const auto& loss = outputs.global_fields.at("loss");
+  requireInlineTensor(stored_outputs["global"]["loss"],
+                      loss.raw_data(),
+                      loss.elements() * loss.element_size(),
+                      "float64",
+                      nlohmann::json::array({1, 2}));
+  CATCH_REQUIRE_FALSE(manifest["cases"][0].contains("target_dim"));
+  CATCH_REQUIRE_FALSE(tensors.contains("target_delta_u"));
   CATCH_REQUIRE_FALSE(containsBinaryFile(test_dir));
 
   fs::remove_all(test_dir);
@@ -735,8 +833,8 @@ CATCH_TEST_CASE("Multiple calls accumulate cases with distinguishable values",
     f.read(reinterpret_cast<char*>(&global_val), sizeof(float));
     CATCH_REQUIRE(global_val == static_cast<float>(call));
 
-    // Verify target output exists
-    CATCH_REQUIRE(case_entry["tensors"].contains("target_delta_u"));
+    // Verify output exists
+    CATCH_REQUIRE(case_entry["outputs"]["node"].contains("delta_u"));
   }
 
   fs::remove_all(test_dir);
@@ -1125,7 +1223,7 @@ CATCH_TEST_CASE(
   auto case0 = manifest["cases"][0];
 
   // Verify stored output matches exact physics output
-  std::string target_path = case0["tensors"]["target_delta_u"]["path"];
+  std::string target_path = case0["outputs"]["node"]["delta_u"]["path"];
   fs::path full_path = test_dir / target_path;
   CATCH_REQUIRE(fs::exists(full_path));
 
@@ -1140,14 +1238,12 @@ CATCH_TEST_CASE(
     CATCH_REQUIRE(std::abs(stored_values[i] - expected) < 1e-12);
   }
 
-  // Verify field name (runtime) vs storage name (target_ prefix)
-  // Runtime API: node_fields["delta_u"]
-  // Storage: "target_delta_u" in manifest
-  CATCH_REQUIRE(case0["tensors"].contains("target_delta_u"));
-  CATCH_REQUIRE(!case0["tensors"].contains("delta_u"));  // No prefix in storage
+  // Verify the application field name is preserved in the node output group.
+  CATCH_REQUIRE(case0["outputs"]["node"].contains("delta_u"));
+  CATCH_REQUIRE_FALSE(case0["tensors"].contains("target_delta_u"));
 
   // Verify dtype preserved as float64
-  CATCH_REQUIRE(case0["tensors"]["target_delta_u"]["dtype"] == "float64");
+  CATCH_REQUIRE(case0["outputs"]["node"]["delta_u"]["dtype"] == "float64");
 
   fs::remove_all(test_dir);
 }
