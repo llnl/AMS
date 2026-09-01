@@ -9,11 +9,13 @@
 
 #include <torch/torch.h>
 
+#include <algorithm>
 #include <cstring>
 #include <experimental/filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <utility>
 
 #include "wf/debug.h"
 
@@ -261,6 +263,49 @@ nlohmann::json JSONDB::encodeBase64Tensor(const torch::Tensor& tensor)
                         {"byte_size", byte_size}};
 }
 
+nlohmann::json JSONDB::serializeTensor(const AMSTensor& tensor,
+                                       const std::string& binary_path)
+{
+  if (json_mode_ == "json") {
+    return encodeBase64Tensor(tensor);
+  }
+
+  auto shape_ref = tensor.shape();
+  std::vector<int64_t> shape(shape_ref.begin(), shape_ref.end());
+  size_t byte_size = writeBinaryTensor(tensor, binary_path);
+  return nlohmann::json{{"path", binary_path},
+                        {"dtype", dtypeToString(tensor.dType())},
+                        {"shape", shape},
+                        {"byte_size", byte_size}};
+}
+
+nlohmann::json JSONDB::serializeOutputFields(const AMSTensorFieldMap& fields,
+                                             const std::string& case_dir,
+                                             const std::string& association)
+{
+  std::vector<std::pair<std::string, const AMSTensor*>> sorted_fields;
+  sorted_fields.reserve(fields.size());
+  for (const auto& [name, tensor] : fields) {
+    sorted_fields.emplace_back(name, &tensor);
+  }
+  std::sort(sorted_fields.begin(),
+            sorted_fields.end(),
+            [](const auto& lhs, const auto& rhs) {
+              return lhs.first < rhs.first;
+            });
+
+  nlohmann::json output_json = nlohmann::json::object();
+  for (size_t i = 0; i < sorted_fields.size(); ++i) {
+    std::ostringstream filename;
+    filename << "field_" << std::setw(6) << std::setfill('0') << i << ".bin";
+    std::string binary_path =
+        case_dir + "/outputs/" + association + "/" + filename.str();
+    output_json[sorted_fields[i].first] =
+        serializeTensor(*sorted_fields[i].second, binary_path);
+  }
+  return output_json;
+}
+
 void JSONDB::validateEdgeIndex(const AMSTensor& edge_index, int64_t num_nodes)
 {
   auto shape_ref = edge_index.shape();
@@ -484,35 +529,12 @@ void JSONDB::store(const ams::AMSHomogeneousGraph& graph,
     }
   }
 
-  // Write targets from outputs.node_fields
-  // For now, we look for specific known target names
-  // TODO: Make this more generic with iterator support in AMSTensorFieldMap
-  int target_dim = 0;
-
-  // Check for "delta_u" target (heat_equation convention)
-  const AMSTensor* delta_u = outputs.node_fields.find("delta_u");
-  if (delta_u != nullptr) {
-    auto t_shape = delta_u->shape();
-    target_dim = (t_shape.size() > 1) ? t_shape[1] : 1;
-
-    if (json_mode_ == "binary") {
-      std::string rel_path = case_dir + "/target_delta_u.bin";
-      size_t byte_size = writeBinaryTensor(*delta_u, rel_path);
-
-      tensors_json["target_delta_u"] = {
-          {"path", rel_path},
-          {"dtype", dtypeToString(delta_u->dType())},
-          {"shape", std::vector<int64_t>{num_nodes, target_dim}},
-          {"byte_size", byte_size}};
-    } else {  // Pure json mode
-      tensors_json["target_delta_u"] = encodeBase64Tensor(*delta_u);
-    }
-  }
-
-  // Add target_dim to case metadata
-  case_json["target_dim"] = target_dim;
-
   case_json["tensors"] = tensors_json;
+  case_json["outputs"] = {
+      {"node", serializeOutputFields(outputs.node_fields, case_dir, "node")},
+      {"edge", serializeOutputFields(outputs.edge_fields, case_dir, "edge")},
+      {"global",
+       serializeOutputFields(outputs.global_fields, case_dir, "global")}};
   cases_.push_back(case_json);
 
   case_counter_++;

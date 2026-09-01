@@ -33,6 +33,10 @@ namespace db
  * - "binary": Binary tensor files + JSON manifest (default, efficient)
  * - "json": Self-contained JSON with base64-encoded tensor data
  *
+ * Homogeneous graph inputs are stored under each case's "tensors" object.
+ * Named graph outputs are stored under "outputs", grouped into "node", "edge",
+ * and "global" objects using the application-provided field names.
+ *
  * Output format is compatible with PyTorch Geometric data loaders.
  *
  * @note Case and step directories are not rank-scoped. Concurrent MPI ranks
@@ -84,6 +88,26 @@ private:
    * @return JSON object with encoded data
    */
   nlohmann::json encodeBase64Tensor(const torch::Tensor& tensor);
+
+  /**
+   * @brief Serialize an AMSTensor using the configured JSON mode
+   * @param[in] tensor The tensor to serialize
+   * @param[in] binary_path Relative binary path used in binary mode
+   * @return JSON tensor descriptor
+   */
+  nlohmann::json serializeTensor(const AMSTensor& tensor,
+                                 const std::string& binary_path);
+
+  /**
+   * @brief Serialize all named output fields for one graph association
+   * @param[in] fields Named output fields
+   * @param[in] case_dir Relative case directory
+   * @param[in] association Output association: node, edge, or global
+   * @return JSON object keyed by application field name
+   */
+  nlohmann::json serializeOutputFields(const AMSTensorFieldMap& fields,
+                                       const std::string& case_dir,
+                                       const std::string& association);
 
   /**
    * @brief Validate edge_index tensor format
