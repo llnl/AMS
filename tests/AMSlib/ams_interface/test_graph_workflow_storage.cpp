@@ -5,9 +5,13 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
+#include <torch/torch.h>
+
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -19,6 +23,7 @@
 #include "AMSGraph.hpp"
 #include "AMSTensor.hpp"
 #include "nlohmann/json.hpp"
+#include "wf/jsondb.hpp"
 
 using namespace ams;
 namespace fs = std::filesystem;
@@ -43,6 +48,94 @@ static AMSTensor makeTensor(std::vector<int64_t> shape)
   return AMSTensor::create<T>(shape, strides, AMSResourceType::AMS_HOST);
 }
 
+static std::vector<uint8_t> decodeBase64(const std::string& encoded)
+{
+  std::vector<uint8_t> decoded;
+  uint32_t accumulator = 0;
+  int bits = 0;
+
+  for (unsigned char c : encoded) {
+    if (c == '=') break;
+
+    int value = -1;
+    if (c >= 'A' && c <= 'Z')
+      value = c - 'A';
+    else if (c >= 'a' && c <= 'z')
+      value = c - 'a' + 26;
+    else if (c >= '0' && c <= '9')
+      value = c - '0' + 52;
+    else if (c == '+')
+      value = 62;
+    else if (c == '/')
+      value = 63;
+
+    CATCH_REQUIRE(value >= 0);
+    accumulator = (accumulator << 6) | static_cast<uint32_t>(value);
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      decoded.push_back(static_cast<uint8_t>((accumulator >> bits) & 0xffU));
+    }
+  }
+
+  return decoded;
+}
+
+static void requireInlineTensor(const nlohmann::json& tensor,
+                                const void* expected_data,
+                                size_t expected_byte_size,
+                                const std::string& expected_dtype,
+                                const nlohmann::json& expected_shape)
+{
+  CATCH_REQUIRE(tensor["encoding"] == "base64");
+  CATCH_REQUIRE(tensor["dtype"] == expected_dtype);
+  CATCH_REQUIRE(tensor["shape"] == expected_shape);
+  CATCH_REQUIRE(tensor["byte_size"] == expected_byte_size);
+  CATCH_REQUIRE_FALSE(tensor.contains("path"));
+
+  auto decoded = decodeBase64(tensor["data"].get<std::string>());
+  CATCH_REQUIRE(decoded.size() == expected_byte_size);
+  CATCH_REQUIRE(
+      std::memcmp(decoded.data(), expected_data, expected_byte_size) == 0);
+}
+
+static bool containsBinaryFile(const fs::path& directory)
+{
+  for (const auto& entry : fs::recursive_directory_iterator(directory)) {
+    if (entry.is_regular_file() && entry.path().extension() == ".bin") {
+      return true;
+    }
+  }
+  return false;
+}
+
+class ScopedEnvironmentVariable
+{
+  std::string name_;
+  std::string previous_value_;
+  bool had_previous_value_;
+
+public:
+  ScopedEnvironmentVariable(std::string name, const std::string& value)
+      : name_(std::move(name)), had_previous_value_(false)
+  {
+    const char* previous_value = std::getenv(name_.c_str());
+    if (previous_value != nullptr) {
+      previous_value_ = previous_value;
+      had_previous_value_ = true;
+    }
+    setenv(name_.c_str(), value.c_str(), 1);
+  }
+
+  ~ScopedEnvironmentVariable()
+  {
+    if (had_previous_value_)
+      setenv(name_.c_str(), previous_value_.c_str(), 1);
+    else
+      unsetenv(name_.c_str());
+  }
+};
+
 CATCH_TEST_CASE(
     "Homogeneous graph forced physics stores data and reveals native schema",
     "[wf][graph][storage]")
@@ -61,6 +154,8 @@ CATCH_TEST_CASE(
   AMSCAbstrModel recorder =
       AMSRegisterAbstractModel("heat_graph_schema", -1.0, "", true);
   AMSExecutor executor = AMSCreateExecutor(recorder, 0, 1);
+  const fs::path manifest_path = AMSGetDatabaseName(executor);
+  CATCH_REQUIRE(manifest_path.filename() == "heat_graph_schema_0_jsondb.json");
 
   // Build small test graph
   const int64_t N = 10;  // nodes
@@ -133,9 +228,9 @@ CATCH_TEST_CASE(
   // INSPECT ACTUAL JSONDB OUTPUT - source of truth for schema
   // ========================================================================
 
-  CATCH_REQUIRE(fs::exists(test_dir / "manifest.json"));
+  CATCH_REQUIRE(fs::exists(manifest_path));
 
-  std::ifstream manifest_file(test_dir / "manifest.json");
+  std::ifstream manifest_file(manifest_path);
   nlohmann::json manifest;
   manifest_file >> manifest;
 
@@ -238,6 +333,7 @@ CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
   AMSCAbstrModel recorder =
       AMSRegisterAbstractModel("empty_globals_domain", -1.0, "", true);
   AMSExecutor executor = AMSCreateExecutor(recorder, 0, 1);
+  const fs::path manifest_path = AMSGetDatabaseName(executor);
 
   auto node_feat = makeTensor<float>({3, 2});
   auto edge_idx = makeTensor<int64_t>({2, 2});
@@ -278,7 +374,7 @@ CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
   AMSExecute(executor, physics, graph, outputs);
   AMSDestroyExecutor(executor);
 
-  std::ifstream manifest_file(test_dir / "manifest.json");
+  std::ifstream manifest_file(manifest_path);
   CATCH_REQUIRE(manifest_file.is_open());
   nlohmann::json manifest;
   manifest_file >> manifest;
@@ -289,6 +385,154 @@ CATCH_TEST_CASE("Homogeneous graph without globals omits global storage",
   CATCH_REQUIRE_FALSE(stored_case["tensors"].contains("global_features"));
   CATCH_REQUIRE_FALSE(
       fs::exists(test_dir / "step_000000" / "global_features.bin"));
+
+  fs::remove_all(test_dir);
+}
+
+CATCH_TEST_CASE("JSONDB pure JSON mode stores flat tensors inline",
+                "[wf][graph][storage][json]")
+{
+  fs::path test_dir = fs::temp_directory_path() / "ams_json_inline_tensor_test";
+  fs::remove_all(test_dir);
+  fs::create_directories(test_dir);
+
+  torch::Tensor input =
+      torch::tensor({1.25f, -2.5f},
+                    torch::TensorOptions().dtype(torch::kFloat32))
+          .reshape({1, 2});
+  torch::Tensor output =
+      torch::tensor({3, 4}, torch::TensorOptions().dtype(torch::kInt64));
+  std::vector<torch::Tensor> inputs{input};
+  std::vector<torch::Tensor> outputs{output};
+
+  fs::path manifest_path;
+  {
+    ams::db::JSONDB db(test_dir.string(), "inline_tensor", 7, "json");
+    manifest_path = db.getFilename();
+    CATCH_REQUIRE(manifest_path.filename() == "inline_tensor_7_jsondb.json");
+
+    db.store(inputs, outputs);
+    db.close();
+    CATCH_REQUIRE_NOTHROW(db.close());
+  }
+
+  CATCH_REQUIRE(fs::exists(manifest_path));
+  std::ifstream manifest_file(manifest_path);
+  nlohmann::json manifest;
+  manifest_file >> manifest;
+
+  CATCH_REQUIRE(manifest["cases"].size() == 1);
+  const auto& tensors = manifest["cases"][0]["tensors"];
+  requireInlineTensor(tensors["input_0"],
+                      input.data_ptr(),
+                      input.nbytes(),
+                      "float32",
+                      nlohmann::json::array({1, 2}));
+  requireInlineTensor(tensors["output_0"],
+                      output.data_ptr(),
+                      output.nbytes(),
+                      "int64",
+                      nlohmann::json::array({2}));
+  CATCH_REQUIRE_FALSE(containsBinaryFile(test_dir));
+
+  fs::remove_all(test_dir);
+}
+
+CATCH_TEST_CASE("AMS pure JSON mode stores homogeneous graphs inline",
+                "[wf][graph][storage][json]")
+{
+  ScopedEnvironmentVariable json_mode("AMS_JSON_MODE", "json");
+  fs::path test_dir = fs::temp_directory_path() / "ams_json_inline_graph_test";
+  fs::remove_all(test_dir);
+  fs::create_directories(test_dir);
+
+  AMSInit();
+  AMSConfigureFSDatabase(AMSDBType::AMS_JSON, test_dir.string().c_str());
+
+  AMSCAbstrModel recorder =
+      AMSRegisterAbstractModel("inline_graph", -1.0, "", true);
+  AMSExecutor executor = AMSCreateExecutor(recorder, 3, 4);
+  const fs::path manifest_path = AMSGetDatabaseName(executor);
+  CATCH_REQUIRE(manifest_path.filename() == "inline_graph_3_jsondb.json");
+
+  auto node_features = makeTensor<float>({3, 2});
+  float* node_data = node_features.data<float>();
+  for (int i = 0; i < 6; ++i)
+    node_data[i] = static_cast<float>(i) * 0.5f;
+
+  auto edge_index = makeTensor<int64_t>({2, 2});
+  int64_t* edge_data = edge_index.data<int64_t>();
+  edge_data[0] = 0;
+  edge_data[1] = 1;
+  edge_data[2] = 1;
+  edge_data[3] = 2;
+
+  auto edge_features = makeTensor<float>({2, 1});
+  float* edge_feature_data = edge_features.data<float>();
+  edge_feature_data[0] = 1.5f;
+  edge_feature_data[1] = 2.5f;
+
+  auto global_features = makeTensor<double>({2});
+  double* global_data = global_features.data<double>();
+  global_data[0] = 0.25;
+  global_data[1] = 1.25;
+
+  AMSHomogeneousGraph graph(std::move(node_features),
+                            std::move(edge_index),
+                            std::move(edge_features),
+                            std::move(global_features));
+  AMSHomogeneousGraphFields outputs;
+  HomogeneousGraphDomainFn physics = [](const AMSHomogeneousGraph& g,
+                                        AMSHomogeneousGraphFields& o) {
+    auto delta = makeTensor<double>({g.node_features.shape()[0], 1});
+    double* delta_data = delta.data<double>();
+    for (int64_t i = 0; i < g.node_features.shape()[0]; ++i)
+      delta_data[i] = static_cast<double>(i) + 10.0;
+    o.node_fields.insert("delta_u", std::move(delta));
+  };
+
+  AMSExecute(executor, physics, graph, outputs);
+  AMSDestroyExecutor(executor);
+
+  CATCH_REQUIRE(fs::exists(manifest_path));
+  std::ifstream manifest_file(manifest_path);
+  nlohmann::json manifest;
+  manifest_file >> manifest;
+
+  CATCH_REQUIRE(manifest["cases"].size() == 1);
+  const auto& tensors = manifest["cases"][0]["tensors"];
+  requireInlineTensor(tensors["node_features"],
+                      graph.node_features.raw_data(),
+                      graph.node_features.elements() *
+                          graph.node_features.element_size(),
+                      "float32",
+                      nlohmann::json::array({3, 2}));
+  requireInlineTensor(tensors["edge_index"],
+                      graph.edge_index.raw_data(),
+                      graph.edge_index.elements() *
+                          graph.edge_index.element_size(),
+                      "int64",
+                      nlohmann::json::array({2, 2}));
+  requireInlineTensor(tensors["edge_features"],
+                      graph.edge_features.raw_data(),
+                      graph.edge_features.elements() *
+                          graph.edge_features.element_size(),
+                      "float32",
+                      nlohmann::json::array({2, 1}));
+  requireInlineTensor(tensors["global_features"],
+                      graph.global_features.raw_data(),
+                      graph.global_features.elements() *
+                          graph.global_features.element_size(),
+                      "float64",
+                      nlohmann::json::array({2}));
+
+  const auto& delta = outputs.node_fields.at("delta_u");
+  requireInlineTensor(tensors["target_delta_u"],
+                      delta.raw_data(),
+                      delta.elements() * delta.element_size(),
+                      "float64",
+                      nlohmann::json::array({3, 1}));
+  CATCH_REQUIRE_FALSE(containsBinaryFile(test_dir));
 
   fs::remove_all(test_dir);
 }
@@ -383,8 +627,8 @@ CATCH_TEST_CASE(
   // Note: Not destroying executor to avoid triggering AMSFinalize between tests
   // The executor will be cleaned up at program exit
 
-  // Verify NO manifest created (store_data=false)
-  CATCH_REQUIRE(!fs::exists(test_dir / "manifest.json"));
+  // Verify no database artifacts were created (store_data=false).
+  CATCH_REQUIRE(fs::is_empty(test_dir));
 
   fs::remove_all(test_dir);
 }
@@ -402,6 +646,7 @@ CATCH_TEST_CASE("Multiple calls accumulate cases with distinguishable values",
   AMSCAbstrModel recorder =
       AMSRegisterAbstractModel("accumulation_domain", -1.0, "", true);
   AMSExecutor executor = AMSCreateExecutor(recorder, 0, 1);
+  const fs::path manifest_path = AMSGetDatabaseName(executor);
 
   const int num_calls = 3;
   int total_callbacks = 0;
@@ -467,9 +712,9 @@ CATCH_TEST_CASE("Multiple calls accumulate cases with distinguishable values",
   AMSDestroyExecutor(executor);
 
   // Verify manifest exists with correct case count
-  CATCH_REQUIRE(fs::exists(test_dir / "manifest.json"));
+  CATCH_REQUIRE(fs::exists(manifest_path));
 
-  std::ifstream manifest_file(test_dir / "manifest.json");
+  std::ifstream manifest_file(manifest_path);
   nlohmann::json manifest;
   manifest_file >> manifest;
 
@@ -512,6 +757,7 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
   AMSCAbstrModel recorder =
       AMSRegisterAbstractModel("hetero_domain", -1.0, "", true);
   AMSExecutor executor = AMSCreateExecutor(recorder, 0, 1);
+  const fs::path manifest_path = AMSGetDatabaseName(executor);
 
   // Build heterogeneous graph with two node types
   AMSHeterogeneousGraph graph;
@@ -588,9 +834,9 @@ CATCH_TEST_CASE("Heterogeneous graph typed storage",
   // The executor will be cleaned up at program exit
 
   // Verify heterogeneous storage
-  CATCH_REQUIRE(fs::exists(test_dir / "manifest.json"));
+  CATCH_REQUIRE(fs::exists(manifest_path));
 
-  std::ifstream manifest_file(test_dir / "manifest.json");
+  std::ifstream manifest_file(manifest_path);
   nlohmann::json manifest;
   manifest_file >> manifest;
 
@@ -800,6 +1046,7 @@ CATCH_TEST_CASE(
   AMSCAbstrModel fallback =
       AMSRegisterAbstractModel("reject_domain", 0.1, "", true);
   AMSExecutor executor = AMSCreateExecutor(fallback, 0, 1);
+  const fs::path manifest_path = AMSGetDatabaseName(executor);
 
   auto node_feat = makeTensor<float>({6, 2});
   auto edge_idx = makeTensor<int64_t>({2, 5});
@@ -867,9 +1114,9 @@ CATCH_TEST_CASE(
   AMSDestroyExecutor(executor);
 
   // Verify exactly one case stored
-  CATCH_REQUIRE(fs::exists(test_dir / "manifest.json"));
+  CATCH_REQUIRE(fs::exists(manifest_path));
 
-  std::ifstream manifest_file(test_dir / "manifest.json");
+  std::ifstream manifest_file(manifest_path);
   nlohmann::json manifest;
   manifest_file >> manifest;
 
