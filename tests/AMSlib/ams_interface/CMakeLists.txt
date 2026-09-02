@@ -13,7 +13,16 @@ function(BUILD_UNIT_TEST exe source)
     target_link_libraries(${exe} PRIVATE hip::host)
     target_link_libraries(${exe} PRIVATE Threads::Threads)
   endif()
-  
+
+  if (ENABLE_MPI)
+    target_link_libraries(${exe} PRIVATE MPI::MPI_CXX)
+  endif()
+
+  if (ENABLE_CALIPER)
+    target_link_libraries(${exe} PRIVATE caliper)
+    target_include_directories(${exe} PRIVATE ${caliper_INCLUDE_DIR})
+  endif()
+
   target_include_directories(${exe} PRIVATE ${CMAKE_SOURCE_DIR}/src/AMSlib/)
   target_include_directories(${exe} PRIVATE ${CMAKE_BINARY_DIR}/include/)
   target_include_directories(${exe} PRIVATE ${AMS_TEST_ROOT})
