@@ -34,7 +34,7 @@ struct Problem {
   {
   }
 
-  void run(long num_elements, DType** inputs, DType** outputs)
+  void run(long num_elements, const DType* const* inputs, DType** outputs)
   {
     for (int i = 0; i < num_elements; i++) {
       DType sum = 0;
@@ -97,7 +97,7 @@ struct Problem {
           [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
               ams::SmallVector<ams::AMSTensor>& ams_inouts,
               ams::SmallVector<ams::AMSTensor>& ams_outs) {
-            DType* ins[num_inputs];
+            const DType* ins[num_inputs];
             DType* outs[num_outputs];
             if (num_inputs != ams_ins.size())
               throw std::runtime_error(
@@ -127,12 +127,12 @@ struct Problem {
       AMSExecute(wf, OrigComputation, input_tensors, inouts, output_tensors);
 
       for (int i = 0; i < input_tensors.size(); i++) {
-        delete input_tensors[i].data<DType>();
+        delete[] input_tensors[i].data<DType>();
       }
 
 
       for (int i = 0; i < output_tensors.size(); i++) {
-        delete output_tensors[i].data<DType>();
+        delete[] output_tensors[i].data<DType>();
       }
       CALIPER(CALI_CXX_MARK_LOOP_ITERATION(mainloop_id, i);)
     }
@@ -180,32 +180,39 @@ int main(int argc, char** argv)
   args.AddOption(&device_name,
                  "-d",
                  "--device",
-                 "Device config string (cpu or gpu)");
-
-  // set precision
+                 "Device config string (cpu or gpu, default: cpu)",
+                 false);
   args.AddOption(&precision_opt,
                  "-pr",
                  "--precision",
-                 "Set precision (single or double)");
-
-  // Sleeping time
+                 "Set precision (single or double, default: double)",
+                 false);
   args.AddOption(&sleep_msec,
                  "-ms",
                  "--msleep",
                  "Sleep for x milliseconds for each iteration (default: 0)",
                  false);
-
-  // data parameters
   args.AddOption(&num_elems,
                  "-e",
                  "--num-elems",
                  "Number of elements per iteration");
 
-  args.AddOption(&num_inputs, "-di", "--dim-inputs", "Dimension of inputs");
-  args.AddOption(&num_outputs, "-do", "--dim-outputs", "Dimension of outputs");
-  args.AddOption(&num_iterations, "-i", "--num-iter", "Number of iterations");
+  args.AddOption(&num_inputs,
+                 "-di",
+                 "--dim-inputs",
+                 "Dimension of inputs, default: 8",
+                 false);
+  args.AddOption(&num_outputs,
+                 "-do",
+                 "--dim-outputs",
+                 "Dimension of outputs, default: 9",
+                 false);
+  args.AddOption(&num_iterations,
+                 "-i",
+                 "--num-iter",
+                 "Number of iterations, default: 1",
+                 false);
 
-  // random speed and packing
   args.AddOption(&seed, "-s", "--seed", "Seed for rand (default 0)", false);
 
   args.AddOption(&db_type,

@@ -295,6 +295,7 @@ docs/                 # Sphinx documentation
   core tests: `ctest --output-on-failure -R "CORE::"` or `ctest --output-on-failure -R "CORE::TENSOR_INT"`
   to re-run one specific test.
 - **Always**: Run `./scripts/run-code-quality.sh --staged --clang-format --ruff --fix` before testing your changes
+- **Always**: Run valgrind when you are doing changes that can affect memory allocations and could lead to memory leaks. Do not necessilry fix all the leaks, some leaks are normal (glibc etc).
 - **Ask First**: Before adding new external dependencies to `CMakeLists.txt`.
 - **Never**: Use C-style casts; instead use `static_cast` or `reinterpret_cast`.
 - **Never**: Over-engineer solutions with superfluous safety checking.
