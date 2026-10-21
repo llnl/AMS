@@ -204,6 +204,7 @@ cmake -S . -B build \
   -DENABLE_CALIPER=On \
   -DENABLE_RMQ=On \
   -DENABLE_WORKFLOW=On \
+  -DENABLE_TORCH=On \
   -DAMS_PIP_INSTALL_ARGS="--no-build-isolation" \
   -DAMS_ENABLE_DEBUG=On \
   -DTorch_DIR="$AMS_TORCH_PATH" \
