@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Configured surrogate models now report load failures through catchable
+  exceptions, while Torch-disabled builds warn and use physics; warnings remain
+  available in non-debug builds.
 - The RabbitMQ test consumer now creates non-durable AMS queues and replaces
   stale durable queues, preventing startup-order conflicts with AMS.
 - Torch-enabled CMake package exports now resolve `AMS::TorchInterop`

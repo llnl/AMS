@@ -312,15 +312,20 @@ public:
         threshold(threshold),
         ePolicy(AMSExecPolicy::AMS_UBALANCED)
   {
-    DB = nullptr;
-    auto& dbm = ams::db::DBManager::getInstance();
-
-    if (storeData) DB = dbm.getDB(domainName, rId);
 #if defined(__AMS_ENABLE_TORCH__)
-    MLModel = nullptr;
     if (!surrogate_path.empty())
       MLModel = SurrogateModel::getInstance(surrogate_path);
+#else
+    if (!surrogate_path.empty())
+      AMS_WARNING(AMSWorkflow,
+                  "Ignoring surrogate model '{}': AMS was built without "
+                  "Torch (ENABLE_TORCH=Off); using physics",
+                  surrogate_path)
 #endif
+    if (storeData) {
+      auto& dbm = ams::db::DBManager::getInstance();
+      DB = dbm.getDB(domainName, rId);
+    }
   }
 
   ~AMSWorkflow()

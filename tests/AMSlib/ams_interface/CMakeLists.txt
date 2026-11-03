@@ -90,6 +90,8 @@ endif()
 if (NOT ENABLE_TORCH)
   BUILD_UNIT_TEST(ams_no_torch_workflow test_no_torch_workflow.cpp Catch2::Catch2 ../ams_catch_main.cpp)
   ADD_AMS_UNIT_TEST(AMS_NO_TORCH_WORKFLOW ams_no_torch_workflow)
+  set_tests_properties(AMS_NO_TORCH_WORKFLOW PROPERTIES
+    ENVIRONMENT "AMS_LOG_LEVEL=warning")
 
   blt_add_executable(NAME ams_ete_no_torch SOURCES ams_ete_no_torch.cpp)
   target_compile_features(ams_ete_no_torch PRIVATE cxx_std_17)

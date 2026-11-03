@@ -37,6 +37,18 @@ class NoAMSInfoModel(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+
+class MissingDeviceAMSModel(nn.Module):
+    """Valid TorchScript model with incomplete workflow metadata."""
+
+    @torch.jit.export
+    def get_ams_info(self) -> Dict[str, str]:
+        return {"ams_type": "float32"}
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x
+
+
 class BadDeviceAMSModel(nn.Module):
     """ams_device is not a device, but a string; C++ isDevice() == false."""
     _ams_dtype: torch.dtype
@@ -230,6 +242,18 @@ def main() -> None:
         (str(no_info_model_path), "InvalidModel", "Valid TorchScript model without get_ams_info method")
     )
     print(f"[info] Saved no_ams_info model: {no_info_model_path}")
+
+    missing_device_path = (models_dir / "missing_device_ams_info.pt").absolute()
+    scripted_missing_device = torch.jit.script(MissingDeviceAMSModel())
+    scripted_missing_device.save(str(missing_device_path))
+    failing_models.append(
+        (
+            str(missing_device_path),
+            "InvalidModel",
+            "Workflow model metadata lacks ams_device",
+        )
+    )
+    print(f"[info] Saved missing_device_ams_info model: {missing_device_path}")
 
     # ---------------------------------------
     # Failing model: ams_device is not a device -> InvalidModel
