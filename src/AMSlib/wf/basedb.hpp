@@ -82,6 +82,7 @@ namespace ams
 {
 namespace db
 {
+namespace fs = std::experimental::filesystem;
 
 AMSDBType getDBType(std::string type);
 std::string getDBTypeAsStr(AMSDBType type);
@@ -183,14 +184,14 @@ protected:
   std::string fp;
 
   /**
-   *  @brief check error code, if it exists print message and exit application
+   *  @brief Raise a filesystem error without terminating the application.
    *  @param[in] ec error code
    */
-  void checkError(std::error_code& ec)
+  void checkError(const std::error_code& ec)
   {
     if (ec) {
-      std::cerr << "Error in is_regular_file: " << ec.message();
-      exit(-1);
+      THROW(std::runtime_error,
+            ("Error checking filesystem path: " + ec.message()).c_str());
     }
   }
 
@@ -209,29 +210,29 @@ public:
          uint64_t rId)
       : BaseDB(rId)
   {
-    std::experimental::filesystem::path Path(path);
+    fs::path Path(path);
     std::error_code ec;
 
-    if (!std::experimental::filesystem::exists(Path, ec)) {
-      std::cerr << "[ERROR]: Path:'" << path << "' does not exist\n";
-      exit(-1);
-    }
-
+    const bool exists = fs::exists(Path, ec);
     checkError(ec);
+    if (!exists)
+      THROW(std::runtime_error,
+            ("Path: '" + path + "' does not exist").c_str());
 
-    if (!std::experimental::filesystem::is_directory(Path, ec)) {
-      std::cerr << "[ERROR]: Path:'" << path << "' is a file NOT a directory\n";
-      exit(-1);
-    }
+    const bool is_directory = fs::is_directory(Path, ec);
+    checkError(ec);
+    if (!is_directory)
+      THROW(std::runtime_error,
+            ("Path: '" + path + "' is not a directory").c_str());
 
-    Path = std::experimental::filesystem::absolute(Path);
+    Path = fs::absolute(Path);
     fp = Path.string();
 
     // We can now create the filename
     std::string dbfn(fn + "_");
     dbfn += std::to_string(rId) + suffix;
-    Path /= std::experimental::filesystem::path(dbfn);
-    this->fn = std::experimental::filesystem::absolute(Path).string();
+    Path /= fs::path(dbfn);
+    this->fn = fs::absolute(Path).string();
     AMS_DBG(DB, "File System DB writes to file {}", this->fn)
   }
 
@@ -1723,25 +1724,30 @@ class FilesystemInterface
 public:
   FilesystemInterface() : connected(false) {}
 
-  bool connect(std::string& path)
+  bool connect(const std::string& path)
   {
-    connected = true;
-    std::experimental::filesystem::path Path(path);
+    fs::path Path(path);
     std::error_code ec;
 
-    if (!std::experimental::filesystem::exists(Path, ec)) {
+    const bool exists = fs::exists(Path, ec);
+    if (ec)
       THROW(std::runtime_error,
-            ("Path: :'" + path + "' does not exist").c_str());
-      exit(-1);
+            ("Error checking path: " + ec.message()).c_str());
+    if (!exists) {
+      THROW(std::runtime_error,
+            ("Path: '" + path + "' does not exist").c_str());
     }
 
-    if (ec) {
-      THROW(std::runtime_error, ("Error in file:" + ec.message()).c_str());
-      exit(-1);
-    }
+    const bool is_directory = fs::is_directory(Path, ec);
+    if (ec)
+      THROW(std::runtime_error,
+            ("Error checking path: " + ec.message()).c_str());
+    if (!is_directory)
+      THROW(std::runtime_error,
+            ("Path: '" + path + "' is not a directory").c_str());
 
     dbPath = path;
-
+    connected = true;
     return true;
   }
 
@@ -1915,13 +1921,12 @@ public:
     AMS_CWARNING(DBManager,
                  dbType != AMSDBType::AMS_NONE,
                  "Setting DBManager default DB when already set")
-    dbType = type;
-
     AMS_CWARNING(DBManager,
-                 (is_debug && dbType != AMSDBType::AMS_HDF5),
+                 (is_debug && type != AMSDBType::AMS_HDF5),
                  "Only HDF5 supports debug")
 
-    if (dbType != AMSDBType::AMS_NONE) fs_interface.connect(db_path);
+    if (type != AMSDBType::AMS_NONE) fs_interface.connect(db_path);
+    dbType = type;
   }
 
   void instantiate_rmq_db(int port,
@@ -1935,10 +1940,10 @@ public:
                           std::string& routing_key,
                           bool update_surrogate)
   {
-    std::experimental::filesystem::path Path(rmq_cert);
+    fs::path Path(rmq_cert);
     std::error_code ec;
     AMS_CWARNING(AMS,
-                 !std::experimental::filesystem::exists(Path, ec),
+                 !fs::exists(Path, ec),
                  "Certificate file '{}' for RMQ server does not exist. AMS "
                  "will "
                  "try to connect without it.",

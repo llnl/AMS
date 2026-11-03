@@ -50,6 +50,8 @@ Use the current ``ENABLE_*`` options:
      - Install Python workflow drivers.
    * - ``ENABLE_TESTS``
      - Build Catch2-based tests.
+   * - ``ENABLE_TORCH``
+     - Enable PyTorch surrogate inference; disable for physics-only builds.
    * - ``AMS_ENABLE_DEBUG``
      - Enable verbose AMS debug messages.
    * - ``AMS_INSTALL_FLUX_PYTHON``
@@ -58,6 +60,21 @@ Use the current ``ENABLE_*`` options:
      - Extra arguments passed to ``pip install`` when ``ENABLE_WORKFLOW=On``.
 
 ``ENABLE_CUDA`` and ``ENABLE_HIP`` are mutually exclusive.
+
+Model Loading and Diagnostics
+-----------------------------
+
+An empty model path intentionally runs the physics implementation. If a
+nonempty path names a missing or invalid Torch model, ``AMSCreateExecutor``
+logs an error and throws an exception containing the path and failure reason.
+Invalid paths supplied through ``AMS_OBJECTS`` fail during ``AMSInit`` in
+Torch-enabled builds. A build with ``ENABLE_TORCH=Off`` accepts a nonempty
+model path, warns when its executor is created, and runs physics instead.
+
+Warnings are available with or without ``AMS_ENABLE_DEBUG`` and appear by
+default. Set ``AMS_LOG_LEVEL=error`` to suppress warnings; ``info`` or
+``debug`` also enables them. Info and debug messages additionally require
+``AMS_ENABLE_DEBUG=On`` at build time.
 
 Dependency Hints
 ----------------

@@ -54,6 +54,10 @@ function(BUILD_UNIT_TEST exe source)
   target_compile_definitions(${exe} PRIVATE ${AMS_APP_DEFINES} CATCH_CONFIG_PREFIX_ALL)
 endfunction()
 
+BUILD_UNIT_TEST(ams_env_missing_model test_env_missing_model.cpp Catch2::Catch2 ../ams_catch_main.cpp)
+target_link_libraries(ams_env_missing_model PRIVATE fmt::fmt)
+ADD_AMS_UNIT_TEST(AMS_ENV_MISSING_MODEL ams_env_missing_model)
+
 # ams_ete.cpp uses torch::Tensor
 if (ENABLE_TORCH)
   BUILD_UNIT_TEST(ams_explicit_end_to_end ams_ete.cpp Catch2::Catch2)

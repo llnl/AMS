@@ -53,6 +53,9 @@ function(ADD_DB_UNIT_TEST name exec)
 endfunction()
 
 # AMSTensor-only tests (always built)
+BUILD_UNIT_TEST(db_configuration_recovery db_configuration_recovery.cpp Catch2::Catch2 ../ams_catch_main.cpp)
+ADD_DB_UNIT_TEST(DB::CONFIGURATION_RECOVERY db_configuration_recovery)
+
 BUILD_UNIT_TEST(db_hdf5_ams db_hdf5_ams.cpp Catch2::Catch2 ../ams_catch_main.cpp)
 ADD_DB_UNIT_TEST(DB::HDF5_AMSTENSOR db_hdf5_ams)
 

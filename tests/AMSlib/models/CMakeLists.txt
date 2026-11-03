@@ -34,6 +34,7 @@ set(GENERATED_CPU_MODELS
   ${CMAKE_CURRENT_BINARY_DIR}/heterogeneous_graph.pt
   ${CMAKE_CURRENT_BINARY_DIR}/homogeneous_graph_bad_key.pt
   ${CMAKE_CURRENT_BINARY_DIR}/homogeneous_graph_bad_shape.pt
+  ${CMAKE_CURRENT_BINARY_DIR}/missing_device_ams_info.pt
 )
 
 if (ENABLE_CUDA OR ENABLE_HIP)

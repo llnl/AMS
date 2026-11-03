@@ -60,10 +60,11 @@ public:
     std::string path = "";
     if (jRoot.contains("model_path")) {
       path = jRoot["model_path"].get<std::string>();
-      AMS_CFATAL(AMS,
-                 (!path.empty() && !fs::exists(path)),
-                 "Path '{}' to model does not exist\n",
-                 path);
+#ifdef __AMS_ENABLE_TORCH__
+      if (!path.empty() && !fs::exists(path))
+        THROW(std::runtime_error,
+              fmt::format("Path '{}' to surrogate model does not exist", path));
+#endif
     }
     return path;
   }

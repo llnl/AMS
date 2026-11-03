@@ -54,6 +54,30 @@ AMSHomogeneousGraph makeGraph()
 }
 }  // namespace
 
+CATCH_TEST_CASE(
+    "Torch-disabled AMS warns and falls back for a configured model",
+    "[ams][workflow][no-torch]")
+{
+  AMSInit();
+  constexpr const char* model_path = "/configured/model.pt";
+  const auto model = AMSRegisterAbstractModel("no_torch_configured_model",
+                                              0.5,
+                                              model_path,
+                                              false);
+  const auto executor = AMSCreateExecutor(model, 0, 1);
+
+  SmallVector<AMSTensor> inputs;
+  SmallVector<AMSTensor> inouts;
+  SmallVector<AMSTensor> outputs;
+  int callback_count = 0;
+  DomainLambda physics = [&](const SmallVector<AMSTensor>&,
+                             SmallVector<AMSTensor>&,
+                             SmallVector<AMSTensor>&) { ++callback_count; };
+  AMSExecute(executor, physics, inputs, inouts, outputs);
+  CATCH_CHECK(callback_count == 1);
+  AMSDestroyExecutor(executor);
+}
+
 CATCH_TEST_CASE("Torch-disabled AMSExecute uses workflow fallback and storage",
                 "[ams][workflow][no-torch]")
 {

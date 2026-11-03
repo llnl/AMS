@@ -77,6 +77,9 @@ inline fmt::text_style style_for(bool UseColor, LogLevel Lvl)
       return fg(fmt::color::yellow);
     case LogLevel::Error:
       return fg(fmt::color::red);
+    case LogLevel::Unknown:
+    case LogLevel::NumLevels:
+      return {};
   }
   return {};  // default (no color)
 }
