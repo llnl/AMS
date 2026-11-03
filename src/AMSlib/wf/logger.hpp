@@ -112,7 +112,7 @@ public:
 
   static LogLevel fromString(std::optional<std::string> LvlStr)
   {
-    if (!LvlStr) return LogLevel::Error;
+    if (!LvlStr) return LogLevel::Warning;
     auto& Lvl = LvlStr.value();
     std::transform(Lvl.begin(), Lvl.end(), Lvl.begin(), [](unsigned char c) {
       return std::tolower(c);

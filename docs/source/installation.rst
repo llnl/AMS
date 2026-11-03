@@ -67,14 +67,14 @@ Model Loading and Diagnostics
 An empty model path intentionally runs the physics implementation. If a
 nonempty path names a missing or invalid Torch model, ``AMSCreateExecutor``
 logs an error and throws an exception containing the path and failure reason.
-Invalid paths supplied through ``AMS_OBJECTS`` may instead fail during
-``AMSInit``. A build with ``ENABLE_TORCH=Off`` warns about a nonempty model
-path and runs physics instead.
+Invalid paths supplied through ``AMS_OBJECTS`` fail during ``AMSInit`` in
+Torch-enabled builds. A build with ``ENABLE_TORCH=Off`` accepts a nonempty
+model path, warns when its executor is created, and runs physics instead.
 
-Warnings are available with or without ``AMS_ENABLE_DEBUG``, but the default
-runtime log level is ``error``. Set ``AMS_LOG_LEVEL=warning`` to see warnings;
-``AMS_LOG_LEVEL=info`` or ``debug`` also enables them. Info and debug messages
-additionally require ``AMS_ENABLE_DEBUG=On`` at build time.
+Warnings are available with or without ``AMS_ENABLE_DEBUG`` and appear by
+default. Set ``AMS_LOG_LEVEL=error`` to suppress warnings; ``info`` or
+``debug`` also enables them. Info and debug messages additionally require
+``AMS_ENABLE_DEBUG=On`` at build time.
 
 Dependency Hints
 ----------------
