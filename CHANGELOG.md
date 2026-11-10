@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Configured surrogate models now report load failures through catchable
+  exceptions. Torch-disabled builds accept configured model paths, warn when
+  an executor uses one, and run physics; warnings now appear by default.
+- Invalid filesystem database paths now raise catchable exceptions while
+  preserving the previous valid configuration for recovery.
 - The RabbitMQ test consumer now creates non-durable AMS queues and replaces
   stale durable queues, preventing startup-order conflicts with AMS.
 - Torch-enabled CMake package exports now resolve `AMS::TorchInterop`

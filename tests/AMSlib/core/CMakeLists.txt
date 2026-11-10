@@ -59,6 +59,19 @@ function(BUILD_UNIT_TEST exe source)
 endfunction()
 
 # Tests that do NOT require torch
+BUILD_UNIT_TEST(ams_diagnostics diagnostics.cpp Catch2::Catch2 ../ams_catch_main.cpp)
+add_test(NAME CORE::THROW_DIAGNOSTICS
+         COMMAND ams_diagnostics "[diagnostics][throw]" -s --reporter console)
+set_tests_properties(CORE::THROW_DIAGNOSTICS PROPERTIES
+  LABELS CORE_UNIT_TEST
+  PASS_REGULAR_EXPRESSION "diagnostic THROW error")
+add_test(NAME CORE::WARNING_DIAGNOSTICS
+         COMMAND ams_diagnostics "[diagnostics][warning]" -s --reporter console)
+set_tests_properties(CORE::WARNING_DIAGNOSTICS PROPERTIES
+  LABELS CORE_UNIT_TEST
+  PASS_REGULAR_EXPRESSION "diagnostic visible warning 1"
+  FAIL_REGULAR_EXPRESSION "diagnostic suppressed warning")
+
 BUILD_UNIT_TEST(amstensor_int amstensor_int.cpp Catch2::Catch2 ../ams_catch_main.cpp)
 ADD_CORE_UNIT_TEST(CORE::TENSOR_INT amstensor_int)
 BUILD_UNIT_TEST(amstensor_float amstensor_float.cpp Catch2::Catch2 ../ams_catch_main.cpp)

@@ -27,6 +27,57 @@ static void verify(torch::Tensor& input,
   CATCH_REQUIRE(probability == Catch::Approx(threshold).margin(0.05));
 }
 
+template <typename Error>
+static void requireModelFailure(std::string path, const std::string& reason)
+{
+  bool caught = false;
+  try {
+    SurrogateModel::getInstance(path);
+  } catch (const Error& e) {
+    caught = true;
+    const std::string message = e.what();
+    CATCH_CHECK(message.find(path) != std::string::npos);
+    CATCH_CHECK(message.find(reason) != std::string::npos);
+  }
+  CATCH_REQUIRE(caught);
+}
+
+CATCH_TEST_CASE("Surrogate model load failures include the path and reason",
+                "[ams][surrogate][error]")
+{
+  requireModelFailure<std::runtime_error>("../models/missing_model.pt",
+                                          "does not exist");
+  requireModelFailure<std::runtime_error>("../models/invalid_torch_file.pt",
+                                          "Failed to load Torch surrogate");
+  requireModelFailure<std::invalid_argument>("../models/no_ams_info.pt",
+                                             "get_ams_info");
+  requireModelFailure<std::invalid_argument>(
+      "../models/missing_device_ams_info.pt", "ams_device");
+}
+
+CATCH_TEST_CASE("Failed model load does not register an AMS executor",
+                "[ams][surrogate][error]")
+{
+  ams::AMSInit();
+  const auto invalid_model = ams::AMSRegisterAbstractModel(
+      "missing_surrogate_model", 0.5, "../models/missing_model.pt", false);
+  bool caught = false;
+  try {
+    ams::AMSCreateExecutor(invalid_model, 0, 1);
+  } catch (const std::runtime_error& e) {
+    caught = true;
+    CATCH_CHECK(std::string(e.what()).find("missing_model.pt") !=
+                std::string::npos);
+  }
+  CATCH_REQUIRE(caught);
+
+  const auto physics_model =
+      ams::AMSRegisterAbstractModel("physics_only_model", 0.5, "", false);
+  const auto executor = ams::AMSCreateExecutor(physics_model, 0, 1);
+  CATCH_CHECK(executor == 0);
+  ams::AMSDestroyExecutor(executor);
+}
+
 
 CATCH_TEST_CASE(
     "SurrogateModel echoes input and predicate mean matches threshold",

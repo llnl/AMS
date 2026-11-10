@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <fmt/format.h>
+
 #include <atomic>
 #include <mutex>
 
@@ -40,15 +42,23 @@ void memUsage(double& vm_usage, double& resident_set);
 
 #define AMS_FATAL(id, ...) AMS_CFATAL(id, true, __VA_ARGS__)
 
-#define THROW(exception, msg) \
-  AMS_FATAL(Throw, "{} {} {}", __FILE__, std::to_string(__LINE__).c_str(), msg)
-
-#if defined(__AMS_DEBUG__)
+#define THROW(exception, msg)                                \
+  do {                                                       \
+    const auto ams_throw_message =                           \
+        fmt::format("{}:{}: {}", __FILE__, __LINE__, (msg)); \
+    ams::Logger::get().log(ams::LogLevel::Error,             \
+                           "Throw",                          \
+                           "{}",                             \
+                           ams_throw_message);               \
+    throw exception(ams_throw_message);                      \
+  } while (0);
 
 #define AMS_CWARNING(id, condition, ...) \
   AMSPRINT(id, condition, ams::LogLevel::Warning, __VA_ARGS__)
 
 #define AMS_WARNING(id, ...) AMS_CWARNING(id, true, __VA_ARGS__)
+
+#if defined(__AMS_DEBUG__)
 
 #define AMS_CINFO(id, condition, ...) \
   AMSPRINT(id, condition, ams::LogLevel::Info, __VA_ARGS__)
@@ -88,10 +98,6 @@ void memUsage(double& vm_usage, double& resident_set);
 // clang-format on
 
 #else  // __AMS_DEBUG__ is disabled
-
-#define AMS_CWARNING(id, condition, ...)
-
-#define AMS_WARNING(id, ...)
 
 #define AMS_CINFO(id, condition, ...)
 

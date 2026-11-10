@@ -14,6 +14,8 @@
 #include "wf/utils.hpp"
 
 using namespace ams;
+namespace fs = std::experimental::filesystem;
+
 static std::string getDTypeAsString(torch::Dtype dtype)
 {
   if (dtype == torch::kFloat32) return "float32";
@@ -60,50 +62,70 @@ void SurrogateModel::clearCache() { instances().clear(); }
 
 
 SurrogateModel::SurrogateModel(std::string& model_path)
-    : _model_path(model_path)
+    : _model_path(model_path),
+      model_device(ams::AMSResourceType::AMS_UNKNOWN),
+      torch_device(c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES),
+      model_dtype(ams::AMSDType::AMS_UNKNOWN_TYPE),
+      torch_dtype(c10::ScalarType::Undefined)
 {
-
-  std::experimental::filesystem::path Path(model_path);
+  fs::path Path(model_path);
   std::error_code ec;
-
-  if (!std::experimental::filesystem::exists(Path, ec)) {
-    AMS_FATAL(Surrogate,
-              "Path to Surrogate Model {} Does not "
-              "exist",
-              model_path)
-  }
+  const bool model_exists = fs::exists(Path, ec);
+  if (ec)
+    THROW(std::runtime_error,
+          fmt::format("Cannot inspect surrogate model '{}': {}",
+                      model_path,
+                      ec.message()));
+  if (!model_exists)
+    THROW(std::runtime_error,
+          fmt::format("Surrogate model '{}' does not exist", model_path));
 
   try {
     module = torch::jit::load(model_path);
-  } catch (const c10::Error& e) {
-    AMS_FATAL(Surrogate, "Error opening {}", model_path);
+  } catch (const std::exception& e) {
+    THROW(std::runtime_error,
+          fmt::format("Failed to load Torch surrogate '{}': {}",
+                      model_path,
+                      e.what()));
   }
 
-  auto method_ptr = module.find_method("get_ams_info");
-  if (!method_ptr) {
-    AMS_FATAL(Surrogate,
-              "The Surrogate {} is not a valid "
-              "AMSModel",
-              model_path);
-  }
+  try {
+    auto method_ptr = module.find_method("get_ams_info");
+    if (!method_ptr)
+      THROW(std::invalid_argument,
+            fmt::format("Surrogate model '{}' has no get_ams_info method",
+                        model_path));
 
-  torch::IValue meta_ivalue = module.run_method("get_ams_info");
-  auto meta_dict = meta_ivalue.toGenericDict();
-
-  for (const auto& item : meta_dict) {
-    std::string key = item.key().toStringRef();
-    std::string value = item.value().toStringRef();
-    if (key == "ams_type") {
-      std::tie(model_dtype, torch_dtype) = convertModelDataType(value);
-    } else if (key == "ams_device") {
-      std::tie(model_device, torch_device) = convertModelResourceType(value);
+    auto meta_dict = module.run_method("get_ams_info").toGenericDict();
+    for (const auto& item : meta_dict) {
+      std::string key = item.key().toStringRef();
+      std::string value = item.value().toStringRef();
+      if (key == "ams_type") {
+        std::tie(model_dtype, torch_dtype) = convertModelDataType(value);
+      } else if (key == "ams_device") {
+        std::tie(model_device, torch_device) = convertModelResourceType(value);
+      }
     }
+  } catch (const c10::Error& e) {
+    THROW(std::runtime_error,
+          fmt::format("Failed to read metadata from surrogate '{}': {}",
+                      model_path,
+                      e.what()));
+  } catch (const torch::jit::ErrorReport& e) {
+    THROW(std::runtime_error,
+          fmt::format("Failed to read metadata from surrogate '{}': {}",
+                      model_path,
+                      e.what()));
   }
 
-  AMS_CFATAL(SurrogateModel,
-             model_dtype == ams::AMS_UNKNOWN_TYPE ||
-                 model_device == ams::AMSResourceType::AMS_UNKNOWN,
-             "Model has unknown datatype or device");
+  if (model_dtype == ams::AMS_UNKNOWN_TYPE)
+    THROW(std::invalid_argument,
+          fmt::format("Surrogate model '{}' is missing ams_type metadata",
+                      model_path));
+  if (model_device == ams::AMSResourceType::AMS_UNKNOWN)
+    THROW(std::invalid_argument,
+          fmt::format("Surrogate model '{}' is missing ams_device metadata",
+                      model_path));
 
   AMS_DBG(SurrogateModel,
           "Loaded model with type {} on device {}",
@@ -134,29 +156,25 @@ std::tuple<AMSResourceType, torch::DeviceType> SurrogateModel::
   } else if (value == "hip") {
     return std::make_tuple(AMS_DEVICE, c10::DeviceType::CUDA);
   }
-  // If no parameters or buffers are found, default to unknown
-  AMS_FATAL(Surrogate,
-            "Cannot determine device type of model "
-            "{}",
-            value);
-  return std::make_tuple(AMS_UNKNOWN,
-                         c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES);
+  THROW(std::invalid_argument,
+        fmt::format("Surrogate model '{}' has unknown device '{}'",
+                    _model_path,
+                    value));
 }
 
 std::tuple<AMSDType, torch::Dtype> SurrogateModel::convertModelDataType(
     std::string& type)
 {
-  AMSDType dParamType = AMSDType::AMS_DOUBLE;
-  torch::Dtype torchType = at::kDouble;
   if (type == "float32") {
     return std::make_tuple(AMSDType::AMS_SINGLE, at ::kFloat);
   } else if (type == "float64") {
     return std::make_tuple(AMSDType::AMS_DOUBLE, at ::kDouble);
   }
 
-  AMS_FATAL(Surrogate, "unknown data type of model {}", type);
-
-  return std::make_tuple(dParamType, torchType);
+  THROW(std::invalid_argument,
+        fmt::format("Surrogate model '{}' has unknown data type '{}'",
+                    _model_path,
+                    type));
 }
 
 std::tuple<torch::Tensor, torch::Tensor> SurrogateModel::_evaluate(
