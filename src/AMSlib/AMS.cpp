@@ -516,10 +516,10 @@ void AMSDestroyExecutor(AMSExecutor executor)
 }
 
 
-const char* AMSGetAllocatorName(AMSResourceType device)
+std::string AMSGetAllocatorName(AMSResourceType device)
 {
   auto& rm = ams::ResourceManager::getInstance();
-  return rm.getAllocatorName(device).c_str();
+  return rm.getAllocatorName(device);
 }
 
 void AMSSetAllocator(AMSResourceType resource, const char* alloc_name)

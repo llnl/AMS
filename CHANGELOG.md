@@ -4,8 +4,6 @@
 
 ### Fixed
 
-- Allocator names returned by `AMSGetAllocatorName` remain valid until the allocator is replaced or destroyed.
-
 - Configured surrogate models now report load failures through catchable
   exceptions. Torch-disabled builds accept configured model paths, warn when
   an executor uses one, and run physics; warnings now appear by default.
@@ -28,6 +26,7 @@
 
 ### Changed
 
+- `AMSGetAllocatorName` now returns an owning `std::string` instead of `const char*`, keeping returned names valid after allocator replacement; callers must rebuild and use the new return type.
 - Workflow environments can now use active system Flux Python bindings instead
   of installing `flux-python` through default AMS Python dependencies.
 - Added `AMS_INSTALL_FLUX_PYTHON` so non-system workflow builds can opt into

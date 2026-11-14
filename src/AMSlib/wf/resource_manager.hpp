@@ -78,8 +78,8 @@ public:
     return instance;
   }
 
-  /** @brief Return the allocator-owned name, valid until replacement or destruction. */
-  const std::string& getAllocatorName(AMSResourceType resource) const
+  /** @brief Return an owning copy of the allocator name. */
+  std::string getAllocatorName(AMSResourceType resource) const
   {
     return getAllocator(resource)->getName();
   }

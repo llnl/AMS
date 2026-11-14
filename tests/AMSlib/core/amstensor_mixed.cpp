@@ -592,7 +592,7 @@ CATCH_TEST_CASE("dtype_to_size: cross-type size relationships",
   CATCH_REQUIRE(sInt64 == 2 * sInt32);
 }
 
-CATCH_TEST_CASE("allocator name remains valid across queries",
+CATCH_TEST_CASE("allocator name copies survive allocator replacement",
                 "[ams][allocator][name]")
 {
   struct RestoreAllocator {
@@ -603,14 +603,22 @@ CATCH_TEST_CASE("allocator name remains valid across queries",
 
   for (const auto& name : {std::string("HOST"), std::string(128, 'A')}) {
     AMSSetAllocator(AMS_HOST, name.c_str());
-    const char* saved = AMSGetAllocatorName(AMS_HOST);
-    CATCH_REQUIRE(saved != nullptr);
-    CATCH_CHECK(std::string(saved) == name);
+    const auto saved = AMSGetAllocatorName(AMS_HOST);
+    CATCH_CHECK(saved == name);
+
+    auto modified = AMSGetAllocatorName(AMS_HOST);
+    modified[0] = 'X';
+    CATCH_CHECK(AMSGetAllocatorName(AMS_HOST) == name);
+    CATCH_CHECK(saved == name);
 
     for (int query = 0; query < 8; ++query) {
-      const char* current = AMSGetAllocatorName(AMS_HOST);
+      const auto current = AMSGetAllocatorName(AMS_HOST);
       CATCH_CHECK(current == saved);
-      CATCH_CHECK(std::string(saved) == name);
     }
+
+    AMSSetAllocator(AMS_HOST, "replacement");
+    CATCH_CHECK(AMSGetAllocatorName(AMS_HOST) == "replacement");
+    CATCH_CHECK(saved == name);
+    CATCH_CHECK(modified[0] == 'X');
   }
 }
