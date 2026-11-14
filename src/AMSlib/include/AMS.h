@@ -102,6 +102,7 @@ void AMSExecute(AMSExecutor executor,
 void AMSDestroyExecutor(AMSExecutor executor);
 
 void AMSSetAllocator(ams::AMSResourceType resource, const char* alloc_name);
+/** @brief Return an allocator-owned name, valid until the allocator is replaced or destroyed. */
 const char* AMSGetAllocatorName(ams::AMSResourceType device);
 void AMSConfigureFSDatabase(AMSDBType db_type, const char* db_path);
 const std::string AMSGetDatabaseName(AMSExecutor wf);

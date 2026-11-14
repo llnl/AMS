@@ -139,7 +139,7 @@ private:
               "\t\t\t Model: {} With AMSAbstractID: {}",
               KV.first,
               KV.second);
-      if (KV.second >= ams_candidate_models.size()) {
+      if (static_cast<size_t>(KV.second) >= ams_candidate_models.size()) {
         AMS_FATAL(AMS,
                   "Candidate model mapped to AMSAbstractID that does not exist "
                   "({})",
@@ -194,7 +194,7 @@ private:
     }
   }
 
-  void setupFSDB(json& entry, std::string& dbStrType)
+  void setupFSDB(json& entry, [[maybe_unused]] std::string& dbStrType)
   {
     if (!entry.contains("fs_path"))
       THROW(std::runtime_error,
@@ -220,7 +220,7 @@ private:
     return entry[field].get<T>();
   }
 
-  void setupRMQ(json& entry, std::string& dbStrType)
+  void setupRMQ(json& entry, [[maybe_unused]] std::string& dbStrType)
   {
     if (!entry.contains("rmq_config")) {
       THROW(std::runtime_error,
@@ -356,7 +356,7 @@ public:
 
   std::pair<std::string, AMSAbstractModel>& get_model(int index)
   {
-    if (index >= registered_models.size()) {
+    if (static_cast<size_t>(index) >= registered_models.size()) {
       AMS_FATAL(AMS, "Model id: {} does not exist", index);
     }
 
@@ -438,7 +438,7 @@ void AMSExecute(AMSExecutor executor,
                 ams::SmallVector<ams::AMSTensor>& outs)
 {
   int64_t index = static_cast<int64_t>(executor);
-  if (index >= _amsWrap->executors.size())
+  if (static_cast<size_t>(index) >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
 
   AMS_DBG(AMS,
@@ -458,7 +458,7 @@ void AMSExecute(AMSExecutor executor,
                 ams::AMSHomogeneousGraphFields& outputs)
 {
   int64_t index = static_cast<int64_t>(executor);
-  if (index >= _amsWrap->executors.size())
+  if (static_cast<size_t>(index) >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
 
   AMS_DBG(AMS, "Calling AMS with homogeneous graph");
@@ -474,7 +474,7 @@ void AMSExecute(AMSExecutor executor,
                 ams::AMSHeterogeneousGraphFields& outputs)
 {
   int64_t index = static_cast<int64_t>(executor);
-  if (index >= _amsWrap->executors.size())
+  if (static_cast<size_t>(index) >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
 
   AMS_DBG(AMS, "Calling AMS with heterogeneous graph");
@@ -507,7 +507,7 @@ void AMSDestroyExecutor(AMSExecutor executor)
 {
   AMS_CFATAL(AMS, _amsWrap == nullptr, "AMSInit has not been called.")
   int64_t index = static_cast<int64_t>(executor);
-  if (index >= _amsWrap->executors.size())
+  if (static_cast<size_t>(index) >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
   auto currExec = _amsWrap->executors[index];
   _amsWrap->executors[index] = nullptr;
@@ -577,7 +577,7 @@ AMSExecutor AMSCreateDistributedExecutor(AMSCAbstrModel model,
 const std::string AMSGetDatabaseName(AMSExecutor executor)
 {
   int64_t index = static_cast<int64_t>(executor);
-  if (index >= _amsWrap->executors.size())
+  if (static_cast<size_t>(index) >= _amsWrap->executors.size())
     throw std::runtime_error("AMS Executor identifier does not exist\n");
   auto currExec =
       reinterpret_cast<ams::AMSWorkflow*>(_amsWrap->executors[index]);

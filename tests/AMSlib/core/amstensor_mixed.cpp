@@ -7,6 +7,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "AMS.h"
@@ -589,4 +590,27 @@ CATCH_TEST_CASE("dtype_to_size: cross-type size relationships",
   // 8-byte types are twice the 4-byte types
   CATCH_REQUIRE(sDouble == 2 * sFloat);
   CATCH_REQUIRE(sInt64 == 2 * sInt32);
+}
+
+CATCH_TEST_CASE("allocator name remains valid across queries",
+                "[ams][allocator][name]")
+{
+  struct RestoreAllocator {
+    std::string name =
+        ResourceManager::getInstance().getAllocatorName(AMS_HOST);
+    ~RestoreAllocator() { AMSSetAllocator(AMS_HOST, name.c_str()); }
+  } restore;
+
+  for (const auto& name : {std::string("HOST"), std::string(128, 'A')}) {
+    AMSSetAllocator(AMS_HOST, name.c_str());
+    const char* saved = AMSGetAllocatorName(AMS_HOST);
+    CATCH_REQUIRE(saved != nullptr);
+    CATCH_CHECK(std::string(saved) == name);
+
+    for (int query = 0; query < 8; ++query) {
+      const char* current = AMSGetAllocatorName(AMS_HOST);
+      CATCH_CHECK(current == saved);
+      CATCH_CHECK(std::string(saved) == name);
+    }
+  }
 }

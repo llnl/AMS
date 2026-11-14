@@ -12,7 +12,7 @@ struct linear_model {
   int numIn, numOut;
   linear_model(std::string ModelPath,
                std::string ModelPrecision,
-               std::string ModelDevice,
+               [[maybe_unused]] std::string ModelDevice,
                std::string UQType,
                int numIn,
                int numOut)

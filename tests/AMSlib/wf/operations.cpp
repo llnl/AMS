@@ -81,15 +81,6 @@ static std::vector<int> generateRandomVector(int target_sum, int size)
   return v;  // sums to original target_sum + size == original target_sum input
 }
 
-// CUDA/HIP mapping like elsewhere
-#if defined(__AMS_ENABLE_CUDA__) || defined(__AMS_ENABLE_HIP__)
-constexpr c10::DeviceType AMS_GPU = c10::DeviceType::CUDA;
-#else
-constexpr c10::DeviceType AMS_GPU =
-    c10::DeviceType::COMPILE_TIME_MAX_DEVICE_TYPES;
-#endif
-
-
 CATCH_TEST_CASE("Workflow: ScatterPhysicOutputsToOrigDomain",
                 "[ams][workflow][scatter]")
 {

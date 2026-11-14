@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Allocator names returned by `AMSGetAllocatorName` remain valid until the allocator is replaced or destroyed.
+
 - Configured surrogate models now report load failures through catchable
   exceptions. Torch-disabled builds accept configured model paths, warn when
   an executor uses one, and run physics; warnings now appear by default.
