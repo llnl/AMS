@@ -76,7 +76,7 @@ static std::optional<torch::Tensor> readDatasetContents(
 
   // Read as float32 on CPU
   torch::Tensor readTensor = torch::empty(shape, TorchType);
-  herr_t st = H5Dread(
+  [[maybe_unused]] herr_t st = H5Dread(
       dset_id, DataType, H5S_ALL, H5S_ALL, H5P_DEFAULT, readTensor.data_ptr());
   H5Dclose(dset_id);
   H5Fclose(file_id);

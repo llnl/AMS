@@ -236,7 +236,7 @@ public:
     AMS_DBG(DB, "File System DB writes to file {}", this->fn)
   }
 
-  std::string getFilename() const { return fn; }
+  std::string getFilename() const override { return fn; }
 };
 
 
@@ -319,7 +319,7 @@ public:
   /**
    * @brief deconstructs the class and closes the file
    */
-  ~hdf5DB();
+  ~hdf5DB() override;
 
   /**
    * @brief Define the type of the DB
@@ -442,7 +442,7 @@ template <typename T>
 static inline size_t serialize_data(uint8_t* dest, T src)
 {
   uint8_t* ptr = reinterpret_cast<uint8_t*>(&src);
-  for (int i = 0; i < sizeof(T); i++) {
+  for (size_t i = 0; i < sizeof(T); i++) {
     dest[i] = ptr[i];
   }
 
@@ -506,10 +506,10 @@ public:
   AMSMessage()
       : _id(0),
         _rank(0),
-        _input_dim(0),
-        _output_dim(0),
         _data(nullptr),
-        _total_size(0)
+        _total_size(0),
+        _input_dim(0),
+        _output_dim(0)
   {
   }
 
@@ -529,10 +529,10 @@ public:
              ArrayRef<AMSTensor> Outputs)
       : _id(id),
         _rank(rId),
-        _input_dim(Inputs.size()),
-        _output_dim(Outputs.size()),
         _data(nullptr),
-        _total_size(0)
+        _total_size(0),
+        _input_dim(Inputs.size()),
+        _output_dim(Outputs.size())
   {
 #ifdef __AMS_DEBUG__
     // Validate preconditions: RMQ serialization requires CPU-resident, contiguous tensors
@@ -894,7 +894,7 @@ public:
   /**
    *  @brief Default destructor
    */
-  ~AMQPHandler() = default;
+  ~AMQPHandler() override = default;
 
 private:
   /**
@@ -902,7 +902,7 @@ private:
     *  handler will be made about the connection.
     *  @param  connection      The connection that can be destructed
     */
-  virtual void onDetached(AMQP::TcpConnection* connection);
+  void onDetached(AMQP::TcpConnection* connection) override;
 
   /**
    *  @brief Method that is called by the AMQP library when a fatal error occurs
@@ -913,8 +913,7 @@ private:
    *  @param[in]  connection      The connection on which the error occurred
    *  @param[in]  message         A human readable error message
    */
-  virtual void onError(AMQP::TcpConnection* connection,
-                       const char* message) override;
+  void onError(AMQP::TcpConnection* connection, const char* message) override;
   /**
    *  @brief Method that is called after a TCP connection has been set up, and
    * right before the SSL handshake is going to be performed to secure the
@@ -926,7 +925,7 @@ private:
    *  @return     bool            True to proceed / accept the connection, false
    * to break up
    */
-  virtual bool onSecuring(AMQP::TcpConnection* connection, SSL* ssl);
+  bool onSecuring(AMQP::TcpConnection* connection, SSL* ssl) override;
 
   /**
    *  @brief Method that is called when the secure TLS connection has been
@@ -938,7 +937,7 @@ private:
    *  @param[in]  ssl             SSL structure from openssl library
    *  @return     bool            True if connection can be used
    */
-  virtual bool onSecured(AMQP::TcpConnection* connection, const SSL* ssl);
+  bool onSecured(AMQP::TcpConnection* connection, const SSL* ssl) override;
   /**
     *  Method that is called when the AMQP protocol is ended. This is the
     *  counter-part of a call to connection.close() to graceful shutdown
@@ -946,13 +945,13 @@ private:
     *  active, and you will also receive calls to onLost() and onDetached()
     *  @param  connection      The connection over which the AMQP protocol ended
     */
-  virtual void onClosed(AMQP::TcpConnection* connection);
+  void onClosed(AMQP::TcpConnection* connection) override;
   /**
    *  @brief Method that is called by the AMQP library when the login attempt
    *  succeeded. After this the connection is ready to use.
    *  @param[in]  connection      The connection that can now be used
    */
-  virtual void onReady(AMQP::TcpConnection* connection) override;
+  void onReady(AMQP::TcpConnection* connection) override;
 };  // class AMQPHandler
 
 
@@ -1023,10 +1022,10 @@ public:
                  rmq_vhost,
                  rmq_cert.empty() ? false : true),
         _stop(false),
+        _reconnecting(false),
         _queue_sender(outbound_queue),
         _exchange(exchange),
         _routing_key(routing_key),
-        _reconnecting(false),
         _isConnected(false),
         _nbProcessingMsg(0)
   {
@@ -1251,7 +1250,7 @@ private:
                     msg.size)
             if (MessagesBuffer::getInstance().insert(msg)) _nbProcessingMsg++;
           })
-          .onError([this, msg](const char* errMsg) {
+          .onError([this, msg]([[maybe_unused]] const char* errMsg) {
             AMS_DBG(ConnectionManagerAMQP,
                     "message #{} ({} / {}) did not get send: \"{}\"",
                     msg.id,
@@ -1337,9 +1336,9 @@ private:
     });
 
     _channel->declareQueue(_queue_sender)
-        .onSuccess([](const std::string& name,
-                      uint32_t messagecount,
-                      uint32_t consumercount) {
+        .onSuccess([]([[maybe_unused]] const std::string& name,
+                      [[maybe_unused]] uint32_t messagecount,
+                      [[maybe_unused]] uint32_t consumercount) {
           AMS_DBG(ConnectionManagerAMQP,
                   "declared queue: {} (messagecount={}, "
                   "consumercount={})",
@@ -1771,7 +1770,6 @@ class DBManager
 private:
   std::unordered_map<std::string, std::shared_ptr<BaseDB>> db_instances;
   AMSDBType dbType;
-  uint64_t rId;
   /** @brief If True, the DB is allowed to update the surrogate model */
   bool updateSurrogate;
 
@@ -1929,15 +1927,15 @@ public:
     dbType = type;
   }
 
-  void instantiate_rmq_db(int port,
-                          std::string& host,
-                          std::string& rmq_pass,
-                          std::string& rmq_user,
-                          std::string& rmq_vhost,
+  void instantiate_rmq_db([[maybe_unused]] int port,
+                          [[maybe_unused]] std::string& host,
+                          [[maybe_unused]] std::string& rmq_pass,
+                          [[maybe_unused]] std::string& rmq_user,
+                          [[maybe_unused]] std::string& rmq_vhost,
                           std::string& rmq_cert,
-                          std::string& outbound_queue,
-                          std::string& exchange,
-                          std::string& routing_key,
+                          [[maybe_unused]] std::string& outbound_queue,
+                          [[maybe_unused]] std::string& exchange,
+                          [[maybe_unused]] std::string& routing_key,
                           bool update_surrogate)
   {
     fs::path Path(rmq_cert);

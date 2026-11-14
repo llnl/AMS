@@ -38,7 +38,7 @@ AMSExpected<std::unique_ptr<BaseModel>> BaseModel::load(
     }
   }();
 
-  if (!BModelOrErr) return std::move(BModelOrErr);
+  if (!BModelOrErr) return BModelOrErr;
 
   auto BModel = std::move(*BModelOrErr);
 
