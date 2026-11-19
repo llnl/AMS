@@ -48,7 +48,7 @@ jobs:
           cd AMQP-CPP/
           mkdir -p build/
           cd build/
-          cmake -DCMAKE_CXX_FLAGS="-D_GLIBCXX_USE_CXX11_ABI=0"  -DAMQP-CPP_LINUX_TCP=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DAMQP-CPP_BUILD_SHARED=On ..
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_CXX_FLAGS="-D_GLIBCXX_USE_CXX11_ABI=0"  -DAMQP-CPP_LINUX_TCP=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DAMQP-CPP_BUILD_SHARED=On ..
           make && sudo make install
       - name: Install caliper
         run: |
@@ -65,7 +65,8 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=On \
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=On \
             -DTorch_DIR=$(python -c 'import torch; print(torch.__path__[0])')/share/cmake/Torch \
             -DBUILD_SHARED_LIBS=On \
             -DCMAKE_C_COMPILER=clang-22 \
