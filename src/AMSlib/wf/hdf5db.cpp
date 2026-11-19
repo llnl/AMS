@@ -97,8 +97,6 @@ hid_t hdf5DB::getDataSet(hid_t group,
   const int nDims = Shape.size();
   currentShape.resize(nDims);
   currentShape.assign(nDims, 0);
-  // We always start from 0
-  hsize_t dims = 0;
   hid_t dset = -1;
 
   int exists = H5Lexists(group, dName.c_str(), H5P_DEFAULT);
@@ -113,21 +111,22 @@ hid_t hdf5DB::getDataSet(hid_t group,
       throw std::runtime_error(
           "File system file with current tensor shape to not match");
     }
-    hsize_t dims[nDims];
-    H5Sget_simple_extent_dims(dspace, dims, NULL);
+    std::vector<hsize_t> dims(nDims);
+    H5Sget_simple_extent_dims(dspace, dims.data(), NULL);
     currentShape[0] = dims[0];
     return dset;
   }
 
   // We will extend the data-set size, so we use unlimited option
-  hsize_t max_dims[Shape.size()];
-  hsize_t initial_shape[Shape.size()];
-  for (int i = 0; i < Shape.size(); i++) {
+  std::vector<hsize_t> max_dims(Shape.size());
+  std::vector<hsize_t> initial_shape(Shape.size());
+  for (size_t i = 0; i < Shape.size(); i++) {
     max_dims[i] = static_cast<hsize_t>(Shape[i]);
     initial_shape[i] = 0;
   }
   max_dims[0] = H5S_UNLIMITED;
-  hid_t fileSpace = H5Screate_simple(nDims, initial_shape, max_dims);
+  hid_t fileSpace =
+      H5Screate_simple(nDims, initial_shape.data(), max_dims.data());
   HDF5_ERROR(fileSpace);
 
   hid_t pList = H5Pcreate(H5P_DATASET_CREATE);
@@ -140,7 +139,7 @@ hid_t hdf5DB::getDataSet(hid_t group,
   // TODO: Align this with the caching mechanism for this option to work
   // out.
   max_dims[0] = Chunk;
-  H5Pset_chunk(pList, nDims, max_dims);
+  H5Pset_chunk(pList, nDims, max_dims.data());
   dset = H5Dcreate(group,
                    dName.c_str(),
                    dataType,
@@ -273,7 +272,7 @@ void hdf5DB::_store(const AMSTensor& inputs, const AMSTensor& outputs)
 
 
 hdf5DB::hdf5DB(std::string path, std::string domain_name, uint64_t rId)
-    : FileDB(path, domain_name, ".h5", rId), HDOset(-1), HDIset(-1), HDType(-1)
+    : FileDB(path, domain_name, ".h5", rId), HDIset(-1), HDOset(-1), HDType(-1)
 {
   std::error_code ec;
   bool exists = fs::exists(this->fn);

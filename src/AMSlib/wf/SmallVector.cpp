@@ -31,14 +31,14 @@ namespace
 // These structures may cause binary compat warnings on AIX. Suppress the
 // warning since we are only using these types for the static assertions below.
 struct Struct16B {
-  alignas(16) void *X;
+  alignas(16) void* X;
 };
 struct Struct32B {
-  alignas(32) void *X;
+  alignas(32) void* X;
 };
 }  // namespace
-static_assert(sizeof(SmallVector<void *, 0>) ==
-                  sizeof(unsigned) * 2 + sizeof(void *),
+static_assert(sizeof(SmallVector<void*, 0>) ==
+                  sizeof(unsigned) * 2 + sizeof(void*),
               "wasted space in SmallVector size 0");
 static_assert(alignof(SmallVector<Struct16B, 0>) >= alignof(Struct16B),
               "wrong alignment for 16-byte aligned T");
@@ -48,12 +48,11 @@ static_assert(sizeof(SmallVector<Struct16B, 0>) >= alignof(Struct16B),
               "missing padding for 16-byte aligned T");
 static_assert(sizeof(SmallVector<Struct32B, 0>) >= alignof(Struct32B),
               "missing padding for 32-byte aligned T");
-static_assert(sizeof(SmallVector<void *, 1>) ==
-                  sizeof(unsigned) * 2 + sizeof(void *) * 2,
+static_assert(sizeof(SmallVector<void*, 1>) ==
+                  sizeof(unsigned) * 2 + sizeof(void*) * 2,
               "wasted space in SmallVector size 1");
 
-static_assert(sizeof(SmallVector<char, 0>) ==
-                  sizeof(void *) * 2 + sizeof(void *),
+static_assert(sizeof(SmallVector<char, 0>) == sizeof(void*) * 2 + sizeof(void*),
               "1 byte elements have word-sized type for size and capacity");
 
 /// Report that MinSize doesn't fit into this vector's size type. Throws
@@ -81,7 +80,9 @@ static void report_at_maximum_capacity(size_t MaxSize)
 
 // Note: Moving this function into the header may cause performance regression.
 template <class Size_T>
-static size_t getNewCapacity(size_t MinSize, size_t TSize, size_t OldCapacity)
+static size_t getNewCapacity(size_t MinSize,
+                             [[maybe_unused]] size_t TSize,
+                             size_t OldCapacity)
 {
   constexpr size_t MaxSize = std::numeric_limits<Size_T>::max();
 
@@ -102,12 +103,12 @@ static size_t getNewCapacity(size_t MinSize, size_t TSize, size_t OldCapacity)
 }
 
 template <class Size_T>
-void *SmallVectorBase<Size_T>::replaceAllocation(void *NewElts,
+void* SmallVectorBase<Size_T>::replaceAllocation(void* NewElts,
                                                  size_t TSize,
                                                  size_t NewCapacity,
                                                  size_t VSize)
 {
-  void *NewEltsReplace = std::malloc(NewCapacity * TSize);
+  void* NewEltsReplace = std::malloc(NewCapacity * TSize);
   if (!NewEltsReplace) {
     throw std::bad_alloc();
   }
@@ -118,15 +119,15 @@ void *SmallVectorBase<Size_T>::replaceAllocation(void *NewElts,
 
 // Note: Moving this function into the header may cause performance regression.
 template <class Size_T>
-void *SmallVectorBase<Size_T>::mallocForGrow(void *FirstEl,
+void* SmallVectorBase<Size_T>::mallocForGrow(void* FirstEl,
                                              size_t MinSize,
                                              size_t TSize,
-                                             size_t &NewCapacity)
+                                             size_t& NewCapacity)
 {
   NewCapacity = getNewCapacity<Size_T>(MinSize, TSize, this->capacity());
   // Even if capacity is not 0 now, if the vector was originally created with
   // capacity 0, it's possible for the malloc to return FirstEl.
-  void *NewElts = std::malloc(NewCapacity * TSize);
+  void* NewElts = std::malloc(NewCapacity * TSize);
   if (!NewElts) throw std::bad_alloc();
 
   if (NewElts == FirstEl)
@@ -136,12 +137,12 @@ void *SmallVectorBase<Size_T>::mallocForGrow(void *FirstEl,
 
 // Note: Moving this function into the header may cause performance regression.
 template <class Size_T>
-void SmallVectorBase<Size_T>::grow_pod(void *FirstEl,
+void SmallVectorBase<Size_T>::grow_pod(void* FirstEl,
                                        size_t MinSize,
                                        size_t TSize)
 {
   size_t NewCapacity = getNewCapacity<Size_T>(MinSize, TSize, this->capacity());
-  void *NewElts;
+  void* NewElts;
   if (BeginX == FirstEl) {
     NewElts = std::malloc(NewCapacity * TSize);
     if (!NewElts) throw std::bad_alloc();

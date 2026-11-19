@@ -113,18 +113,18 @@ public:
       Uncertainties.reset();
     }
 
-    if (ModelOut.size(1) != Outs.size() + InOuts.size())
+    if (static_cast<size_t>(ModelOut.size(1)) != Outs.size() + InOuts.size())
       return AMS_MAKE_ERROR(AMSErrorType::InvalidShapes,
                             "Expected the output size to match the Application "
                             "output dimensions");
 
-    int k = 0;
+    size_t k = 0;
     for (; k < Outs.size(); ++k) {
       Outs[k].tensor =
           ModelOut.narrow(/*dim=*/1, /*start=*/k, /*length=*/1).squeeze();
     }
 
-    for (int i = 0; i < InOuts.size(); ++k, ++i) {
+    for (size_t i = 0; i < InOuts.size(); ++k, ++i) {
       InOuts[i].tensor =
           ModelOut.narrow(/*dim=*/1, /*start=*/k, /*length=*/1).squeeze();
     }

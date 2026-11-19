@@ -78,7 +78,7 @@ static inline AMSDBType getDBType(std::string db_type)
 }
 
 // Signal handler to print the stack trace
-static inline void signalHandler(int signum)
+static inline void signalHandler([[maybe_unused]] int signum)
 {
   const char* msg = "[signalHandler] Caught signal\n";
   write(STDERR_FILENO, msg, strlen(msg));

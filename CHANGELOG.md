@@ -26,6 +26,7 @@
 
 ### Changed
 
+- `AMSGetAllocatorName` now returns an owning `std::string` instead of `const char*`, keeping returned names valid after allocator replacement; callers must rebuild and use the new return type.
 - Workflow environments can now use active system Flux Python bindings instead
   of installing `flux-python` through default AMS Python dependencies.
 - Added `AMS_INSTALL_FLUX_PYTHON` so non-system workflow builds can opt into

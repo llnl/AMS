@@ -95,14 +95,14 @@ struct Problem {
 
       DomainLambda OrigComputation =
           [&](const ams::SmallVector<ams::AMSTensor>& ams_ins,
-              ams::SmallVector<ams::AMSTensor>& ams_inouts,
+              [[maybe_unused]] ams::SmallVector<ams::AMSTensor>& ams_inouts,
               ams::SmallVector<ams::AMSTensor>& ams_outs) {
-            const DType* ins[num_inputs];
-            DType* outs[num_outputs];
-            if (num_inputs != ams_ins.size())
+            std::vector<const DType*> ins(num_inputs);
+            std::vector<DType*> outs(num_outputs);
+            if (static_cast<size_t>(num_inputs) != ams_ins.size())
               throw std::runtime_error(
                   "Expecting dimensions of inputs to remain the same");
-            else if (num_outputs != ams_outs.size())
+            else if (static_cast<size_t>(num_outputs) != ams_outs.size())
               throw std::runtime_error(
                   "Expecting dimensions of outputs to remain the same");
 
@@ -120,18 +120,18 @@ struct Problem {
                 throw std::runtime_error(
                     "Expected tensors to have the same shape");
             }
-            run(num_elements, ins, outs);
+            run(num_elements, ins.data(), outs.data());
           };
 
       ams::SmallVector<AMSTensor> inouts;
       AMSExecute(wf, OrigComputation, input_tensors, inouts, output_tensors);
 
-      for (int i = 0; i < input_tensors.size(); i++) {
+      for (size_t i = 0; i < input_tensors.size(); i++) {
         delete[] input_tensors[i].data<DType>();
       }
 
 
-      for (int i = 0; i < output_tensors.size(); i++) {
+      for (size_t i = 0; i < output_tensors.size(); i++) {
         delete[] output_tensors[i].data<DType>();
       }
       CALIPER(CALI_CXX_MARK_LOOP_ITERATION(mainloop_id, i);)
@@ -146,7 +146,7 @@ int main(int argc, char** argv)
   // My Local Id
   int rId = 0;
   // Level of Threading provided by MPI
-  int provided = 0;
+  [[maybe_unused]] int provided = 0;
 
   installSignals();
   AMSInit();

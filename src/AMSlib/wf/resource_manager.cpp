@@ -26,17 +26,18 @@ static T roundUp(T num_to_round, int multiple)
   return ((num_to_round + multiple - 1) / multiple) * multiple;
 }
 
-const std::string AMSAllocator::getName() const { return name; }
+const std::string& AMSAllocator::getName() const { return name; }
 
 
 struct AMSDefaultDeviceAllocator final : AMSAllocator {
   AMSDefaultDeviceAllocator(std::string name) : AMSAllocator(name) {};
-  ~AMSDefaultDeviceAllocator()
+  ~AMSDefaultDeviceAllocator() override
   {
     AMS_DBG(AMSDefaultDeviceAllocator, "Destroying default device allocator");
   };
 
-  void* allocate(size_t num_bytes, size_t alignment)
+  void* allocate([[maybe_unused]] size_t num_bytes,
+                 [[maybe_unused]] size_t alignment) override
   {
 #if defined(__AMS_ENABLE_CUDA__)
     void* devPtr;
@@ -51,7 +52,7 @@ struct AMSDefaultDeviceAllocator final : AMSAllocator {
 #endif
   }
 
-  void deallocate(void* ptr)
+  void deallocate([[maybe_unused]] void* ptr) override
   {
 #if defined(__AMS_ENABLE_CUDA__)
     cudaErrCheck(cudaFree(ptr));
@@ -63,24 +64,25 @@ struct AMSDefaultDeviceAllocator final : AMSAllocator {
 
 struct AMSDefaultHostAllocator final : AMSAllocator {
   AMSDefaultHostAllocator(std::string name) : AMSAllocator(name) {}
-  ~AMSDefaultHostAllocator()
+  ~AMSDefaultHostAllocator() override
   {
     AMS_DBG(AMSDefaultDeviceAllocator, "Destroying default host allocator");
   }
 
-  void* allocate(size_t num_bytes, size_t alignment)
+  void* allocate(size_t num_bytes, size_t alignment) override
   {
     return aligned_alloc(alignment, roundUp(num_bytes, alignment));
   }
 
-  void deallocate(void* ptr) { free(ptr); }
+  void deallocate(void* ptr) override { free(ptr); }
 };
 
 struct AMSDefaultPinnedAllocator final : AMSAllocator {
   AMSDefaultPinnedAllocator(std::string name) : AMSAllocator(name) {}
-  ~AMSDefaultPinnedAllocator() = default;
+  ~AMSDefaultPinnedAllocator() override = default;
 
-  void* allocate(size_t num_bytes, size_t alignment)
+  void* allocate([[maybe_unused]] size_t num_bytes,
+                 [[maybe_unused]] size_t alignment) override
   {
 #if defined(__AMS_ENABLE_CUDA__)
     void* ptr;
@@ -95,7 +97,7 @@ struct AMSDefaultPinnedAllocator final : AMSAllocator {
 #endif
   }
 
-  void deallocate(void* ptr)
+  void deallocate([[maybe_unused]] void* ptr) override
   {
 #if defined(__AMS_ENABLE_CUDA__)
     cudaErrCheck(cudaFreeHost(ptr));

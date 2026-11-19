@@ -74,7 +74,6 @@ AMSMsgHeader AMSMsgHeader::decode(uint8_t* data_blob)
 
   current_offset += sizeof(uint8_t);
   // Data type (should be 1 bytes)
-  uint8_t new_dtype = data_blob[current_offset];
   current_offset += sizeof(uint8_t);
   // MPI rank (should be 2 bytes)
   uint16_t new_mpirank =
@@ -212,7 +211,7 @@ void MessagesBuffer::erase(int id)
 void MessagesBuffer::print()
 {
   std::lock_guard<std::mutex> lock(_mutex);
-  for (const auto& e : _msgs)
+  for ([[maybe_unused]] const auto& e : _msgs)
     AMS_DBG(MessagesBuffer,
             "Message [{}] (addr={},use_count={}, size={})",
             e.second.id,
@@ -231,20 +230,21 @@ size_t MessagesBuffer::size()
  * AMQPHandler
  */
 
-void AMQPHandler::onDetached(AMQP::TcpConnection* connection)
+void AMQPHandler::onDetached(AMQP::TcpConnection* /*connection*/)
 {
   AMS_DBG(AMQPHandler, "Connection detached");
   // Signal reconnection if needed.
   if (reconnectCallback) reconnectCallback();
 }
 
-void AMQPHandler::onError(AMQP::TcpConnection* connection, const char* message)
+void AMQPHandler::onError(AMQP::TcpConnection* /*connection*/,
+                          const char* message)
 {
   AMS_WARNING(AMQPHandler, "Connection error: '{}'", message)
   if (reconnectCallback) reconnectCallback();
 }
 
-bool AMQPHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
+bool AMQPHandler::onSecuring(AMQP::TcpConnection* /*connection*/, SSL* ssl)
 {
   // No TLS certificate provided
   if (_cacert.empty()) {
@@ -274,18 +274,19 @@ bool AMQPHandler::onSecuring(AMQP::TcpConnection* connection, SSL* ssl)
   }
 }
 
-bool AMQPHandler::onSecured(AMQP::TcpConnection* connection, const SSL* ssl)
+bool AMQPHandler::onSecured(AMQP::TcpConnection* /*connection*/,
+                            const SSL* /*ssl*/)
 {
   AMS_DBG(AMQPHandler, "Secured TLS connection has been established")
   return true;
 }
 
-void AMQPHandler::onClosed(AMQP::TcpConnection* connection)
+void AMQPHandler::onClosed(AMQP::TcpConnection* /*connection*/)
 {
   AMS_DBG(AMQPHandler, "Connection closed")
 }
 
-void AMQPHandler::onReady(AMQP::TcpConnection* connection)
+void AMQPHandler::onReady(AMQP::TcpConnection* /*connection*/)
 {
   AMS_DBG(AMQPHandler, "Connection established and ready")
 }

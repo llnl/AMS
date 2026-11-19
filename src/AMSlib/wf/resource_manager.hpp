@@ -52,7 +52,7 @@ struct AMSAllocator {
   virtual void* allocate(size_t num_bytes, size_t alignment) = 0;
   virtual void deallocate(void* ptr) = 0;
 
-  const std::string getName() const;
+  const std::string& getName() const;
 };
 
 
@@ -78,8 +78,8 @@ public:
     return instance;
   }
 
-  /** @brief return the name of an allocator */
-  const std::string getAllocatorName(AMSResourceType resource) const
+  /** @brief Return an owning copy of the allocator name. */
+  std::string getAllocatorName(AMSResourceType resource) const
   {
     return getAllocator(resource)->getName();
   }
@@ -216,10 +216,10 @@ public:
    *  @param[out] as The actual size of the pool..
    *  @return void.
    */
-  void getAllocatorStats(AMSResourceType resource,
-                         size_t& wm,
-                         size_t& cs,
-                         size_t& as)
+  void getAllocatorStats([[maybe_unused]] AMSResourceType resource,
+                         [[maybe_unused]] size_t& wm,
+                         [[maybe_unused]] size_t& cs,
+                         [[maybe_unused]] size_t& as)
   {
     return;
   }

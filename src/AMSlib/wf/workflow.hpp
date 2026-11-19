@@ -305,12 +305,13 @@ public:
       : domainName(domain_name),
         rId(_pId),
         wSize(_wSize),
-        storeData(store_data),
-#if defined(__AMS_ENABLE_MPI__)
-        comm(MPI_COMM_NULL),
-#endif
+        ePolicy(AMSExecPolicy::AMS_UBALANCED),
         threshold(threshold),
-        ePolicy(AMSExecPolicy::AMS_UBALANCED)
+        storeData(store_data)
+#if defined(__AMS_ENABLE_MPI__)
+        ,
+        comm(MPI_COMM_NULL)
+#endif
   {
 #if defined(__AMS_ENABLE_TORCH__)
     if (!surrogate_path.empty())
@@ -429,7 +430,7 @@ public:
           "Expecting equal sized tensors when composing Original and domain "
           "memories\n");
     }
-    for (int i = 0; i < computedDomain.size(); i++) {
+    for (size_t i = 0; i < computedDomain.size(); i++) {
       auto indexed_shape = computedDomain[i].sizes();
       entireDomain[i].index_put_({Predicate},
                                  computedDomain[i].view(indexed_shape));
@@ -664,7 +665,7 @@ public:
 
     auto sizePhysics = (PhysicIns.size() > 0) ? PhysicIns[0].sizes()[0] : 0;
     auto sizeInput = (InputTensors.size() > 0) ? InputTensors[0].sizes()[0] : 0;
-    float ratioComputedPhysics = 0.0;
+    [[maybe_unused]] float ratioComputedPhysics = 0.0;
     if (sizePhysics > 0 && sizeInput > 0)
       ratioComputedPhysics =
           (float)(PhysicIns[0].sizes()[0]) / float(InputTensors[0].sizes()[0]);

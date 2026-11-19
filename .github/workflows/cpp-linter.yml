@@ -5,7 +5,7 @@ on:
 
 jobs:
   cpp-linter:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       pull-requests: write
@@ -44,10 +44,7 @@ jobs:
               libhdf5-dev \
               hdf5-tools
       - name: Install clang-llvm
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 18
+        run: sudo apt-get install -y clang-18 clang-format-18 clang-tidy-18
       - name: Install AMQCPP
         run: |
           git clone --depth=1 https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git
