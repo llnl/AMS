@@ -253,7 +253,8 @@ int main(int argc, char **argv)
 #endif
 
   if (argc != 5) {
-    std::cout << "USAGE: " << argv[0] << " num-options batch_size num_fractions fraction_id";
+    std::cout << "USAGE: " << argv[0]
+              << " num-options batch_size num_fractions fraction_id";
     return EXIT_FAILURE;
   }
 

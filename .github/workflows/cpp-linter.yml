@@ -21,9 +21,6 @@ jobs:
           sudo apt-get update
           sudo apt-get update
           sudo apt-get install -y \
-              lsb-release \
-              gnupg \
-              software-properties-common \
               git \
               python3 \
               python3-pip \
@@ -44,7 +41,7 @@ jobs:
               libhdf5-dev \
               hdf5-tools
       - name: Install clang-llvm
-        run: sudo apt-get install -y clang-18 clang-format-18 clang-tidy-18
+        run: sudo apt-get install -y clang-22 clang-format-22 clang-tidy-22
       - name: Install AMQCPP
         run: |
           git clone --depth=1 https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git
@@ -71,8 +68,8 @@ jobs:
           cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=On \
             -DTorch_DIR=$(python -c 'import torch; print(torch.__path__[0])')/share/cmake/Torch \
             -DBUILD_SHARED_LIBS=On \
-            -DCMAKE_C_COMPILER=clang-18 \
-            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_C_COMPILER=clang-22 \
+            -DCMAKE_CXX_COMPILER=clang++-22 \
             -DENABLE_CALIPER=On \
             -DENABLE_RMQ=On \
             -DENABLE_RMQ=On \
@@ -87,7 +84,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          version: 18
+          version: 22
           ignore: .github | .gitlab | scripts | build | .git | blt
           database: build
           extra-args: "-D__AMS_ENABLE_CALIPER__ -D__AMS_ENABLE_HDF5__ -D__AMS_ENABLE_MPI__ -D__AMS_ENABLE_RMQ__"
