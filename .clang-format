@@ -17,6 +17,7 @@ ColumnLimit : 80
 PenaltyBreakBeforeFirstCallParameter : 100
 PenaltyReturnTypeOnItsOwnLine : 65000
 PenaltyBreakString : 10
+DerivePointerAlignment: true
 
 # These improve formatting results but require clang 3.6/7 or higher
 BreakBeforeBinaryOperators : None

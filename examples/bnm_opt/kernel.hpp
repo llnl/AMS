@@ -1,8 +1,7 @@
+#include <AMS.h>
 #include <stddef.h>
 
 #include "realtype.h"
-
-#include <AMS.h>
 
 class BinomialOptions
 {
